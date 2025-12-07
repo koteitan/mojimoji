@@ -127,12 +127,13 @@ User Inrterface is as follows.
 ### graph editor navigation
 - zoom:
   - by mouse: wheel
-  - by touch: pinch
+  - by touch: pinch (two fingers)
+  - zoom range: 0.1 to 2.0
 - pan:
   - by mouse: drag on background, right drag
   - by touch: drag on background, two fingers drag
 - center view:
-  - Center button: fit all nodes in view
+  - Center button: fit all nodes in view with toolbar offset adjustment
 - node selection:
   - by mouse: click on node: toggle select/unselect the node
   - by touch: tap on node: toggle select/unselect the node

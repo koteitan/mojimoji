@@ -54,6 +54,11 @@ export function GraphEditor({
     move: (e: PointerEvent) => void;
     up: (e: PointerEvent) => void;
   } | null>(null);
+  const touchHandlersRef = useRef<{
+    start: (e: TouchEvent) => void;
+    move: (e: TouchEvent) => void;
+    end: (e: TouchEvent) => void;
+  } | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const selectorRef = useRef<any>(null);
   const isInitializedRef = useRef(false);
@@ -474,6 +479,9 @@ export function GraphEditor({
     const nodes = editor.getNodes();
     if (nodes.length > 0) {
       await AreaExtensions.zoomAt(area, nodes);
+      // Adjust for toolbar height (move view down)
+      const { x, y } = area.area.transform;
+      area.area.translate(x, y + 30);
     }
   }, []);
 
@@ -691,6 +699,61 @@ export function GraphEditor({
       container.addEventListener('pointerdown', handlePointerDown);
       container.addEventListener('pointermove', handlePointerMove);
       container.addEventListener('pointerup', handlePointerUp);
+
+      // Add pinch zoom handler for touch devices
+      let initialPinchDistance = 0;
+      let initialZoom = 1;
+      let pinchCenterX = 0;
+      let pinchCenterY = 0;
+
+      const getDistance = (touches: TouchList) => {
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+      };
+
+      const handleTouchStart = (e: TouchEvent) => {
+        if (e.touches.length === 2) {
+          e.preventDefault();
+          initialPinchDistance = getDistance(e.touches);
+          initialZoom = area.area.transform.k;
+          const rect = container.getBoundingClientRect();
+          pinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+          pinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+        }
+      };
+
+      const handleTouchMove = (e: TouchEvent) => {
+        if (e.touches.length === 2 && initialPinchDistance > 0) {
+          e.preventDefault();
+          const currentDistance = getDistance(e.touches);
+          const scale = currentDistance / initialPinchDistance;
+          const newZoom = Math.max(0.1, Math.min(2.0, initialZoom * scale));
+
+          const { x, y, k } = area.area.transform;
+          // Calculate new position to keep pinch center fixed
+          const newX = pinchCenterX - (pinchCenterX - x) * (newZoom / k);
+          const newY = pinchCenterY - (pinchCenterY - y) * (newZoom / k);
+
+          area.area.zoom(newZoom, 0, 0);
+          area.area.translate(newX, newY);
+        }
+      };
+
+      const handleTouchEnd = (e: TouchEvent) => {
+        if (e.touches.length < 2) {
+          initialPinchDistance = 0;
+        }
+      };
+
+      touchHandlersRef.current = {
+        start: handleTouchStart,
+        move: handleTouchMove,
+        end: handleTouchEnd,
+      };
+      container.addEventListener('touchstart', handleTouchStart, { passive: false });
+      container.addEventListener('touchmove', handleTouchMove, { passive: false });
+      container.addEventListener('touchend', handleTouchEnd);
 
       // Enable selection and node dragging
       const selector = AreaExtensions.selector();
@@ -1012,6 +1075,9 @@ export function GraphEditor({
         // Fit view to show all nodes (delay to ensure DOM is ready)
         setTimeout(async () => {
           await AreaExtensions.zoomAt(area, editor.getNodes());
+          // Adjust for toolbar height (move view down)
+          const { x, y } = area.area.transform;
+          area.area.translate(x, y + 30);
         }, 150);
       } else {
         // Create default graph when localStorage is empty
@@ -1048,6 +1114,9 @@ export function GraphEditor({
         // Fit view to show all nodes (delay to ensure DOM is ready)
         setTimeout(async () => {
           await AreaExtensions.zoomAt(area, editor.getNodes());
+          // Adjust for toolbar height (move view down)
+          const { x, y } = area.area.transform;
+          area.area.translate(x, y + 30);
         }, 150);
       }
     };
@@ -1068,6 +1137,12 @@ export function GraphEditor({
         containerRef.current.removeEventListener('pointerdown', pointerHandlersRef.current.down);
         containerRef.current.removeEventListener('pointermove', pointerHandlersRef.current.move);
         containerRef.current.removeEventListener('pointerup', pointerHandlersRef.current.up);
+      }
+      // Remove touch listeners
+      if (touchHandlersRef.current && containerRef.current) {
+        containerRef.current.removeEventListener('touchstart', touchHandlersRef.current.start);
+        containerRef.current.removeEventListener('touchmove', touchHandlersRef.current.move);
+        containerRef.current.removeEventListener('touchend', touchHandlersRef.current.end);
       }
       if (areaRef.current) {
         areaRef.current.destroy();
