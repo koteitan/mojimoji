@@ -164,7 +164,7 @@ User Inrterface is as follows.
   - @rx-nostr/crypto: for signing and verification.
 - directory structure:
   ```
-  momimomi/
+  mojimoji/
   ├── index.html
   ├── package.json
   ├── tsconfig.json

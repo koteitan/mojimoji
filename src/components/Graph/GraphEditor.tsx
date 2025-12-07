@@ -151,16 +151,68 @@ export function GraphEditor({
     };
   }, [dumpGraph, dumpSub]);
 
-  // Listen for control changes to save to localStorage
+  // Find all downstream timeline IDs from a given node
+  const findDownstreamTimelines = useCallback((startNodeId: string): Set<string> => {
+    const editor = editorRef.current;
+    if (!editor) return new Set();
+
+    const connections = editor.getConnections();
+    const timelineIds = new Set<string>();
+    const visited = new Set<string>();
+
+    const traverse = (nodeId: string) => {
+      if (visited.has(nodeId)) return;
+      visited.add(nodeId);
+
+      const node = editor.getNode(nodeId);
+      if (!node) return;
+
+      if (getNodeType(node) === 'Timeline') {
+        timelineIds.add(nodeId);
+        return;
+      }
+
+      // Find connections where this node is the source
+      const outgoingConns = connections.filter(
+        (c: { source: string }) => c.source === nodeId
+      );
+
+      for (const conn of outgoingConns) {
+        traverse(conn.target);
+      }
+    };
+
+    traverse(startNodeId);
+    return timelineIds;
+  }, []);
+
+  // Store downstream timelines ref for use in rebuildPipeline
+  const timelinesToClearRef = useRef<Set<string> | null>(null);
+
+  // Listen for control changes to save to localStorage and rebuild pipeline
   useEffect(() => {
-    const handleControlChange = () => {
+    const handleControlChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ nodeId: string }>;
+      const nodeId = customEvent.detail?.nodeId;
+
       saveCurrentGraph();
+
+      // Find downstream timelines from the changed node and clear only those
+      if (nodeId) {
+        timelinesToClearRef.current = findDownstreamTimelines(nodeId);
+      } else {
+        timelinesToClearRef.current = null; // Clear all if no nodeId
+      }
+
+      // Rebuild pipeline to apply new attribute values
+      rebuildPipelineRef.current?.();
+      timelinesToClearRef.current = null;
     };
     window.addEventListener('graph-control-change', handleControlChange);
     return () => {
       window.removeEventListener('graph-control-change', handleControlChange);
     };
-  }, [saveCurrentGraph]);
+  }, [saveCurrentGraph, findDownstreamTimelines]);
 
   // Get the output Observable from a node by traversing connections
   const getNodeOutput = useCallback((nodeId: string): Observable<NostrEvent> | null => {
@@ -289,8 +341,11 @@ export function GraphEditor({
         );
         const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
 
-        // Clear events if no input connection
-        if (!input$) {
+        // Clear events only for specified timelines, or all if no specific ones
+        const shouldClear = timelinesToClearRef.current === null ||
+                           timelinesToClearRef.current.has(timelineNodeId) ||
+                           !input$; // Always clear if no input connection
+        if (shouldClear) {
           eventsRef.current.set(timelineNodeId, []);
           onEventsUpdate(timelineNodeId, []);
         }

@@ -17,13 +17,13 @@ function sortByIndex<T extends { index?: number }[]>(entries: T): T {
 }
 
 // Custom event to notify graph that a control value changed
-const dispatchControlChange = () => {
-  window.dispatchEvent(new CustomEvent('graph-control-change'));
+const dispatchControlChange = (nodeId: string) => {
+  window.dispatchEvent(new CustomEvent('graph-control-change', { detail: { nodeId } }));
 };
 
 // Custom control components with React state
 // Changes are applied on blur (losing focus) for text inputs
-function TextInputControlComponent({ control }: { control: TextInputControl }) {
+function TextInputControlComponent({ control, nodeId }: { control: TextInputControl; nodeId: string }) {
   const [value, setValue] = useState(control.value);
 
   return (
@@ -37,7 +37,7 @@ function TextInputControlComponent({ control }: { control: TextInputControl }) {
         onBlur={() => {
           control.value = value;
           control.onChange(value);
-          dispatchControlChange();
+          dispatchControlChange(nodeId);
         }}
         onPointerDown={(e) => e.stopPropagation()}
       />
@@ -45,7 +45,7 @@ function TextInputControlComponent({ control }: { control: TextInputControl }) {
   );
 }
 
-function TextAreaControlComponent({ control }: { control: TextAreaControl }) {
+function TextAreaControlComponent({ control, nodeId }: { control: TextAreaControl; nodeId: string }) {
   const [value, setValue] = useState(control.value);
 
   return (
@@ -59,7 +59,7 @@ function TextAreaControlComponent({ control }: { control: TextAreaControl }) {
         onBlur={() => {
           control.value = value;
           control.onChange(value);
-          dispatchControlChange();
+          dispatchControlChange(nodeId);
         }}
         onPointerDown={(e) => e.stopPropagation()}
       />
@@ -68,7 +68,7 @@ function TextAreaControlComponent({ control }: { control: TextAreaControl }) {
 }
 
 // Select applies immediately since it's a single action
-function SelectControlComponent({ control }: { control: SelectControl }) {
+function SelectControlComponent({ control, nodeId }: { control: SelectControl; nodeId: string }) {
   const [value, setValue] = useState(control.value);
 
   return (
@@ -81,7 +81,7 @@ function SelectControlComponent({ control }: { control: SelectControl }) {
           setValue(e.target.value);
           control.value = e.target.value;
           control.onChange(e.target.value);
-          dispatchControlChange();
+          dispatchControlChange(nodeId);
         }}
         onPointerDown={(e) => e.stopPropagation()}
       >
@@ -96,7 +96,7 @@ function SelectControlComponent({ control }: { control: SelectControl }) {
 }
 
 // Checkbox applies immediately since it's a single action
-function CheckboxControlComponent({ control }: { control: CheckboxControl }) {
+function CheckboxControlComponent({ control, nodeId }: { control: CheckboxControl; nodeId: string }) {
   const [checked, setChecked] = useState(control.checked);
 
   return (
@@ -110,7 +110,7 @@ function CheckboxControlComponent({ control }: { control: CheckboxControl }) {
             setChecked(e.target.checked);
             control.checked = e.target.checked;
             control.onChange(e.target.checked);
-            dispatchControlChange();
+            dispatchControlChange(nodeId);
           }}
           onPointerDown={(e) => e.stopPropagation()}
         />
@@ -122,18 +122,18 @@ function CheckboxControlComponent({ control }: { control: CheckboxControl }) {
 
 // Custom control renderer
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CustomControl({ data }: { data: any }) {
+function CustomControl({ data, nodeId }: { data: any; nodeId: string }) {
   if (data instanceof TextInputControl) {
-    return <TextInputControlComponent control={data} />;
+    return <TextInputControlComponent control={data} nodeId={nodeId} />;
   }
   if (data instanceof TextAreaControl) {
-    return <TextAreaControlComponent control={data} />;
+    return <TextAreaControlComponent control={data} nodeId={nodeId} />;
   }
   if (data instanceof SelectControl) {
-    return <SelectControlComponent control={data} />;
+    return <SelectControlComponent control={data} nodeId={nodeId} />;
   }
   if (data instanceof CheckboxControl) {
-    return <CheckboxControlComponent control={data} />;
+    return <CheckboxControlComponent control={data} nodeId={nodeId} />;
   }
   // Fallback to classic control
   return <Presets.classic.Control data={data} />;
@@ -190,7 +190,7 @@ export function CustomNode(props: Props) {
       <div className="custom-node-controls">
         {sortedControls.map(({ key, control }) =>
           control ? (
-            <CustomControl key={key} data={control} />
+            <CustomControl key={key} data={control} nodeId={id} />
           ) : null
         )}
       </div>
