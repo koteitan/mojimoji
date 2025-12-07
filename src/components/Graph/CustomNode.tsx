@@ -17,8 +17,8 @@ function sortByIndex<T extends { index?: number }[]>(entries: T): T {
 }
 
 // Custom event to notify graph that a control value changed
-const dispatchControlChange = (nodeId: string) => {
-  window.dispatchEvent(new CustomEvent('graph-control-change', { detail: { nodeId } }));
+const dispatchControlChange = (nodeId: string, rebuildPipeline: boolean = true) => {
+  window.dispatchEvent(new CustomEvent('graph-control-change', { detail: { nodeId, rebuildPipeline } }));
 };
 
 // Custom control components with React state
@@ -39,7 +39,7 @@ function TextInputControlComponent({ control, nodeId }: { control: TextInputCont
           if (value !== control.value) {
             control.value = value;
             control.onChange(value);
-            dispatchControlChange(nodeId);
+            dispatchControlChange(nodeId, control.rebuildPipeline);
           }
         }}
         onPointerDown={(e) => e.stopPropagation()}

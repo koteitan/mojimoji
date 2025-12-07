@@ -175,6 +175,7 @@ User Inrterface is as follows.
   - only downstream timelines (connected from the changed node) are cleared
   - the observable pipeline is rebuilt
   - subscriptions are restarted
+- exception: display-only attributes (e.g., timeline name) do not trigger pipeline rebuild
 
 ### subscription
 - When Timeline nodes are connected from Relay nodes, the subscription is started.

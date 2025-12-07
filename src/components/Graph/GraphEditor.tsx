@@ -200,10 +200,14 @@ export function GraphEditor({
   // Listen for control changes to save to localStorage and rebuild pipeline
   useEffect(() => {
     const handleControlChange = (e: Event) => {
-      const customEvent = e as CustomEvent<{ nodeId: string }>;
+      const customEvent = e as CustomEvent<{ nodeId: string; rebuildPipeline?: boolean }>;
       const nodeId = customEvent.detail?.nodeId;
+      const shouldRebuild = customEvent.detail?.rebuildPipeline !== false;
 
       saveCurrentGraph();
+
+      // Skip pipeline rebuild if not needed (e.g., display-only changes like timeline name)
+      if (!shouldRebuild) return;
 
       // Find downstream timelines from the changed node and clear only those
       if (nodeId) {

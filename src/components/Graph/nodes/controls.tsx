@@ -45,16 +45,19 @@ export class TextInputControl extends ClassicPreset.Control {
   value: string;
   label: string;
   onChange: (value: string) => void;
+  rebuildPipeline: boolean;
 
   constructor(
     value: string,
     label: string,
-    onChange: (value: string) => void
+    onChange: (value: string) => void,
+    rebuildPipeline: boolean = true
   ) {
     super();
     this.value = value;
     this.label = label;
     this.onChange = onChange;
+    this.rebuildPipeline = rebuildPipeline;
   }
 }
 

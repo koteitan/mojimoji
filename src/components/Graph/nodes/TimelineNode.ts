@@ -34,7 +34,8 @@ export class TimelineNode extends ClassicPreset.Node {
         i18next.t('nodes.timeline.name'),
         (value) => {
           this.timelineName = value;
-        }
+        },
+        false // Don't rebuild pipeline on name change
       )
     );
   }
