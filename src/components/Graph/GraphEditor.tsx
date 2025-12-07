@@ -36,10 +36,12 @@ export function GraphEditor({
   const keydownHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const selectorRef = useRef<any>(null);
+  const isInitializedRef = useRef(false);
+  const isLoadingRef = useRef(false);
 
   const saveCurrentGraph = useCallback(() => {
     const editor = editorRef.current;
-    if (!editor) return;
+    if (!editor || isLoadingRef.current) return;
 
     const nodes = editor.getNodes().map((node: NodeTypes) => ({
       id: node.id,
@@ -96,25 +98,18 @@ export function GraphEditor({
   const deleteSelected = useCallback(async () => {
     const editor = editorRef.current;
     const selector = selectorRef.current;
-    console.log('deleteSelected called', { editor: !!editor, selector: !!selector });
     if (!editor || !selector) return;
 
     // Get selected node IDs
     const selected: string[] = [];
-    console.log('selector.entities:', selector.entities);
-    console.log('selector.entities.size:', selector.entities.size);
-    selector.entities.forEach((value: unknown, id: string) => {
-      console.log('selected node:', id, value);
+    selector.entities.forEach((_value: unknown, id: string) => {
       selected.push(id);
     });
-
-    console.log('selected nodes:', selected);
 
     for (const id of selected) {
       // Remove 'node_' prefix if present (selector adds this prefix)
       const nodeId = id.startsWith('node_') ? id.slice(5) : id;
       const node = editor.getNode(nodeId);
-      console.log('removing node:', id, nodeId, node);
       if (node) {
         // Remove connections first
         const connections = editor.getConnections().filter(
@@ -129,11 +124,13 @@ export function GraphEditor({
         selector.remove({ id, label: 'node' });
       }
     }
-    console.log('delete completed');
   }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
+    // Prevent double initialization in React StrictMode
+    if (isInitializedRef.current) return;
+    isInitializedRef.current = true;
 
     const container = containerRef.current;
 
@@ -240,7 +237,9 @@ export function GraphEditor({
       // Load saved graph
       const savedGraph = loadGraph();
       if (savedGraph) {
+        isLoadingRef.current = true;
         const nodeMap = new Map<string, NodeTypes>();
+        const displayNodes: Array<{ node: DisplayNode; id: string }> = [];
 
         // Create nodes
         for (const nodeData of savedGraph.nodes as Array<{
@@ -275,7 +274,8 @@ export function GraphEditor({
               if (nodeData.data) {
                 (node as DisplayNode).deserialize(nodeData.data as { timelineName: string });
               }
-              onTimelineCreate(node.id, (node as DisplayNode).getTimelineName());
+              // Delay onTimelineCreate until after ID is overridden
+              displayNodes.push({ node: node as DisplayNode, id: nodeData.id });
               break;
             default:
               continue;
@@ -286,6 +286,11 @@ export function GraphEditor({
           await editor.addNode(node);
           await area.translate(node.id, nodeData.position);
           nodeMap.set(nodeData.id, node);
+        }
+
+        // Now create timelines for Display nodes with correct IDs
+        for (const { node, id } of displayNodes) {
+          onTimelineCreate(id, node.getTimelineName());
         }
 
         // Create connections
@@ -309,6 +314,8 @@ export function GraphEditor({
             await editor.addConnection(conn);
           }
         }
+
+        isLoadingRef.current = false;
 
         // Fit view to show all nodes
         await AreaExtensions.zoomAt(area, editor.getNodes());

@@ -52,6 +52,8 @@ User Inrterface is as follows.
         - attributes:
           - keyword: string
           - regex switch: on, off
+        - behavior:
+          - input nostr event and filter by keyword the event.content.
     - display node:
       - input terminal:
         - input (nostr event)
