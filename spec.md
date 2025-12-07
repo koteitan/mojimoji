@@ -173,6 +173,7 @@ User Inrterface is as follows.
   - c: center view
   - d: delete selected nodes/connections
   - shortcuts are disabled when focus is on input/textarea/select elements
+  - shortcuts are disabled when Ctrl/Alt/Meta key is pressed
 
 ### on load
 - load:

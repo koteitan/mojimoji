@@ -159,7 +159,6 @@ svg {
 .control-textarea {
   resize: vertical;
   min-height: 60px;
-  font-family: monospace;
 }
 
 .control-checkbox-wrapper {

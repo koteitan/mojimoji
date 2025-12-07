@@ -1204,6 +1204,11 @@ export function GraphEditor({
         return;
       }
 
+      // Don't handle shortcuts with modifier keys (Ctrl, Alt, Meta)
+      if (e.ctrlKey || e.altKey || e.metaKey) {
+        return;
+      }
+
       const key = e.key.toLowerCase();
 
       // Delete selected nodes with Delete, Backspace, or 'd' key
