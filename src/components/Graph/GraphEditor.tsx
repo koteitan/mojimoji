@@ -657,6 +657,11 @@ export function GraphEditor({
           lastY = e.clientY;
           container.setPointerCapture(e.pointerId);
           e.preventDefault();
+
+          // Unselect all nodes when clicking on background
+          if (selectorRef.current) {
+            selectorRef.current.unselectAll();
+          }
         }
       };
 
@@ -727,6 +732,11 @@ export function GraphEditor({
         lastPointerDownOnSocket = !!(inputSocket || outputSocket);
 
         if (inputSocket || outputSocket) {
+          // Unselect all nodes when clicking on socket
+          if (selectorRef.current) {
+            selectorRef.current.unselectAll();
+          }
+
           // Find the node this socket belongs to
           const nodeElement = target.closest('.custom-node') as HTMLElement | null;
 
@@ -1005,15 +1015,15 @@ export function GraphEditor({
         // Create default graph when localStorage is empty
         isLoadingRef.current = true;
 
-        // Create default Relay node
+        // Create default Relay node (at top)
         const relayNode = new RelayNode();
         await editor.addNode(relayNode);
-        await area.translate(relayNode.id, { x: 100, y: 150 });
+        await area.translate(relayNode.id, { x: 100, y: 100 });
 
-        // Create default Timeline node
+        // Create default Timeline node (below Relay node - vertical arrangement)
         const timelineNode = new TimelineNode();
         await editor.addNode(timelineNode);
-        await area.translate(timelineNode.id, { x: 400, y: 150 });
+        await area.translate(timelineNode.id, { x: 120, y: 400 });
         onTimelineCreate(timelineNode.id, timelineNode.getTimelineName());
 
         // Connect Relay node to Timeline node

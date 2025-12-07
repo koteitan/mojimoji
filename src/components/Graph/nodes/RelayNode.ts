@@ -11,14 +11,23 @@ import type { NostrEvent } from '../../../nostr/types';
 // Type for the result of createRxForwardReq with emit method
 type ForwardReq = ReturnType<typeof createRxForwardReq>;
 
+// Get default relay URL based on locale
+const getDefaultRelayUrl = (): string => {
+  const lang = i18next.language || navigator.language || 'en';
+  if (lang.startsWith('ja')) {
+    return 'wss://yabu.me';
+  }
+  return 'wss://relay.damus.io';
+};
+
 export class RelayNode extends ClassicPreset.Node {
   static readonly nodeType = 'Relay';
   readonly nodeType = 'Relay';
   width = 220;
-  height = 200;
+  height: number | undefined = undefined; // auto-calculated based on content
 
-  private relayUrls: string[] = ['wss://relay.damus.io'];
-  private filterJson: string = '{"kinds": [1], "limit": 20}';
+  private relayUrls: string[] = [getDefaultRelayUrl()];
+  private filterJson: string = '{"kinds": [1], "limit": 500}';
 
   // RxJS Observable for output events
   private eventSubject = new Subject<NostrEvent>();
@@ -51,7 +60,7 @@ export class RelayNode extends ClassicPreset.Node {
       new TextAreaControl(
         this.filterJson,
         'Filter (JSON)',
-        '{"kinds": [1], "limit": 20}',
+        '{"kinds": [1], "limit": 500}',
         (value) => {
           this.filterJson = value;
         }
@@ -67,7 +76,7 @@ export class RelayNode extends ClassicPreset.Node {
     try {
       return JSON.parse(this.filterJson);
     } catch {
-      return { kinds: [1], limit: 20 };
+      return { kinds: [1], limit: 500 };
     }
   }
 

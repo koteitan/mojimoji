@@ -9,7 +9,7 @@ export class TimelineNode extends ClassicPreset.Node {
   static readonly nodeType = 'Timeline';
   readonly nodeType = 'Timeline';
   width = 180;
-  height = 120;
+  height: number | undefined = undefined; // auto-calculated based on content
 
   private timelineName: string = 'Timeline';
 

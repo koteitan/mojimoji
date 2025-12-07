@@ -11,13 +11,13 @@
 }
 
 .custom-node.selected {
-  border-color: #646cff;
-  box-shadow: 0 0 10px rgba(100, 108, 255, 0.3);
+  border-color: #4ade80;
+  box-shadow: 0 0 10px rgba(74, 222, 128, 0.4);
 }
 
 .custom-node-title {
   background: #1a1a1a;
-  padding: 10px 12px;
+  padding: 16px 12px 10px 12px; /* Extra top padding for input socket */
   border-radius: 6px 6px 0 0;
   font-weight: 600;
   font-size: 16px;
@@ -28,6 +28,7 @@
 
 .custom-node-controls {
   padding: 8px;
+  padding-bottom: 16px; /* Extra space for output socket */
   flex: 1;
 }
 

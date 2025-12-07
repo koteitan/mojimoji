@@ -11,7 +11,7 @@ export class OperatorNode extends ClassicPreset.Node {
   static readonly nodeType = 'Operator';
   readonly nodeType = 'Operator';
   width = 180;
-  height = 160;
+  height: number | undefined = undefined; // auto-calculated based on content
 
   private operator: OperatorType = 'AND';
 

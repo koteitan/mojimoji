@@ -9,7 +9,7 @@ export class SearchNode extends ClassicPreset.Node {
   static readonly nodeType = 'Search';
   readonly nodeType = 'Search';
   width = 200;
-  height = 160;
+  height: number | undefined = undefined; // auto-calculated based on content
 
   private keyword: string = '';
   private useRegex: boolean = false;
