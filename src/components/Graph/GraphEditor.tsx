@@ -13,6 +13,9 @@ import type { TimelineEvent, NostrEvent } from '../../nostr/types';
 import type { Observable } from 'rxjs';
 import './GraphEditor.css';
 
+// Debug flag for development
+const DEBUG = false;
+
 type NodeTypes = RelayNode | OperatorNode | SearchNode | TimelineNode;
 
 // Helper to get the internal node type
@@ -87,35 +90,66 @@ export function GraphEditor({
       return;
     }
 
-    const nodes = editor.getNodes().map((node: NodeTypes) => ({
-      id: node.id,
-      type: (node as NodeTypes & { nodeType: string }).nodeType,
-      position: areaRef.current?.nodeViews.get(node.id)?.position || { x: 0, y: 0 },
-    }));
+    const nodes = editor.getNodes();
+    const connections = editor.getConnections();
 
-    const connections = editor.getConnections().map((conn: ClassicPreset.Connection<NodeTypes, NodeTypes>) => ({
-      id: conn.id,
-      source: conn.source,
-      sourceOutput: conn.sourceOutput,
-      target: conn.target,
-      targetInput: conn.targetInput,
-    }));
+    const lines: string[] = ['=== Graph Dump ===', '', 'Nodes:'];
+    for (const node of nodes) {
+      const pos = areaRef.current?.nodeViews.get(node.id)?.position || { x: 0, y: 0 };
+      const type = (node as NodeTypes & { nodeType: string }).nodeType;
+      lines.push(`  [${type}] ${node.id} (${Math.round(pos.x)}, ${Math.round(pos.y)})`);
+    }
 
-    console.log('=== Graph Dump ===');
-    console.log('Nodes:', nodes);
-    console.log('Connections:', connections);
-    console.log('==================');
+    lines.push('', 'Connections:');
+    for (const conn of connections) {
+      lines.push(`  ${conn.source}.${conn.sourceOutput} -> ${conn.target}.${conn.targetInput}`);
+    }
+
+    lines.push('', '==================');
+    console.log(lines.join('\n'));
   }, []);
 
-  // Expose dumpgraph to window for debugging
+  // Debug function to dump subscription state to console
+  const dumpSub = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) {
+      console.log('Editor not initialized');
+      return;
+    }
+
+    const nodes = editor.getNodes();
+    const lines: string[] = ['=== Subscription Dump ===', ''];
+
+    for (const node of nodes) {
+      const type = getNodeType(node);
+      if (type === 'Relay') {
+        const relayNode = node as RelayNode;
+        const isActive = relayNode.isSubscribed();
+        const relays = relayNode.getRelayUrls();
+        const filter = relayNode.getFilter();
+        const status = isActive ? 'ON' : 'OFF';
+
+        lines.push(`[${status}] ${node.id} | ${relays.join(', ')} | ${JSON.stringify(filter)}`);
+      }
+    }
+
+    lines.push('========================');
+    console.log(lines.join('\n'));
+  }, []);
+
+  // Expose debug functions to window
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).dumpgraph = dumpGraph;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).dumpsub = dumpSub;
     return () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).dumpgraph;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).dumpsub;
     };
-  }, [dumpGraph]);
+  }, [dumpGraph, dumpSub]);
 
   // Get the output Observable from a node by traversing connections
   const getNodeOutput = useCallback((nodeId: string): Observable<NostrEvent> | null => {
@@ -238,12 +272,25 @@ export function GraphEditor({
         const timelineNode = node as TimelineNode;
         const timelineNodeId = node.id;
 
-        // Initialize events array
-        eventsRef.current.set(timelineNodeId, []);
+        // Find input connection
+        const inputConn = connections.find(
+          (c: { target: string }) => c.target === node.id
+        );
+        const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+
+        // Clear events if no input connection
+        if (!input$) {
+          eventsRef.current.set(timelineNodeId, []);
+          onEventsUpdate(timelineNodeId, []);
+        }
 
         // Set the event callback
         timelineNode.setOnEvent((event: NostrEvent) => {
           const events = eventsRef.current.get(timelineNodeId) || [];
+          // Skip if event already exists (deduplication)
+          if (events.some(e => e.event.id === event.id)) {
+            return;
+          }
           // Add event and sort by created_at (newest first)
           const newEvents = [...events, { event, profile: undefined }].sort(
             (a, b) => b.event.created_at - a.event.created_at
@@ -253,12 +300,6 @@ export function GraphEditor({
           eventsRef.current.set(timelineNodeId, limitedEvents);
           onEventsUpdate(timelineNodeId, limitedEvents);
         });
-
-        // Find input connection
-        const inputConn = connections.find(
-          (c: { target: string }) => c.target === node.id
-        );
-        const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
 
         timelineNode.setInput(input$);
       }
@@ -553,6 +594,17 @@ export function GraphEditor({
         }
       };
 
+      // Function to check if a connection already exists
+      const connectionExists = (sourceId: string, sourceOutput: string, targetId: string, targetInput: string) => {
+        const connections = editor.getConnections();
+        return connections.some(c =>
+          c.source === sourceId &&
+          c.sourceOutput === sourceOutput &&
+          c.target === targetId &&
+          c.targetInput === targetInput
+        );
+      };
+
       container.addEventListener('pointerdown', (e) => {
         const target = e.target as HTMLElement;
         const inputSocket = target.closest('.custom-node-input');
@@ -579,9 +631,9 @@ export function GraphEditor({
               }
 
               // Check if this socket has a connection
-              console.log('Socket clicked:', { nodeId, socketKey, side });
+              if (DEBUG) console.log('Socket clicked:', { nodeId, socketKey, side });
               const existingConnection = findConnectionBySocket(nodeId, socketKey, side);
-              console.log('Existing connection:', existingConnection);
+              if (DEBUG) console.log('Existing connection:', existingConnection);
 
               // Clear previous socket selection highlight
               container.querySelectorAll('.socket-selected').forEach(el => {
@@ -601,12 +653,16 @@ export function GraphEditor({
                   // Connect output -> input
                   const sourceNode = editor.getNode(pendingConnectionRef.current.nodeId);
                   const targetNode = editor.getNode(nodeId);
-                  if (sourceNode && targetNode && pendingConnectionRef.current.nodeId !== nodeId) {
+                  const sourceOutput = pendingConnectionRef.current.socketKey;
+                  const targetInput = socketKey;
+                  // Check for duplicate connection
+                  if (sourceNode && targetNode && pendingConnectionRef.current.nodeId !== nodeId &&
+                      !connectionExists(pendingConnectionRef.current.nodeId, sourceOutput, nodeId, targetInput)) {
                     const conn = new ClassicPreset.Connection(
                       sourceNode,
-                      pendingConnectionRef.current.socketKey as never,
+                      sourceOutput as never,
                       targetNode,
-                      socketKey as never
+                      targetInput as never
                     );
                     editor.addConnection(conn);
                   }
@@ -614,12 +670,16 @@ export function GraphEditor({
                   // Connect output -> input (reverse order)
                   const sourceNode = editor.getNode(nodeId);
                   const targetNode = editor.getNode(pendingConnectionRef.current.nodeId);
-                  if (sourceNode && targetNode && pendingConnectionRef.current.nodeId !== nodeId) {
+                  const sourceOutput = socketKey;
+                  const targetInput = pendingConnectionRef.current.socketKey;
+                  // Check for duplicate connection
+                  if (sourceNode && targetNode && pendingConnectionRef.current.nodeId !== nodeId &&
+                      !connectionExists(nodeId, sourceOutput, pendingConnectionRef.current.nodeId, targetInput)) {
                     const conn = new ClassicPreset.Connection(
                       sourceNode,
-                      socketKey as never,
+                      sourceOutput as never,
                       targetNode,
-                      pendingConnectionRef.current.socketKey as never
+                      targetInput as never
                     );
                     editor.addConnection(conn);
                   }
