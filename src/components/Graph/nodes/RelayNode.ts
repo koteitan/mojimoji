@@ -5,7 +5,7 @@ import type { RxNostr } from 'rx-nostr';
 import { verifier } from '@rx-nostr/crypto';
 import i18next from 'i18next';
 import { eventSocket } from './types';
-import { TextAreaControl } from './controls';
+import { TextAreaControl, FilterControl, type Filters } from './controls';
 import type { NostrEvent } from '../../../nostr/types';
 
 // Type for the result of createRxForwardReq with emit method
@@ -20,14 +20,49 @@ const getDefaultRelayUrl = (): string => {
   return 'wss://relay.damus.io';
 };
 
+// Default filters: kinds=[1], limit=200
+const getDefaultFilters = (): Filters => [
+  [
+    { field: 'kinds', value: '1' },
+    { field: 'limit', value: '200' },
+  ],
+];
+
+// Convert Filters to nostr filter objects
+const filtersToNostrFilters = (filters: Filters): Record<string, unknown>[] => {
+  return filters.map((filter) => {
+    const nostrFilter: Record<string, unknown> = {};
+    for (const element of filter) {
+      const { field, value } = element;
+      if (!value.trim()) continue;
+
+      // Parse value based on field type
+      if (field === 'kinds') {
+        // kinds is an array of integers
+        nostrFilter[field] = value.split(',').map((v) => parseInt(v.trim(), 10)).filter((n) => !isNaN(n));
+      } else if (field === 'ids' || field === 'authors' || field.startsWith('#')) {
+        // Arrays of strings
+        nostrFilter[field] = value.split(',').map((v) => v.trim()).filter((v) => v);
+      } else if (field === 'since' || field === 'until' || field === 'limit') {
+        // Single integers
+        const num = parseInt(value.trim(), 10);
+        if (!isNaN(num)) {
+          nostrFilter[field] = num;
+        }
+      }
+    }
+    return nostrFilter;
+  }).filter((f) => Object.keys(f).length > 0);
+};
+
 export class RelayNode extends ClassicPreset.Node {
   static readonly nodeType = 'Relay';
   readonly nodeType = 'Relay';
-  width = 220;
+  width = 280;
   height: number | undefined = undefined; // auto-calculated based on content
 
   private relayUrls: string[] = [getDefaultRelayUrl()];
-  private filterJson: string = '{"kinds": [1], "limit": 500}';
+  private filters: Filters = getDefaultFilters();
 
   // RxJS Observable for output events
   private eventSubject = new Subject<NostrEvent>();
@@ -57,12 +92,11 @@ export class RelayNode extends ClassicPreset.Node {
 
     this.addControl(
       'filter',
-      new TextAreaControl(
-        this.filterJson,
-        'Filter (JSON)',
-        '{"kinds": [1], "limit": 500}',
-        (value) => {
-          this.filterJson = value;
+      new FilterControl(
+        this.filters,
+        i18next.t('nodes.relay.filter'),
+        (filters) => {
+          this.filters = filters;
         }
       )
     );
@@ -72,33 +106,46 @@ export class RelayNode extends ClassicPreset.Node {
     return this.relayUrls;
   }
 
-  getFilter(): Record<string, unknown> {
-    try {
-      return JSON.parse(this.filterJson);
-    } catch {
-      return { kinds: [1], limit: 500 };
-    }
+  getFilters(): Record<string, unknown>[] {
+    return filtersToNostrFilters(this.filters);
   }
 
   serialize() {
     return {
       relayUrls: this.relayUrls,
-      filterJson: this.filterJson,
+      filters: this.filters,
     };
   }
 
-  deserialize(data: { relayUrls: string[]; filterJson: string }) {
+  deserialize(data: { relayUrls: string[]; filters?: Filters; filterJson?: string }) {
     this.relayUrls = data.relayUrls;
-    this.filterJson = data.filterJson;
+
+    // Handle backward compatibility: convert old filterJson to new filters format
+    if (data.filters) {
+      this.filters = data.filters;
+    } else if (data.filterJson) {
+      // Convert old JSON format to new Filters format
+      try {
+        const parsed = JSON.parse(data.filterJson);
+        this.filters = [
+          Object.entries(parsed).map(([field, value]) => ({
+            field,
+            value: Array.isArray(value) ? value.join(',') : String(value),
+          })),
+        ];
+      } catch {
+        this.filters = getDefaultFilters();
+      }
+    }
 
     const relaysControl = this.controls['relays'] as TextAreaControl;
     if (relaysControl) {
       relaysControl.value = this.relayUrls.join('\n');
     }
 
-    const filterControl = this.controls['filter'] as TextAreaControl;
+    const filterControl = this.controls['filter'] as FilterControl;
     if (filterControl) {
-      filterControl.value = this.filterJson;
+      filterControl.filters = this.filters;
     }
   }
 
@@ -124,9 +171,11 @@ export class RelayNode extends ClassicPreset.Node {
       },
     });
 
-    // Emit the filter to start receiving events
-    const filter = this.getFilter();
-    this.rxReq.emit(filter as { kinds?: number[]; limit?: number });
+    // Emit filters to start receiving events (multiple filters = OR logic)
+    const filters = this.getFilters();
+    for (const filter of filters) {
+      this.rxReq.emit(filter as { kinds?: number[]; limit?: number });
+    }
   }
 
   // Stop the nostr subscription

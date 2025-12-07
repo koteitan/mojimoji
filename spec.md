@@ -56,16 +56,25 @@ User Inrterface is as follows.
         - output terminal:
           - output (nostr event)
         - attributes:
-          - relay URL list: multiple line text area (size adjusted by new lines automatically)
-          - filter list:
-            - list item:
-              - filter name: {ids, authors, kinds, #?, since, until, limit}
-              - filter value: string
-              - + button: add a new filter item (on the right end of the last item)
+          - relay URL list: multiple line text area (one URL per line)
+          - filters: structured filter UI (NIP-01 compliant)
+            - multiple filters (OR logic between filters)
+            - each filter:
+              - filter header with remove button (×)
+              - multiple filter elements (AND logic within filter)
+              - each element:
+                - dropdown: field name {kinds, ids, authors, #e, #p, #t, since, until, limit}
+                - text input: field value
+                  - kinds: comma-separated integers (e.g., "1,6,7")
+                  - ids, authors, #e, #p, #t: comma-separated hex strings
+                  - since, until, limit: single integer
+                - remove button (×) for element (if more than one element)
+                - add button (+) on last element to add new element
+              - add button (+) at bottom to add new filter
         - default:
-          - kinds = [1]
-          - limit = 500
-          - if 
+          - kinds = 1
+          - limit = 200
+          - if
             - locale is "ja": relay URL = wss://yabu.me
             - otherwise     : relay URL = wss://relay.damus.io
       - original-filter node:

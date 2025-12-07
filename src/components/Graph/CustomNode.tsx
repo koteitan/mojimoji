@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Presets } from 'rete-react-plugin';
-import { TextInputControl, TextAreaControl, SelectControl, CheckboxControl } from './nodes/controls';
+import { TextInputControl, TextAreaControl, SelectControl, CheckboxControl, FilterControl, FILTER_FIELDS, type Filters } from './nodes/controls';
 import './CustomNode.css';
 
 const { RefSocket } = Presets.classic;
@@ -126,9 +126,141 @@ function CheckboxControlComponent({ control, nodeId }: { control: CheckboxContro
   );
 }
 
+// Filter control component for nostr filters
+function FilterControlComponent({ control, nodeId }: { control: FilterControl; nodeId: string }) {
+  const [filters, setFilters] = useState<Filters>(control.filters);
+
+  const updateFilters = (newFilters: Filters) => {
+    setFilters(newFilters);
+    control.filters = newFilters;
+    control.onChange(newFilters);
+    dispatchControlChange(nodeId);
+  };
+
+  const addFilter = () => {
+    const newFilters = [...filters, [{ field: 'kinds', value: '' }]];
+    updateFilters(newFilters);
+  };
+
+  const addElement = (filterIndex: number) => {
+    const newFilters = filters.map((filter, i) =>
+      i === filterIndex ? [...filter, { field: 'kinds', value: '' }] : filter
+    );
+    updateFilters(newFilters);
+  };
+
+  const removeFilter = (filterIndex: number) => {
+    if (filters.length <= 1) return; // Keep at least one filter
+    const newFilters = filters.filter((_, i) => i !== filterIndex);
+    updateFilters(newFilters);
+  };
+
+  const removeElement = (filterIndex: number, elementIndex: number) => {
+    const filter = filters[filterIndex];
+    if (filter.length <= 1) return; // Keep at least one element
+    const newFilters = filters.map((f, i) =>
+      i === filterIndex ? f.filter((_, j) => j !== elementIndex) : f
+    );
+    updateFilters(newFilters);
+  };
+
+  const updateElement = (filterIndex: number, elementIndex: number, field: string, value: string) => {
+    const newFilters = filters.map((filter, i) =>
+      i === filterIndex
+        ? filter.map((el, j) =>
+            j === elementIndex ? { field, value } : el
+          )
+        : filter
+    );
+    setFilters(newFilters);
+  };
+
+  const commitChanges = () => {
+    control.filters = filters;
+    control.onChange(filters);
+    dispatchControlChange(nodeId);
+  };
+
+  return (
+    <div className="control-wrapper filter-control">
+      <label className="control-label">{control.label}</label>
+      {filters.map((filter, filterIndex) => (
+        <div key={filterIndex} className="filter-item">
+          <div className="filter-header">
+            <span className="filter-label">Filter {filterIndex + 1}</span>
+            {filters.length > 1 && (
+              <button
+                className="filter-remove-btn"
+                onClick={() => removeFilter(filterIndex)}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                ×
+              </button>
+            )}
+          </div>
+          {filter.map((element, elementIndex) => (
+            <div key={elementIndex} className="filter-element">
+              <select
+                className="filter-field-select"
+                value={element.field}
+                onChange={(e) => updateElement(filterIndex, elementIndex, e.target.value, element.value)}
+                onBlur={commitChanges}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                {FILTER_FIELDS.map((f) => (
+                  <option key={f.value} value={f.value}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                className="filter-value-input"
+                value={element.value}
+                placeholder="value"
+                onChange={(e) => updateElement(filterIndex, elementIndex, element.field, e.target.value)}
+                onBlur={commitChanges}
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+              {filter.length > 1 && (
+                <button
+                  className="filter-element-remove-btn"
+                  onClick={() => removeElement(filterIndex, elementIndex)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  ×
+                </button>
+              )}
+              {elementIndex === filter.length - 1 && (
+                <button
+                  className="filter-element-add-btn"
+                  onClick={() => addElement(filterIndex)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  +
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+      <button
+        className="filter-add-btn"
+        onClick={addFilter}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        + Add Filter
+      </button>
+    </div>
+  );
+}
+
 // Custom control renderer
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function CustomControl({ data, nodeId }: { data: any; nodeId: string }) {
+  if (data instanceof FilterControl) {
+    return <FilterControlComponent control={data} nodeId={nodeId} />;
+  }
   if (data instanceof TextInputControl) {
     return <TextInputControlComponent control={data} nodeId={nodeId} />;
   }

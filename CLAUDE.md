@@ -30,6 +30,7 @@ or
 
 # Specifications
 - see spec.md.
+- edit spec.md when the implementation is changed.
 
 # others 
 - version APP_VERSION on src/App.tsx shall be updated in every deployment.
@@ -41,5 +42,3 @@ or
   - NIP-01: https://github.com/nostr-protocol/nips/blob/master/01.md
   - rx-nostr: https://github.com/penpenpng/rx-nostr
     - document https://penpenpng.github.io/rx-nostr/
-
-

@@ -129,10 +129,10 @@ export function GraphEditor({
         const relayNode = node as RelayNode;
         const isActive = relayNode.isSubscribed();
         const relays = relayNode.getRelayUrls();
-        const filter = relayNode.getFilter();
+        const filters = relayNode.getFilters();
         const status = isActive ? 'ON' : 'OFF';
 
-        lines.push(`[${status}] ${node.id} | ${relays.join(', ')} | ${JSON.stringify(filter)}`);
+        lines.push(`[${status}] ${node.id} | ${relays.join(', ')} | ${JSON.stringify(filters)}`);
       }
     }
 

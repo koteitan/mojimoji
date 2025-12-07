@@ -11,7 +11,7 @@
     "relay": {
       "title": "リレー",
       "relays": "リレーURL（1行に1つ）",
-      "kinds": "Kinds（カンマ区切り）"
+      "filter": "フィルター"
     },
     "operator": {
       "title": "演算",

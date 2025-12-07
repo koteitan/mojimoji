@@ -11,7 +11,7 @@
     "relay": {
       "title": "Relay",
       "relays": "Relay URLs (one per line)",
-      "kinds": "Kinds (comma separated)"
+      "filter": "Filters"
     },
     "operator": {
       "title": "Operator",

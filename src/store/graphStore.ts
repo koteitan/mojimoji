@@ -69,7 +69,8 @@ function recalculateSubscriptions(): void {
       const { relayNode, searchNodes } = relayInfo;
 
       const relayUrls = relayNode.getRelayUrls();
-      const filter = relayNode.getFilter();
+      const filters = relayNode.getFilters();
+      const filter = filters[0] || { kinds: [1], limit: 200 };
 
       subscribeToEvents(
         timelineNode.id,
