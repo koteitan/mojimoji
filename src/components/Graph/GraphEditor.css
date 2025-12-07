@@ -180,3 +180,21 @@ svg {
   height: 16px;
   cursor: pointer;
 }
+
+/* GitHub link */
+.github-link {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  color: #888;
+  z-index: 10;
+  transition: color 0.2s;
+}
+
+.github-link:hover {
+  color: #fff;
+}
+
+.github-link svg {
+  display: block;
+}
