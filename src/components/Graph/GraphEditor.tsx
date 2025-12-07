@@ -151,6 +151,17 @@ export function GraphEditor({
     };
   }, [dumpGraph, dumpSub]);
 
+  // Listen for control changes to save to localStorage
+  useEffect(() => {
+    const handleControlChange = () => {
+      saveCurrentGraph();
+    };
+    window.addEventListener('graph-control-change', handleControlChange);
+    return () => {
+      window.removeEventListener('graph-control-change', handleControlChange);
+    };
+  }, [saveCurrentGraph]);
+
   // Get the output Observable from a node by traversing connections
   const getNodeOutput = useCallback((nodeId: string): Observable<NostrEvent> | null => {
     const editor = editorRef.current;
@@ -535,6 +546,13 @@ export function GraphEditor({
         const isSocket = target.closest('.socket') ||
                          target.closest('.custom-node-input') ||
                          target.closest('.custom-node-output');
+        // Check if clicking on an input element
+        const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
+
+        // Blur any focused input when clicking on background or non-input elements
+        if (!isInput && document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
 
         // Don't start panning if clicking on a node, connection, or socket
         if (!isNode && !isConnection && !isSocket) {
