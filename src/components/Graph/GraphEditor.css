@@ -9,6 +9,14 @@
   height: 100%;
   touch-action: none;
   user-select: none;
+  --dot-size: 2px;
+  --dot-spacing: 20px;
+  --dot-color: #222;
+  --bg-offset-x: 0px;
+  --bg-offset-y: 0px;
+  background-image: radial-gradient(circle, var(--dot-color) var(--dot-size), transparent var(--dot-size));
+  background-size: var(--dot-spacing) var(--dot-spacing);
+  background-position: var(--bg-offset-x) var(--bg-offset-y);
 }
 
 .graph-toolbar {

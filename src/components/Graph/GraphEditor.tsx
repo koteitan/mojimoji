@@ -694,6 +694,27 @@ export function GraphEditor({
       });
       render.use(pathPlugin);
 
+      // Helper to update background dot pattern based on transform
+      const updateBackground = () => {
+        const { k, x, y } = area.area.transform;
+        const baseSpacing = 20;
+        const spacing = baseSpacing * k;
+        container.style.setProperty('--dot-spacing', `${spacing}px`);
+        container.style.setProperty('--bg-offset-x', `${x % spacing}px`);
+        container.style.setProperty('--bg-offset-y', `${y % spacing}px`);
+      };
+
+      // Listen to area transform changes to update background
+      area.addPipe((context) => {
+        if (context.type === 'zoomed' || context.type === 'translated') {
+          updateBackground();
+        }
+        return context;
+      });
+
+      // Set initial background
+      updateBackground();
+
       // Add wheel zoom handler
       const handleWheel = (e: WheelEvent) => {
         e.preventDefault();
@@ -710,6 +731,7 @@ export function GraphEditor({
 
         area.area.zoom(newZoom, 0, 0);
         area.area.translate(newX, newY);
+        updateBackground();
       };
       wheelHandlerRef.current = handleWheel;
       container.addEventListener('wheel', handleWheel, { passive: false });
@@ -760,6 +782,7 @@ export function GraphEditor({
 
         const { x, y } = area.area.transform;
         area.area.translate(x + dx, y + dy);
+        updateBackground();
       };
 
       const handlePointerUp = (e: PointerEvent) => {
@@ -815,6 +838,7 @@ export function GraphEditor({
 
           area.area.zoom(newZoom, 0, 0);
           area.area.translate(newX, newY);
+          updateBackground();
         }
       };
 

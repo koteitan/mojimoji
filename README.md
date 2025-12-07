@@ -1,12 +1,8 @@
 # mojimoji
 
-A modular timeline client for Nostr with visual node-based filtering.
+A modular filter previewer for Nostr. modular + moderation = mojimoji
 
 ## Usage
-
-### Overview
-
-mojimoji provides a visual graph editor to create custom Nostr timelines by connecting nodes:
 
 - **Relay Node**: Connect to Nostr relays and fetch events
 - **Filter Nodes**: Filter events by criteria (Operator, Search, Language)
@@ -27,14 +23,13 @@ mojimoji provides a visual graph editor to create custom Nostr timelines by conn
 
 #### Connecting Nodes
 
-1. Click on an output socket (bottom of a node) - it turns green
-2. Click on an input socket (top of another node)
-3. Connection is created
+1. Click on a socket (it turns green)
+2. Click on another socket (connection is created)
 
 #### Deleting
 
-- Select node(s) by clicking, then press `d` or `Delete`
-- Or click the `Delete` button in toolbar
+- **Nodes**: Select node(s) by clicking, then press `d` or `Delete`. Or click the `Delete` button in toolbar
+- **Connections**: Click on a socket (endpoint), then press `d` or `Delete`. Or click the `Delete` button in toolbar
 
 #### Navigation
 
@@ -54,8 +49,6 @@ mojimoji provides a visual graph editor to create custom Nostr timelines by conn
 | t | Add Timeline node |
 | c | Center view |
 | d | Delete selected |
-
-Note: Shortcuts are disabled when typing in input fields or when Ctrl/Alt/Meta is pressed.
 
 ### Node Types
 
@@ -78,7 +71,7 @@ Note: Shortcuts are disabled when typing in input fields or when Ctrl/Alt/Meta i
 
 ### Data Persistence
 
-- Graph layout and settings are automatically saved to localStorage
+- Graph layout and settings are saved to localStorage on focus lost
 - Profile cache is stored for faster loading
 
 ## Developer Guide
