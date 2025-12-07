@@ -6,7 +6,61 @@ import { verifier } from '@rx-nostr/crypto';
 import i18next from 'i18next';
 import { eventSocket } from './types';
 import { TextAreaControl, FilterControl, type Filters } from './controls';
-import type { NostrEvent } from '../../../nostr/types';
+import type { NostrEvent, Profile } from '../../../nostr/types';
+
+const DEBUG = false;
+
+// Global profile cache shared across all RelayNodes
+const PROFILE_CACHE_KEY = 'mojimoji-profile-cache';
+const profileCache = new Map<string, Profile>();
+
+// Load cache from localStorage on startup
+function loadProfileCache(): void {
+  try {
+    const stored = localStorage.getItem(PROFILE_CACHE_KEY);
+    if (stored) {
+      const data = JSON.parse(stored) as Record<string, Profile>;
+      for (const [pubkey, profile] of Object.entries(data)) {
+        profileCache.set(pubkey, profile);
+      }
+    }
+  } catch {
+    // Ignore errors when loading cache
+  }
+}
+
+// Save cache to localStorage
+function saveProfileCache(): void {
+  try {
+    const data: Record<string, Profile> = {};
+    for (const [pubkey, profile] of profileCache) {
+      data[pubkey] = profile;
+    }
+    localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(data));
+  } catch {
+    // Ignore errors when saving cache (e.g., quota exceeded)
+  }
+}
+
+// Initialize cache from localStorage
+loadProfileCache();
+
+export function getCachedProfile(pubkey: string): Profile | undefined {
+  return profileCache.get(pubkey);
+}
+
+// Get cache info for debugging
+export function getProfileCacheInfo(): { count: number; bytes: number } {
+  const data: Record<string, Profile> = {};
+  for (const [pubkey, profile] of profileCache) {
+    data[pubkey] = profile;
+  }
+  const json = JSON.stringify(data);
+  return {
+    count: profileCache.size,
+    bytes: new Blob([json]).size,
+  };
+}
 
 // Type for the result of createRxForwardReq with emit method
 type ForwardReq = ReturnType<typeof createRxForwardReq>;
@@ -70,8 +124,18 @@ export class RelayNode extends ClassicPreset.Node {
   private rxReq: ForwardReq | null = null;
   private subscription: { unsubscribe: () => void } | null = null;
 
+  // Profile updates (kind:0 events handled in main subscription)
+  private profileSubject = new Subject<{ pubkey: string; profile: Profile }>();
+  private profileSubscription: { unsubscribe: () => void } | null = null;
+  private pendingProfiles = new Set<string>(); // Track pubkeys we've already requested
+  private profileBatchQueue: string[] = []; // Queue for batching profile requests
+  private profileBatchTimer: ReturnType<typeof setTimeout> | null = null;
+
   // Shared observable that can be subscribed to by multiple downstream nodes
   public output$: Observable<NostrEvent> = this.eventSubject.asObservable().pipe(share());
+
+  // Observable for profile updates
+  public profile$: Observable<{ pubkey: string; profile: Profile }> = this.profileSubject.asObservable().pipe(share());
 
   constructor() {
     super(i18next.t('nodes.relay.title'));
@@ -161,15 +225,70 @@ export class RelayNode extends ClassicPreset.Node {
 
     this.rxReq = createRxForwardReq();
 
+    // Helper to flush profile batch queue
+    const flushProfileBatch = () => {
+      if (this.profileBatchQueue.length === 0) return;
+      const authors = [...this.profileBatchQueue];
+      this.profileBatchQueue = [];
+      if (DEBUG) console.log('Batch requesting profiles for:', authors.length, 'authors');
+      this.rxReq?.emit({ kinds: [0], authors, limit: authors.length });
+    };
+
+    // Helper to queue profile request with batching
+    const queueProfileRequest = (pubkey: string) => {
+      if (profileCache.has(pubkey) || this.pendingProfiles.has(pubkey)) return;
+      this.pendingProfiles.add(pubkey);
+      this.profileBatchQueue.push(pubkey);
+
+      // Flush immediately if batch is large enough, or schedule flush
+      if (this.profileBatchQueue.length >= 50) {
+        if (this.profileBatchTimer) {
+          clearTimeout(this.profileBatchTimer);
+          this.profileBatchTimer = null;
+        }
+        flushProfileBatch();
+      } else if (!this.profileBatchTimer) {
+        // Flush after 100ms if no more events arrive
+        this.profileBatchTimer = setTimeout(() => {
+          this.profileBatchTimer = null;
+          flushProfileBatch();
+        }, 100);
+      }
+    };
+
+    // Main event subscription (handles both regular events and profile events)
     this.subscription = this.rxNostr.use(this.rxReq).subscribe({
       next: (packet) => {
         const event = packet.event as NostrEvent;
+
+        // Handle profile events (kind:0)
+        if (event.kind === 0) {
+          if (DEBUG) console.log('Profile event received:', event.kind, event.pubkey.slice(0, 8));
+          try {
+            const profile = JSON.parse(event.content) as Profile;
+            profileCache.set(event.pubkey, profile);
+            saveProfileCache(); // Persist to localStorage
+            if (DEBUG) console.log('Profile cached:', event.pubkey.slice(0, 8), profile.name || profile.display_name);
+            this.profileSubject.next({ pubkey: event.pubkey, profile });
+          } catch (e) {
+            if (DEBUG) console.error('Profile parse error:', e);
+          }
+          return; // Don't emit profile events to the main output
+        }
+
+        // Emit regular events
         this.eventSubject.next(event);
+
+        // Queue profile request (batched)
+        queueProfileRequest(event.pubkey);
       },
       error: (err) => {
-        console.error('RelayNode subscription error:', err);
+        if (DEBUG) console.error('RelayNode subscription error:', err);
       },
     });
+
+    // Profile subscription is now merged with main subscription
+    this.profileSubscription = { unsubscribe: () => {} }; // Dummy for cleanup
 
     // Emit filters to start receiving events (multiple filters = OR logic)
     const filters = this.getFilters();
@@ -184,15 +303,35 @@ export class RelayNode extends ClassicPreset.Node {
       this.subscription.unsubscribe();
       this.subscription = null;
     }
+    if (this.profileSubscription) {
+      this.profileSubscription.unsubscribe();
+      this.profileSubscription = null;
+    }
     if (this.rxNostr) {
       this.rxNostr.dispose();
       this.rxNostr = null;
     }
     this.rxReq = null;
+    this.pendingProfiles.clear();
+    this.profileBatchQueue = [];
+    if (this.profileBatchTimer) {
+      clearTimeout(this.profileBatchTimer);
+      this.profileBatchTimer = null;
+    }
   }
 
   // Check if subscription is active
   isSubscribed(): boolean {
     return this.subscription !== null;
+  }
+
+  // Check if profile subscription is active
+  isProfileSubscribed(): boolean {
+    return this.profileSubscription !== null;
+  }
+
+  // Get pending profile count
+  getPendingProfileCount(): number {
+    return this.pendingProfiles.size;
   }
 }

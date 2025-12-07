@@ -7,13 +7,13 @@ import { ConnectionPathPlugin } from 'rete-connection-path-plugin';
 import { ReactPlugin, Presets } from 'rete-react-plugin';
 import { createRoot } from 'react-dom/client';
 
-import { RelayNode, OperatorNode, SearchNode, TimelineNode } from './nodes';
+import { RelayNode, OperatorNode, SearchNode, TimelineNode, getCachedProfile, getProfileCacheInfo } from './nodes';
 import { CustomNode } from './CustomNode';
 import { CustomConnection } from './CustomConnection';
 import { CustomSocket } from './CustomSocket';
 import { saveGraph, loadGraph } from '../../utils/localStorage';
 import type { TimelineEvent, NostrEvent } from '../../nostr/types';
-import type { Observable } from 'rxjs';
+import type { Observable, Subscription } from 'rxjs';
 import './GraphEditor.css';
 
 // Debug flag for development
@@ -65,6 +65,7 @@ export function GraphEditor({
   const isLoadingRef = useRef(false);
   const eventsRef = useRef<Map<string, TimelineEvent[]>>(new Map());
   const rebuildPipelineRef = useRef<(() => void) | null>(null);
+  const profileSubscriptionsRef = useRef<Subscription[]>([]);
   const selectedConnectionIdRef = useRef<string | null>(null);
   const pendingConnectionRef = useRef<{ nodeId: string; socketKey: string; side: 'input' | 'output' } | null>(null);
 
@@ -133,15 +134,32 @@ export function GraphEditor({
       if (type === 'Relay') {
         const relayNode = node as RelayNode;
         const isActive = relayNode.isSubscribed();
+        const isProfileActive = relayNode.isProfileSubscribed();
+        const pendingProfiles = relayNode.getPendingProfileCount();
         const relays = relayNode.getRelayUrls();
         const filters = relayNode.getFilters();
         const status = isActive ? 'ON' : 'OFF';
+        const profileStatus = isProfileActive ? 'ON' : 'OFF';
 
         lines.push(`[${status}] ${node.id} | ${relays.join(', ')} | ${JSON.stringify(filters)}`);
+        lines.push(`  └─ [profile: ${profileStatus}] pending: ${pendingProfiles}`);
       }
     }
 
     lines.push('========================');
+    console.log(lines.join('\n'));
+  }, []);
+
+  // Debug function to dump profile cache info to console
+  const infoCache = useCallback(() => {
+    const info = getProfileCacheInfo();
+    const lines: string[] = ['=== Profile Cache Info ===', ''];
+    lines.push(`Items: ${info.count}`);
+    lines.push(`Size: ${info.bytes.toLocaleString()} bytes`);
+    if (info.bytes >= 1024) {
+      lines.push(`      ${(info.bytes / 1024).toFixed(2)} KB`);
+    }
+    lines.push('==========================');
     console.log(lines.join('\n'));
   }, []);
 
@@ -151,13 +169,17 @@ export function GraphEditor({
     (window as any).dumpgraph = dumpGraph;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).dumpsub = dumpSub;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).infocache = infoCache;
     return () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).dumpgraph;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).dumpsub;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).infocache;
     };
-  }, [dumpGraph, dumpSub]);
+  }, [dumpGraph, dumpSub, infoCache]);
 
   // Find all downstream timeline IDs from a given node
   const findDownstreamTimelines = useCallback((startNodeId: string): Set<string> => {
@@ -253,6 +275,12 @@ export function GraphEditor({
     const connections = editor.getConnections();
     const nodes = editor.getNodes();
 
+    // Clean up existing profile subscriptions
+    for (const sub of profileSubscriptionsRef.current) {
+      sub.unsubscribe();
+    }
+    profileSubscriptionsRef.current = [];
+
     // First, stop all existing subscriptions
     for (const node of nodes) {
       if (getNodeType(node) === 'Relay') {
@@ -297,10 +325,31 @@ export function GraphEditor({
       }
     }
 
-    // Start subscriptions on active Relay nodes
+    // Start subscriptions on active Relay nodes and subscribe to profile updates
     for (const node of nodes) {
       if (getNodeType(node) === 'Relay' && activeRelayIds.has(node.id)) {
-        (node as RelayNode).startSubscription();
+        const relayNode = node as RelayNode;
+        relayNode.startSubscription();
+
+        // Subscribe to profile updates from this relay
+        const profileSub = relayNode.profile$.subscribe({
+          next: ({ pubkey, profile }) => {
+            // Update all events with this pubkey across all timelines
+            for (const [timelineId, events] of eventsRef.current) {
+              let updated = false;
+              for (const event of events) {
+                if (event.event.pubkey === pubkey && !event.profile) {
+                  event.profile = profile;
+                  updated = true;
+                }
+              }
+              if (updated) {
+                onEventsUpdate(timelineId, [...events]);
+              }
+            }
+          },
+        });
+        profileSubscriptionsRef.current.push(profileSub);
       }
     }
 
@@ -369,8 +418,10 @@ export function GraphEditor({
           if (events.some(e => e.event.id === event.id)) {
             return;
           }
+          // Try to get cached profile
+          const cachedProfile = getCachedProfile(event.pubkey);
           // Add event and sort by created_at (newest first)
-          const newEvents = [...events, { event, profile: undefined }].sort(
+          const newEvents = [...events, { event, profile: cachedProfile }].sort(
             (a, b) => b.event.created_at - a.event.created_at
           );
           // Limit to 100 events

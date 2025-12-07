@@ -1,4 +1,4 @@
-export { RelayNode } from './RelayNode';
+export { RelayNode, getCachedProfile, getProfileCacheInfo } from './RelayNode';
 export { OperatorNode } from './OperatorNode';
 export { SearchNode } from './SearchNode';
 export { TimelineNode } from './TimelineNode';

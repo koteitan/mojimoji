@@ -184,14 +184,24 @@ User Inrterface is as follows.
 - After the EOSE(End Of Stored Events) is received, the subscription continues to listen to new events.
 - Event deduplication: duplicate events (same event ID) are filtered out
 
-### nostr-filter resolution
-- There are hidden subscriptions:
-  - kind:0: to get profile information.
+### hidden subscriptions:
+- There are hidden subscriptions to get profile information for displaying event items:
+  - find all the relay nodes for each timeline node.
+  - add hidden subscriptions to get kind:0 events for authors found in the timeline events.
+  - icon, name, display_name, created_at are extracted from kind:0 events for displaying timeline items.
+  - profile requests are batched (up to 50 authors per request, or flush after 100ms)
+
+### profile cache
+- Profile data (kind:0 events) is cached in memory and persisted to localStorage
+- Cache key: `mojimoji-profile-cache`
+- Cache is loaded from localStorage on app startup
+- Cache is saved to localStorage when new profiles are received
 
 ### debug tools
 - Browser console debug functions:
   - dumpgraph(): output graph structure (nodes and connections)
   - dumpsub(): output relay subscription status (ON/OFF)
+  - infocache(): output profile cache info (item count and size in bytes)
 
 ## Internationalization (i18n)
 - Language detection:
