@@ -118,3 +118,13 @@
 .custom-node-output > div > div:hover {
   background: #8b93ff !important;
 }
+
+/* Selected socket (for deletion) - high specificity to override styled-components */
+.custom-node .custom-node-input.socket-selected > div > div,
+.custom-node .custom-node-output.socket-selected > div > div,
+.custom-node-input.socket-selected > div > div,
+.custom-node-output.socket-selected > div > div {
+  background: #ff6b6b !important;
+  border-color: #ff4444 !important;
+  box-shadow: 0 0 8px rgba(255, 68, 68, 0.6) !important;
+}

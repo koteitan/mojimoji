@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NodeEditor, ClassicPreset } from 'rete';
 import { AreaPlugin, AreaExtensions } from 'rete-area-plugin';
-import { ConnectionPlugin, Presets as ConnectionPresets } from 'rete-connection-plugin';
+import { ConnectionPlugin } from 'rete-connection-plugin';
 import { ReactPlugin, Presets } from 'rete-react-plugin';
 import { createRoot } from 'react-dom/client';
 
@@ -54,6 +54,7 @@ export function GraphEditor({
   const isLoadingRef = useRef(false);
   const eventsRef = useRef<Map<string, TimelineEvent[]>>(new Map());
   const rebuildPipelineRef = useRef<(() => void) | null>(null);
+  const selectedConnectionIdRef = useRef<string | null>(null);
 
   const saveCurrentGraph = useCallback(() => {
     const editor = editorRef.current;
@@ -368,7 +369,17 @@ export function GraphEditor({
   const deleteSelected = useCallback(async () => {
     const editor = editorRef.current;
     const selector = selectorRef.current;
-    if (!editor || !selector) return;
+    if (!editor) return;
+
+    // First, check if there's a selected connection to delete
+    if (selectedConnectionIdRef.current) {
+      await editor.removeConnection(selectedConnectionIdRef.current);
+      selectedConnectionIdRef.current = null;
+      return;
+    }
+
+    // Otherwise, delete selected nodes
+    if (!selector) return;
 
     // Get selected node IDs
     const selected: string[] = [];
@@ -414,8 +425,8 @@ export function GraphEditor({
       const connection = new ConnectionPlugin<Schemes, AreaExtra>();
       const render = new ReactPlugin<Schemes, AreaExtra>({ createRoot });
 
-      // Set up connection presets
-      connection.addPreset(ConnectionPresets.classic.setup());
+      // Don't add connection presets - we handle connections manually via click-to-connect
+      // This prevents pseudo-connection visual artifacts
 
 
       // Set up render presets with custom node only
@@ -514,9 +525,19 @@ export function GraphEditor({
       });
       AreaExtensions.simpleNodesOrder(area);
 
-      // Track socket interactions for manual connection creation
+      // Track socket interactions for manual connection creation and selection
       let lastPointerDownOnSocket = false;
       let pendingConnection: { nodeId: string; socketKey: string; side: 'input' | 'output' } | null = null;
+
+      // Function to find connection by socket
+      const findConnectionBySocket = (nodeId: string, socketKey: string, side: 'input' | 'output') => {
+        const connections = editor.getConnections();
+        if (side === 'input') {
+          return connections.find(c => c.target === nodeId && c.targetInput === socketKey);
+        } else {
+          return connections.find(c => c.source === nodeId && c.sourceOutput === socketKey);
+        }
+      };
 
       container.addEventListener('pointerdown', (e) => {
         const target = e.target as HTMLElement;
@@ -543,7 +564,37 @@ export function GraphEditor({
                 socketKey = testId.substring(testId.indexOf('-') + 1);
               }
 
-              if (pendingConnection) {
+              // Check if this socket has a connection
+              console.log('Socket clicked:', { nodeId, socketKey, side });
+              const existingConnection = findConnectionBySocket(nodeId, socketKey, side);
+              console.log('Existing connection:', existingConnection);
+
+              // Clear previous socket selection highlight
+              container.querySelectorAll('.socket-selected').forEach(el => {
+                el.classList.remove('socket-selected');
+                // Clear inline styles
+                const innerSocket = el.querySelector('div > div') as HTMLElement;
+                if (innerSocket) {
+                  innerSocket.style.background = '';
+                  innerSocket.style.borderColor = '';
+                  innerSocket.style.boxShadow = '';
+                }
+              });
+
+              if (existingConnection) {
+                // Select this connection for potential deletion
+                selectedConnectionIdRef.current = existingConnection.id;
+                pendingConnection = null;
+                // Highlight the selected socket
+                socketContainer?.classList.add('socket-selected');
+                // Also apply inline style to the inner socket div
+                const innerSocket = socketContainer?.querySelector('div > div') as HTMLElement;
+                if (innerSocket) {
+                  innerSocket.style.background = '#ff6b6b';
+                  innerSocket.style.borderColor = '#ff4444';
+                  innerSocket.style.boxShadow = '0 0 8px rgba(255, 68, 68, 0.6)';
+                }
+              } else if (pendingConnection) {
                 // Second click - create connection
                 if (pendingConnection.side === 'output' && side === 'input') {
                   // Connect output -> input
@@ -573,15 +624,29 @@ export function GraphEditor({
                   }
                 }
                 pendingConnection = null;
+                selectedConnectionIdRef.current = null;
               } else {
                 // First click - store pending connection
                 pendingConnection = { nodeId, socketKey, side };
+                selectedConnectionIdRef.current = null;
               }
             }
           }
         } else {
-          // Clicked elsewhere, cancel pending connection
+          // Clicked elsewhere, cancel pending connection and selection
           pendingConnection = null;
+          selectedConnectionIdRef.current = null;
+          // Clear socket selection highlight
+          container.querySelectorAll('.socket-selected').forEach(el => {
+            el.classList.remove('socket-selected');
+            // Clear inline styles
+            const innerSocket = el.querySelector('div > div') as HTMLElement;
+            if (innerSocket) {
+              innerSocket.style.background = '';
+              innerSocket.style.borderColor = '';
+              innerSocket.style.boxShadow = '';
+            }
+          });
         }
       }, true); // Use capture phase to run before rete's handlers
 
@@ -648,6 +713,16 @@ export function GraphEditor({
           setTimeout(saveCurrentGraph, 0);
           // Rebuild pipeline when connections change
           setTimeout(() => rebuildPipelineRef.current?.(), 0);
+          // Force update nodes to refresh socket positions and clear ghost connections
+          if (context.type === 'connectionremoved') {
+            const conn = context.data;
+            setTimeout(() => {
+              const sourceNode = editor.getNode(conn.source);
+              const targetNode = editor.getNode(conn.target);
+              if (sourceNode) area.update('node', sourceNode.id);
+              if (targetNode) area.update('node', targetNode.id);
+            }, 10);
+          }
         }
         return context;
       });
