@@ -25,10 +25,10 @@ User Inrterface is as follows.
             - text: event.context
 - center: Graph view: modular connectors of nostr filter by rete.js.
   - top line: toolbars:
-    - +Source button: add a Source node.
+    - +Relay button: add a Relay node.
     - +Operator button: add an Operator node.
     - +Search button: add a Search node.
-    - +Display button: add a Display node.
+    - +Timeline button: add a Timeline node.
     - Delete button: delete selected node(s).
   - center area: graph editor area.
     - nodes:
@@ -36,15 +36,26 @@ User Inrterface is as follows.
         - nodes inputs data.
         - nodes outputs data:
         - nodes have attributes.
-      - Source node:
+      - common behaviors:
+        - terminal positions:
+          - input terminals are placed at the top center of the node
+          - output terminals are placed at the bottom center of the node
+        - node placement on add:
+          - Relay node: placed at the same Y as the uppermost node, to the right of the rightmost node.
+          - Other nodes (Operator, Search, Timeline): placed at the same X as the rightmost node, below the lowermost node.
+          - spacing: 50px gap from existing nodes.
+        - view centering:
+          - after adding a new node, the view is centered on the new node without changing the zoom level.
+      - Relay node:
         - output terminal:
           - output (nostr event)
         - attributes:
-          - relay URL list:
+          - relay URL list: multiple line text area (size adjusted by new lines automatically)
           - filter list:
             - list item:
-              - filter name: ids, authors, kinds, #?, since, until, limit
+              - filter name: {ids, authors, kinds, #?, since, until, limit}
               - filter value: string
+              - + button: add a new filter item (on the right end of the last item)
         - default:
           - kinds = [1]
           - limit = 500
@@ -70,7 +81,7 @@ User Inrterface is as follows.
             - regex switch: on, off
           - behavior:
             - input nostr event and filter by keyword the event.content.
-      - display node:
+      - Timeline node:
         - input terminal:
           - input (nostr event)
         - attributes:
@@ -106,16 +117,16 @@ User Inrterface is as follows.
   - automatically load localStorage when the app is started.
   - when the localStorage is empty:
     - create a default graph:
-      - one relay node: default node
-      - one Display node: timeline name: "Timeline 1"
-      - one edge:connect the relay node and the Display node.
+      - one Relay node: default settings
+      - one Timeline node: timeline name: "Timeline"
+      - one edge: connect the Relay node output to the Timeline node input.
 
 ### on change connections
 - save:
   - automatically save the graph into localStorage when a node or an edge is added/removed. 
 
 ### subscription
-- When display nodes are connected from the source nodes, the subscription is started.
+- When Timeline nodes are connected from Relay nodes, the subscription is started.
 - The subscription is implemented by rx-nostr observable.
 - When the subscription receives new nostr events, the events are shown in the timelines.
 - After the EOSE(End Of Stored Events) is received, the subscription continues to listen to new events.
@@ -171,10 +182,10 @@ User Inrterface is as follows.
   │   │   └── Graph/
   │   │       ├── GraphEditor.tsx
   │   │       └── nodes/
-  │   │           ├── SourceNode.ts
+  │   │           ├── RelayNode.ts
   │   │           ├── OperatorNode.ts
   │   │           ├── SearchNode.ts
-  │   │           └── DisplayNode.ts
+  │   │           └── TimelineNode.ts
   │   ├── nostr/
   │   │   ├── client.ts
   │   │   ├── subscription.ts

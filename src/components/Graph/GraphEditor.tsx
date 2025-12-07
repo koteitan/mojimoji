@@ -7,8 +7,7 @@ import { ReactPlugin, Presets } from 'rete-react-plugin';
 import { createRoot } from 'react-dom/client';
 
 import { RelayNode, OperatorNode, SearchNode, TimelineNode } from './nodes';
-import { TextInputControl, TextAreaControl, SelectControl, CheckboxControl } from './nodes/controls';
-import { TextInputComponent, TextAreaComponent, SelectComponent, CheckboxComponent } from './CustomControls';
+import { CustomNode } from './CustomNode';
 import { saveGraph, loadGraph } from '../../utils/localStorage';
 import type { TimelineEvent, NostrEvent } from '../../nostr/types';
 import type { Observable } from 'rxjs';
@@ -77,6 +76,44 @@ export function GraphEditor({
 
     saveGraph({ nodes, connections });
   }, []);
+
+  // Debug function to dump graph state to console
+  const dumpGraph = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) {
+      console.log('Editor not initialized');
+      return;
+    }
+
+    const nodes = editor.getNodes().map((node: NodeTypes) => ({
+      id: node.id,
+      type: (node as NodeTypes & { nodeType: string }).nodeType,
+      position: areaRef.current?.nodeViews.get(node.id)?.position || { x: 0, y: 0 },
+    }));
+
+    const connections = editor.getConnections().map((conn: ClassicPreset.Connection<NodeTypes, NodeTypes>) => ({
+      id: conn.id,
+      source: conn.source,
+      sourceOutput: conn.sourceOutput,
+      target: conn.target,
+      targetInput: conn.targetInput,
+    }));
+
+    console.log('=== Graph Dump ===');
+    console.log('Nodes:', nodes);
+    console.log('Connections:', connections);
+    console.log('==================');
+  }, []);
+
+  // Expose dumpgraph to window for debugging
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).dumpgraph = dumpGraph;
+    return () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).dumpgraph;
+    };
+  }, [dumpGraph]);
 
   // Get the output Observable from a node by traversing connections
   const getNodeOutput = useCallback((nodeId: string): Observable<NostrEvent> | null => {
@@ -256,9 +293,63 @@ export function GraphEditor({
 
     await editor.addNode(node);
 
-    // Position the node in the center of the visible area
-    const { x, y } = area.area.pointer;
-    await area.translate(node.id, { x: x || 100, y: y || 100 });
+    // Calculate position based on existing nodes
+    const existingNodes = editor.getNodes();
+    let newX = 100;
+    let newY = 100;
+    const nodeSpacing = 50;
+
+    if (existingNodes.length > 1) { // More than just the new node
+      // Get positions of all existing nodes (excluding the newly added one)
+      const positions: { x: number; y: number; width: number; height: number }[] = [];
+      for (const n of existingNodes) {
+        if (n.id !== node.id) {
+          const view = area.nodeViews.get(n.id);
+          if (view) {
+            positions.push({
+              x: view.position.x,
+              y: view.position.y,
+              width: n.width || 180,
+              height: n.height || 120,
+            });
+          }
+        }
+      }
+
+      if (positions.length > 0) {
+        // Find bounds
+        const minY = Math.min(...positions.map(p => p.y));
+        const maxX = Math.max(...positions.map(p => p.x + p.width));
+        const maxY = Math.max(...positions.map(p => p.y + p.height));
+
+        if (type === 'Relay') {
+          // Relay nodes: same Y as uppermost, right of rightmost
+          newX = maxX + nodeSpacing;
+          newY = minY;
+        } else {
+          // Other nodes: same X as rightmost, below lowermost
+          newX = Math.max(...positions.map(p => p.x));
+          newY = maxY + nodeSpacing;
+        }
+      }
+    }
+
+    await area.translate(node.id, { x: newX, y: newY });
+
+    // Center view on new node without changing zoom
+    const container = area.container;
+    const { k } = area.area.transform;
+    const containerRect = container.getBoundingClientRect();
+    const centerX = containerRect.width / 2;
+    const centerY = containerRect.height / 2;
+    const nodeWidth = node.width || 180;
+    const nodeHeight = node.height || 120;
+
+    // Calculate translation to center the node
+    const targetX = centerX - (newX + nodeWidth / 2) * k;
+    const targetY = centerY - (newY + nodeHeight / 2) * k;
+
+    area.area.translate(targetX, targetY);
 
     saveCurrentGraph();
   }, [onTimelineCreate, saveCurrentGraph]);
@@ -326,24 +417,14 @@ export function GraphEditor({
       // Set up connection presets
       connection.addPreset(ConnectionPresets.classic.setup());
 
-      // Set up render presets with custom control rendering
+
+      // Set up render presets with custom node only
       render.addPreset(
         Presets.classic.setup({
           customize: {
-            control(data: { payload: ClassicPreset.Control }) {
-              if (data.payload instanceof TextInputControl) {
-                return TextInputComponent;
-              }
-              if (data.payload instanceof TextAreaControl) {
-                return TextAreaComponent;
-              }
-              if (data.payload instanceof SelectControl) {
-                return SelectComponent;
-              }
-              if (data.payload instanceof CheckboxControl) {
-                return CheckboxComponent;
-              }
-              return null;
+            node() {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              return CustomNode as any;
             },
           },
         })
@@ -381,10 +462,14 @@ export function GraphEditor({
       const handlePointerDown = (e: PointerEvent) => {
         // Only pan if clicking on the container background (not on nodes)
         const target = e.target as HTMLElement;
-        const isNode = target.closest('.node');
+        const isNode = target.closest('.node') || target.closest('.custom-node');
         const isConnection = target.closest('.connection');
-        const isSocket = target.closest('.socket');
+        // Check for socket - including styled-components sockets in our custom containers
+        const isSocket = target.closest('.socket') ||
+                         target.closest('.custom-node-input') ||
+                         target.closest('.custom-node-output');
 
+        // Don't start panning if clicking on a node, connection, or socket
         if (!isNode && !isConnection && !isSocket) {
           isDragging = true;
           lastX = e.clientX;
@@ -421,13 +506,95 @@ export function GraphEditor({
       container.addEventListener('pointermove', handlePointerMove);
       container.addEventListener('pointerup', handlePointerUp);
 
-      // Enable zoom and drag
+      // Enable selection and node dragging
       const selector = AreaExtensions.selector();
       selectorRef.current = selector;
       AreaExtensions.selectableNodes(area, selector, {
         accumulating: AreaExtensions.accumulateOnCtrl(),
       });
       AreaExtensions.simpleNodesOrder(area);
+
+      // Track socket interactions for manual connection creation
+      let lastPointerDownOnSocket = false;
+      let pendingConnection: { nodeId: string; socketKey: string; side: 'input' | 'output' } | null = null;
+
+      container.addEventListener('pointerdown', (e) => {
+        const target = e.target as HTMLElement;
+        const inputSocket = target.closest('.custom-node-input');
+        const outputSocket = target.closest('.custom-node-output');
+
+        lastPointerDownOnSocket = !!(inputSocket || outputSocket);
+
+        if (inputSocket || outputSocket) {
+          // Find the node this socket belongs to
+          const nodeElement = target.closest('.custom-node') as HTMLElement | null;
+
+          if (nodeElement) {
+            // Get node ID from our custom data-node-id attribute
+            const nodeId = nodeElement.getAttribute('data-node-id');
+
+            if (nodeId) {
+              const side = outputSocket ? 'output' : 'input';
+              // Get socket key from data-testid (format: "input-keyName" or "output-keyName")
+              const socketContainer = outputSocket || inputSocket;
+              const testId = socketContainer?.getAttribute('data-testid');
+              let socketKey = side; // fallback
+              if (testId && testId.includes('-')) {
+                socketKey = testId.substring(testId.indexOf('-') + 1);
+              }
+
+              if (pendingConnection) {
+                // Second click - create connection
+                if (pendingConnection.side === 'output' && side === 'input') {
+                  // Connect output -> input
+                  const sourceNode = editor.getNode(pendingConnection.nodeId);
+                  const targetNode = editor.getNode(nodeId);
+                  if (sourceNode && targetNode && pendingConnection.nodeId !== nodeId) {
+                    const conn = new ClassicPreset.Connection(
+                      sourceNode,
+                      pendingConnection.socketKey as never,
+                      targetNode,
+                      socketKey as never
+                    );
+                    editor.addConnection(conn);
+                  }
+                } else if (pendingConnection.side === 'input' && side === 'output') {
+                  // Connect output -> input (reverse order)
+                  const sourceNode = editor.getNode(nodeId);
+                  const targetNode = editor.getNode(pendingConnection.nodeId);
+                  if (sourceNode && targetNode && pendingConnection.nodeId !== nodeId) {
+                    const conn = new ClassicPreset.Connection(
+                      sourceNode,
+                      socketKey as never,
+                      targetNode,
+                      pendingConnection.socketKey as never
+                    );
+                    editor.addConnection(conn);
+                  }
+                }
+                pendingConnection = null;
+              } else {
+                // First click - store pending connection
+                pendingConnection = { nodeId, socketKey, side };
+              }
+            }
+          }
+        } else {
+          // Clicked elsewhere, cancel pending connection
+          pendingConnection = null;
+        }
+      }, true); // Use capture phase to run before rete's handlers
+
+      // Cancel node picking/dragging when drag starts from socket
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      area.addPipe((context: any) => {
+        if (lastPointerDownOnSocket) {
+          if (context.type === 'nodepicked' || context.type === 'nodetranslate') {
+            return undefined; // Cancel the event
+          }
+        }
+        return context;
+      });
 
       // Delete selected nodes with Delete or Backspace key
       const handleKeyDown = async (e: KeyboardEvent) => {

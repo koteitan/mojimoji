@@ -66,23 +66,36 @@
   border-bottom: 1px solid #333;
 }
 
-/* Socket styles */
-.socket {
-  width: 16px !important;
-  height: 16px !important;
-  border-radius: 50% !important;
+/* Socket styles - rounded thin rectangle */
+.socket,
+.custom-socket {
+  width: 40px !important;
+  height: 12px !important;
+  border-radius: 6px !important;
   background: #646cff !important;
   border: 2px solid #444 !important;
+  cursor: crosshair !important;
+  z-index: 100 !important;
+  position: relative !important;
 }
 
-.socket:hover {
+.socket:hover,
+.custom-socket:hover {
   background: #8b93ff !important;
 }
 
 /* Connection styles */
-.connection path {
+.connection path,
+svg path {
   stroke: #646cff !important;
   stroke-width: 3px !important;
+  fill: none !important;
+}
+
+/* Debug: ensure connection SVG is visible */
+svg {
+  overflow: visible !important;
+  pointer-events: none;
 }
 
 /* Control styles */
