@@ -1,4 +1,4 @@
-import type { TimelineEvent } from '../../nostr/types';
+import { formatNpub, type TimelineEvent } from '../../nostr/types';
 import './Timeline.css';
 
 interface TimelineItemProps {
@@ -14,6 +14,10 @@ export function TimelineItem({ event }: TimelineItemProps) {
   const { event: nostrEvent, profile } = event;
   const isReaction = nostrEvent.kind === 7;
 
+  // Show npub if no profile name available
+  const displayName = profile?.display_name || profile?.name || formatNpub(nostrEvent.pubkey);
+  const userName = profile?.name || formatNpub(nostrEvent.pubkey);
+
   return (
     <div className="timeline-item">
       <div className="timeline-item-header">
@@ -27,10 +31,10 @@ export function TimelineItem({ event }: TimelineItemProps) {
         />
         <div className="timeline-item-names">
           <span className="timeline-item-display-name">
-            {profile?.display_name || profile?.name || 'Anonymous'}
+            {displayName}
           </span>
           <span className="timeline-item-name">
-            @{profile?.name || nostrEvent.pubkey.slice(0, 8)}
+            @{userName}
           </span>
         </div>
       </div>

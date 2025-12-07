@@ -1,4 +1,25 @@
 // Nostr event types
+import { bech32 } from 'bech32';
+
+// Convert hex pubkey to npub format (NIP-19)
+export function pubkeyToNpub(pubkey: string): string {
+  try {
+    const bytes = [];
+    for (let i = 0; i < pubkey.length; i += 2) {
+      bytes.push(parseInt(pubkey.slice(i, i + 2), 16));
+    }
+    const words = bech32.toWords(new Uint8Array(bytes));
+    return bech32.encode('npub', words, 90);
+  } catch {
+    return pubkey.slice(0, 8); // Fallback to hex prefix
+  }
+}
+
+// Format npub for display (shortened)
+export function formatNpub(pubkey: string): string {
+  const npub = pubkeyToNpub(pubkey);
+  return `${npub.slice(0, 12)}...${npub.slice(-4)}`;
+}
 
 export interface NostrEvent {
   id: string;

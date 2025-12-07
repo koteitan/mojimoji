@@ -15,17 +15,17 @@ User Inrterface is as follows.
       - vertical scrollable area:
         - items: nostr events.
           - kind:1:
-            - icon: kind0.context.picture
-            - name: kind0.context.name
-            - display_name: kind0.context.display_name
-            - text created at: kind0.context.created_at
-            - text content: event.context
+            - icon: kind0.content.picture (default avatar if not available)
+            - name: kind0.content.name (npub if not available, e.g., "npub1abc...xyz")
+            - display_name: kind0.content.display_name (npub if not available)
+            - text created at: event.created_at
+            - text content: event.content
           - kind:7:
-            - icon: kind0.context.picture
-            - name: kind0.context.name
-            - display_name: kind0.context.display_name
-            - text created at: kind0.context.created_at
-            - text: event.context
+            - icon: kind0.content.picture (default avatar if not available)
+            - name: kind0.content.name (npub if not available)
+            - display_name: kind0.content.display_name (npub if not available)
+            - text created at: event.created_at
+            - text: event.content
 - center: Graph view: modular connectors of nostr filter by rete.js.
   - top line: toolbars:
     - +Relay button: add a Relay node.
@@ -195,7 +195,7 @@ User Inrterface is as follows.
 - Profile data (kind:0 events) is cached in memory and persisted to localStorage
 - Cache key: `mojimoji-profile-cache`
 - Cache is loaded from localStorage on app startup
-- Cache is saved to localStorage when new profiles are received
+- Cache is saved to localStorage with debouncing (500ms delay to batch writes)
 
 ### debug tools
 - Browser console debug functions:

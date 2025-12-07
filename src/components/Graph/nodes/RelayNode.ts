@@ -29,17 +29,27 @@ function loadProfileCache(): void {
   }
 }
 
-// Save cache to localStorage
+// Save cache to localStorage (debounced to avoid excessive writes)
+let saveProfileCacheTimer: ReturnType<typeof setTimeout> | null = null;
+
 function saveProfileCache(): void {
-  try {
-    const data: Record<string, Profile> = {};
-    for (const [pubkey, profile] of profileCache) {
-      data[pubkey] = profile;
-    }
-    localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(data));
-  } catch {
-    // Ignore errors when saving cache (e.g., quota exceeded)
+  // Debounce: wait 500ms after last call before actually saving
+  if (saveProfileCacheTimer) {
+    clearTimeout(saveProfileCacheTimer);
   }
+  saveProfileCacheTimer = setTimeout(() => {
+    saveProfileCacheTimer = null;
+    try {
+      const data: Record<string, Profile> = {};
+      for (const [pubkey, profile] of profileCache) {
+        data[pubkey] = profile;
+      }
+      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(data));
+      if (DEBUG) console.log('Profile cache saved to localStorage');
+    } catch {
+      // Ignore errors when saving cache (e.g., quota exceeded)
+    }
+  }, 500);
 }
 
 // Initialize cache from localStorage
