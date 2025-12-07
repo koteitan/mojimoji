@@ -66,7 +66,7 @@
   justify-content: center;
   gap: 16px;
   position: absolute;
-  top: -8px;
+  top: -6px;
   left: 0;
   right: 0;
   z-index: 100;
@@ -85,7 +85,7 @@
   justify-content: center;
   gap: 16px;
   position: absolute;
-  bottom: -8px;
+  bottom: -6px;
   left: 0;
   right: 0;
   z-index: 100;
@@ -97,36 +97,50 @@
   z-index: 100;
 }
 
-/* Socket styles - circle for direction-agnostic connections */
-/* Target rete.js styled-components socket */
+/* Socket styles - rounded thin rectangle for vertical connections */
+/* Target rete.js styled-components socket with high specificity */
+.custom-node .custom-node-input > div,
+.custom-node .custom-node-output > div,
 .custom-node-input > div,
 .custom-node-output > div {
-  width: 16px !important;
-  height: 16px !important;
+  width: 40px !important;
+  height: 12px !important;
+  min-width: 40px !important;
+  min-height: 12px !important;
+  max-width: 40px !important;
+  max-height: 12px !important;
 }
 
+.custom-node .custom-node-input > div > div,
+.custom-node .custom-node-output > div > div,
 .custom-node-input > div > div,
 .custom-node-output > div > div {
-  width: 16px !important;
-  height: 16px !important;
-  border-radius: 50% !important;
+  width: 40px !important;
+  height: 12px !important;
+  min-width: 40px !important;
+  min-height: 12px !important;
+  max-width: 40px !important;
+  max-height: 12px !important;
+  border-radius: 6px !important;
   background: #646cff !important;
   border: 2px solid #444 !important;
   cursor: crosshair !important;
   pointer-events: auto !important;
 }
 
-.custom-node-input > div > div:hover,
-.custom-node-output > div > div:hover {
+.custom-node .custom-node-input .custom-socket:hover,
+.custom-node .custom-node-output .custom-socket:hover,
+.custom-node-input .custom-socket:hover,
+.custom-node-output .custom-socket:hover {
   background: #8b93ff !important;
 }
 
-/* Selected socket (for deletion) - high specificity to override styled-components */
-.custom-node .custom-node-input.socket-selected > div > div,
-.custom-node .custom-node-output.socket-selected > div > div,
-.custom-node-input.socket-selected > div > div,
-.custom-node-output.socket-selected > div > div {
-  background: #ff6b6b !important;
-  border-color: #ff4444 !important;
-  box-shadow: 0 0 8px rgba(255, 68, 68, 0.6) !important;
+/* Selected socket - high specificity for custom socket */
+.custom-node .custom-node-input.socket-selected .custom-socket,
+.custom-node .custom-node-output.socket-selected .custom-socket,
+.custom-node-input.socket-selected .custom-socket,
+.custom-node-output.socket-selected .custom-socket {
+  background: #4ade80 !important;
+  border-color: #22c55e !important;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6) !important;
 }

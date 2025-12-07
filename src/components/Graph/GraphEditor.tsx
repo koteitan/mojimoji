@@ -10,6 +10,7 @@ import { createRoot } from 'react-dom/client';
 import { RelayNode, OperatorNode, SearchNode, TimelineNode } from './nodes';
 import { CustomNode } from './CustomNode';
 import { CustomConnection } from './CustomConnection';
+import { CustomSocket } from './CustomSocket';
 import { saveGraph, loadGraph } from '../../utils/localStorage';
 import type { TimelineEvent, NostrEvent } from '../../nostr/types';
 import type { Observable } from 'rxjs';
@@ -491,7 +492,7 @@ export function GraphEditor({
       if (container) {
         container.querySelectorAll('.socket-selected').forEach(el => {
           el.classList.remove('socket-selected');
-          const innerSocket = el.querySelector('div > div') as HTMLElement;
+          const innerSocket = el.querySelector('.custom-socket') as HTMLElement;
           if (innerSocket) {
             innerSocket.style.background = '';
             innerSocket.style.borderColor = '';
@@ -553,7 +554,7 @@ export function GraphEditor({
       // This prevents pseudo-connection visual artifacts
 
 
-      // Set up render presets with custom node and connection
+      // Set up render presets with custom node, connection, and socket
       render.addPreset(
         Presets.classic.setup({
           customize: {
@@ -564,6 +565,10 @@ export function GraphEditor({
             connection() {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               return CustomConnection as any;
+            },
+            socket() {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              return CustomSocket as any;
             },
           },
         })
@@ -748,7 +753,7 @@ export function GraphEditor({
               container.querySelectorAll('.socket-selected').forEach(el => {
                 el.classList.remove('socket-selected');
                 // Clear inline styles
-                const innerSocket = el.querySelector('div > div') as HTMLElement;
+                const innerSocket = el.querySelector('.custom-socket') as HTMLElement;
                 if (innerSocket) {
                   innerSocket.style.background = '';
                   innerSocket.style.borderColor = '';
@@ -802,7 +807,7 @@ export function GraphEditor({
                 selectedConnectionIdRef.current = existingConnection?.id ?? null;
                 // Highlight the selected socket (green)
                 socketContainer?.classList.add('socket-selected');
-                const innerSocket = socketContainer?.querySelector('div > div') as HTMLElement;
+                const innerSocket = socketContainer?.querySelector('.custom-socket') as HTMLElement;
                 if (innerSocket) {
                   innerSocket.style.background = '#4ade80';
                   innerSocket.style.borderColor = '#22c55e';
@@ -819,7 +824,7 @@ export function GraphEditor({
           container.querySelectorAll('.socket-selected').forEach(el => {
             el.classList.remove('socket-selected');
             // Clear inline styles
-            const innerSocket = el.querySelector('div > div') as HTMLElement;
+            const innerSocket = el.querySelector('.custom-socket') as HTMLElement;
             if (innerSocket) {
               innerSocket.style.background = '';
               innerSocket.style.borderColor = '';
