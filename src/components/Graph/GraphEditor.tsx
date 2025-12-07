@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { NodeEditor, ClassicPreset } from 'rete';
 import { AreaPlugin, AreaExtensions } from 'rete-area-plugin';
 import { ConnectionPlugin, Presets as ConnectionPresets } from 'rete-connection-plugin';
@@ -32,6 +33,7 @@ export function GraphEditor({
   onTimelineRemove,
   onEventsUpdate,
 }: GraphEditorProps) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<NodeEditor<Schemes> | null>(null);
   const areaRef = useRef<AreaPlugin<Schemes, AreaExtra> | null>(null);
@@ -500,11 +502,11 @@ export function GraphEditor({
   return (
     <div className="graph-editor">
       <div className="graph-toolbar">
-        <button onClick={() => addNode('Source')}>+ Source</button>
-        <button onClick={() => addNode('Operator')}>+ Operator</button>
-        <button onClick={() => addNode('Search')}>+ Search</button>
-        <button onClick={() => addNode('Display')}>+ Display</button>
-        <button onClick={deleteSelected} className="delete-btn">Delete</button>
+        <button onClick={() => addNode('Source')}>{t('toolbar.source')}</button>
+        <button onClick={() => addNode('Operator')}>{t('toolbar.operator')}</button>
+        <button onClick={() => addNode('Search')}>{t('toolbar.search')}</button>
+        <button onClick={() => addNode('Display')}>{t('toolbar.display')}</button>
+        <button onClick={deleteSelected} className="delete-btn">{t('toolbar.delete')}</button>
       </div>
       <div ref={containerRef} className="graph-editor-container" />
     </div>

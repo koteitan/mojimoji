@@ -1,5 +1,6 @@
 import { ClassicPreset } from 'rete';
 import { Observable, merge, share, Subject } from 'rxjs';
+import i18next from 'i18next';
 import { eventSocket } from './types';
 import { SelectControl } from './controls';
 import type { NostrEvent } from '../../../nostr/types';
@@ -28,7 +29,7 @@ export class OperatorNode extends ClassicPreset.Node {
   private subscriptions: { unsubscribe: () => void }[] = [];
 
   constructor() {
-    super('Operator');
+    super(i18next.t('nodes.operator.title'));
 
     this.addInput('input1', new ClassicPreset.Input(eventSocket, 'Input A'));
     this.addInput('input2', new ClassicPreset.Input(eventSocket, 'Input B'));
@@ -40,9 +41,9 @@ export class OperatorNode extends ClassicPreset.Node {
         this.operator,
         'Operation',
         [
-          { value: 'AND', label: 'AND (A ∩ B)' },
-          { value: 'OR', label: 'OR (A ∪ B)' },
-          { value: 'A-B', label: 'A - B' },
+          { value: 'AND', label: i18next.t('nodes.operator.and') + ' (A ∩ B)' },
+          { value: 'OR', label: i18next.t('nodes.operator.or') + ' (A ∪ B)' },
+          { value: 'A-B', label: i18next.t('nodes.operator.diff') },
         ],
         (value) => {
           this.operator = value as OperatorType;

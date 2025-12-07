@@ -8,11 +8,35 @@
 
 .timeline-pane {
   display: flex;
+  flex-direction: column;
   flex-shrink: 0;
   height: 100%;
-  overflow-x: auto;
   background: #1a1a1a;
   border-right: 2px solid #333;
+}
+
+.title-bar {
+  padding: 8px 12px;
+  background: #0a0a0a;
+  border-bottom: 1px solid #333;
+  font-size: 14px;
+  font-weight: bold;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.title-bar .version {
+  font-weight: normal;
+  font-size: 11px;
+  color: #888;
+  margin-left: 4px;
+}
+
+.timeline-content {
+  display: flex;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .timeline-empty-state {
@@ -64,13 +88,3 @@
   }
 }
 
-.version-info {
-  position: fixed;
-  left: 8px;
-  bottom: 8px;
-  font-size: 11px;
-  color: #444;
-  font-family: monospace;
-  pointer-events: none;
-  z-index: 1000;
-}

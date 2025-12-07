@@ -1,0 +1,34 @@
+{
+  "toolbar": {
+    "source": "+ソース",
+    "operator": "+演算",
+    "search": "+検索",
+    "display": "+表示",
+    "delete": "削除"
+  },
+  "nodes": {
+    "source": {
+      "title": "ソース",
+      "relays": "リレーURL（1行に1つ）",
+      "kinds": "Kinds（カンマ区切り）"
+    },
+    "operator": {
+      "title": "演算",
+      "and": "AND",
+      "or": "OR",
+      "diff": "A-B"
+    },
+    "search": {
+      "title": "検索",
+      "keyword": "キーワード",
+      "regex": "正規表現"
+    },
+    "display": {
+      "title": "表示",
+      "name": "タイムライン名"
+    }
+  },
+  "timeline": {
+    "defaultName": "タイムライン"
+  }
+}

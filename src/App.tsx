@@ -5,7 +5,8 @@ import type { TimelineEvent } from './nostr/types';
 import './App.css';
 
 // Version: Update this on each deployment
-const APP_VERSION = '0.1.4';
+const APP_VERSION = '0.1.5';
+const APP_NAME = '(.>_<)-(.>_<)-mojimoji';
 
 interface TimelineData {
   id: string;
@@ -39,20 +40,25 @@ function App() {
   return (
     <div className="app">
       <div className="timeline-pane">
-        {timelines.length === 0 ? (
-          <div className="timeline-empty-state">
-            <p>No timelines yet</p>
-            <p className="hint">Connect a Display node in the graph editor</p>
-          </div>
-        ) : (
-          timelines.map(timeline => (
-            <Timeline
-              key={timeline.id}
-              name={timeline.name}
-              events={timeline.events}
-            />
-          ))
-        )}
+        <div className="title-bar">
+          {APP_NAME} <span className="version">v{APP_VERSION}</span>
+        </div>
+        <div className="timeline-content">
+          {timelines.length === 0 ? (
+            <div className="timeline-empty-state">
+              <p>No timelines yet</p>
+              <p className="hint">Connect a Display node in the graph editor</p>
+            </div>
+          ) : (
+            timelines.map(timeline => (
+              <Timeline
+                key={timeline.id}
+                name={timeline.name}
+                events={timeline.events}
+              />
+            ))
+          )}
+        </div>
       </div>
       <div className="graph-pane">
         <GraphEditor
@@ -61,7 +67,6 @@ function App() {
           onEventsUpdate={handleEventsUpdate}
         />
       </div>
-      <div className="version-info">v{APP_VERSION}</div>
     </div>
   );
 }

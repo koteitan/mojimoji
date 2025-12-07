@@ -1,5 +1,6 @@
 import { ClassicPreset } from 'rete';
 import { Observable, Subject, share, filter } from 'rxjs';
+import i18next from 'i18next';
 import { eventSocket } from './types';
 import { TextInputControl, CheckboxControl } from './controls';
 import type { NostrEvent } from '../../../nostr/types';
@@ -22,7 +23,7 @@ export class SearchNode extends ClassicPreset.Node {
   private subscription: { unsubscribe: () => void } | null = null;
 
   constructor() {
-    super('Search');
+    super(i18next.t('nodes.search.title'));
 
     this.addInput('input', new ClassicPreset.Input(eventSocket, 'Input'));
     this.addOutput('output', new ClassicPreset.Output(eventSocket, 'Output'));
@@ -31,7 +32,7 @@ export class SearchNode extends ClassicPreset.Node {
       'keyword',
       new TextInputControl(
         this.keyword,
-        'Keyword',
+        i18next.t('nodes.search.keyword'),
         (value) => {
           this.keyword = value;
         }
@@ -42,7 +43,7 @@ export class SearchNode extends ClassicPreset.Node {
       'regex',
       new CheckboxControl(
         this.useRegex,
-        'Use Regex',
+        i18next.t('nodes.search.regex'),
         (checked) => {
           this.useRegex = checked;
         }

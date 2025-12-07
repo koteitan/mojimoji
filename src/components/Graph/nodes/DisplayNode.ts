@@ -1,5 +1,6 @@
 import { ClassicPreset } from 'rete';
 import { Observable } from 'rxjs';
+import i18next from 'i18next';
 import { eventSocket } from './types';
 import { TextInputControl } from './controls';
 import type { NostrEvent } from '../../../nostr/types';
@@ -20,7 +21,7 @@ export class DisplayNode extends ClassicPreset.Node {
   private onEvent: ((event: NostrEvent) => void) | null = null;
 
   constructor() {
-    super('Display');
+    super(i18next.t('nodes.display.title'));
 
     this.addInput('input', new ClassicPreset.Input(eventSocket, 'Events'));
 
@@ -28,7 +29,7 @@ export class DisplayNode extends ClassicPreset.Node {
       'name',
       new TextInputControl(
         this.timelineName,
-        'Timeline Name',
+        i18next.t('nodes.display.name'),
         (value) => {
           this.timelineName = value;
         }

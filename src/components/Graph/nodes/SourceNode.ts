@@ -3,6 +3,7 @@ import { Subject, Observable, share } from 'rxjs';
 import { createRxNostr, createRxForwardReq } from 'rx-nostr';
 import type { RxNostr } from 'rx-nostr';
 import { verifier } from '@rx-nostr/crypto';
+import i18next from 'i18next';
 import { eventSocket } from './types';
 import { TextAreaControl } from './controls';
 import type { NostrEvent } from '../../../nostr/types';
@@ -27,7 +28,7 @@ export class SourceNode extends ClassicPreset.Node {
   public output$: Observable<NostrEvent> = this.eventSubject.asObservable().pipe(share());
 
   constructor() {
-    super('Source');
+    super(i18next.t('nodes.source.title'));
 
     this.addOutput('output', new ClassicPreset.Output(eventSocket, 'Events'));
 
@@ -35,7 +36,7 @@ export class SourceNode extends ClassicPreset.Node {
       'relays',
       new TextAreaControl(
         this.relayUrls.join('\n'),
-        'Relay URLs',
+        i18next.t('nodes.source.relays'),
         'wss://relay.example.com',
         (value) => {
           this.relayUrls = value.split('\n').filter(url => url.trim());

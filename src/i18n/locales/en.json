@@ -1,0 +1,34 @@
+{
+  "toolbar": {
+    "source": "+Source",
+    "operator": "+Operator",
+    "search": "+Search",
+    "display": "+Display",
+    "delete": "Delete"
+  },
+  "nodes": {
+    "source": {
+      "title": "Source",
+      "relays": "Relay URLs (one per line)",
+      "kinds": "Kinds (comma separated)"
+    },
+    "operator": {
+      "title": "Operator",
+      "and": "AND",
+      "or": "OR",
+      "diff": "A-B"
+    },
+    "search": {
+      "title": "Search",
+      "keyword": "Keyword",
+      "regex": "Regex"
+    },
+    "display": {
+      "title": "Display",
+      "name": "Timeline Name"
+    }
+  },
+  "timeline": {
+    "defaultName": "Timeline"
+  }
+}
