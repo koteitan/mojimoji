@@ -35,9 +35,12 @@ function TextInputControlComponent({ control, nodeId }: { control: TextInputCont
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={() => {
-          control.value = value;
-          control.onChange(value);
-          dispatchControlChange(nodeId);
+          // Only dispatch change event if value actually changed
+          if (value !== control.value) {
+            control.value = value;
+            control.onChange(value);
+            dispatchControlChange(nodeId);
+          }
         }}
         onPointerDown={(e) => e.stopPropagation()}
       />
@@ -57,9 +60,12 @@ function TextAreaControlComponent({ control, nodeId }: { control: TextAreaContro
         placeholder={control.placeholder}
         onChange={(e) => setValue(e.target.value)}
         onBlur={() => {
-          control.value = value;
-          control.onChange(value);
-          dispatchControlChange(nodeId);
+          // Only dispatch change event if value actually changed
+          if (value !== control.value) {
+            control.value = value;
+            control.onChange(value);
+            dispatchControlChange(nodeId);
+          }
         }}
         onPointerDown={(e) => e.stopPropagation()}
       />
