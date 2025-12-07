@@ -1,0 +1,133 @@
+.graph-editor {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.graph-editor-container {
+  width: 100%;
+  height: 100%;
+}
+
+.graph-toolbar {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.graph-toolbar button {
+  padding: 8px 12px;
+  font-size: 12px;
+  background: #2a2a2a;
+  border: 1px solid #444;
+}
+
+.graph-toolbar button:hover {
+  background: #3a3a3a;
+  border-color: #646cff;
+}
+
+/* Node styles */
+.node {
+  background: #2a2a2a !important;
+  border: 2px solid #444 !important;
+  border-radius: 8px !important;
+  padding: 0 !important;
+  min-width: 180px;
+}
+
+.node.selected {
+  border-color: #646cff !important;
+  box-shadow: 0 0 10px rgba(100, 108, 255, 0.3) !important;
+}
+
+.node-title {
+  background: #1a1a1a;
+  padding: 8px 12px;
+  border-radius: 6px 6px 0 0;
+  font-weight: 600;
+  font-size: 13px;
+  color: #fff;
+  border-bottom: 1px solid #333;
+}
+
+/* Socket styles */
+.socket {
+  width: 16px !important;
+  height: 16px !important;
+  border-radius: 50% !important;
+  background: #646cff !important;
+  border: 2px solid #444 !important;
+}
+
+.socket:hover {
+  background: #8b93ff !important;
+}
+
+/* Connection styles */
+.connection path {
+  stroke: #646cff !important;
+  stroke-width: 3px !important;
+}
+
+/* Control styles */
+.control-wrapper {
+  padding: 4px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.control-label {
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+}
+
+.control-input,
+.control-textarea,
+.control-select {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #fff;
+}
+
+.control-input:focus,
+.control-textarea:focus,
+.control-select:focus {
+  outline: none;
+  border-color: #646cff;
+}
+
+.control-textarea {
+  resize: vertical;
+  min-height: 60px;
+  font-family: monospace;
+}
+
+.control-checkbox-wrapper {
+  flex-direction: row;
+  align-items: center;
+}
+
+.control-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #ddd;
+  cursor: pointer;
+}
+
+.control-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}

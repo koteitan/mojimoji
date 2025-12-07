@@ -1,0 +1,65 @@
+.app {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #0a0a0a;
+}
+
+.timeline-pane {
+  display: flex;
+  flex-shrink: 0;
+  height: 100%;
+  overflow-x: auto;
+  background: #1a1a1a;
+  border-right: 2px solid #333;
+}
+
+.timeline-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 300px;
+  color: #666;
+  text-align: center;
+  padding: 20px;
+}
+
+.timeline-empty-state p {
+  margin: 4px 0;
+}
+
+.timeline-empty-state .hint {
+  font-size: 12px;
+  color: #444;
+}
+
+.graph-pane {
+  flex: 1;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Mobile layout: bottom pane for timelines */
+@media (max-width: 768px) {
+  .app {
+    flex-direction: column-reverse;
+  }
+
+  .timeline-pane {
+    height: 40vh;
+    width: 100%;
+    border-right: none;
+    border-top: 2px solid #333;
+  }
+
+  .graph-pane {
+    height: 60vh;
+  }
+
+  .timeline-empty-state {
+    width: 100%;
+  }
+}
