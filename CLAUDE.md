@@ -1,0 +1,43 @@
+# language rules
+- I talk to you in English.
+- You talk to me in Japanese.
+- Write all the documents/messages/comments in English.
+- The UIs are written in English and Japenese(selected by browser locale).
+
+# git rules
+- git add/commit/push only if I ask you to do so.
+- don't git restore/checkout/revert/add -A.
+- commit messages is in the following format:
+```
+[short description]
+[empty line]
+- [change item 1]
+- [change item 2]
+```
+or
+```
+[short description]
+```
+
+- commit message rules:
+  - the number of the change items should be MECE.
+    - don't write the redundant change items.
+    - Don't miss the necessary change items.
+    - use git diff when you make a commit message suggestion.
+  - commit message suggestion is written in commit-msg.txt.
+
+# Project
+- This is the project to make a modular-type timeline in nostr.
+
+# Specifications
+- see spec.md.
+
+# References
+- rete.js: https://rete.js.org/
+  - github: https://github.com/retejs
+- nostr
+  - NIP-01: https://github.com/nostr-protocol/nips/blob/master/01.md
+  - rx-nostr: https://github.com/penpenpng/rx-nostr
+    - document https://penpenpng.github.io/rx-nostr/
+
+
