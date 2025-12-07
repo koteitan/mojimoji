@@ -47,7 +47,6 @@ export function GraphEditor({
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<NodeEditor<Schemes> | null>(null);
   const areaRef = useRef<AreaPlugin<Schemes, AreaExtra> | null>(null);
-  const keydownHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
   const wheelHandlerRef = useRef<((e: WheelEvent) => void) | null>(null);
   const pointerHandlersRef = useRef<{
     down: (e: PointerEvent) => void;
@@ -997,40 +996,6 @@ export function GraphEditor({
         return context;
       });
 
-      // Delete selected nodes with Delete or Backspace key
-      const handleKeyDown = async (e: KeyboardEvent) => {
-        if (e.key === 'Delete' || e.key === 'Backspace') {
-          // Don't prevent default if focus is on an input element
-          if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-            return;
-          }
-          e.preventDefault();
-          // Get selected node IDs from the selector
-          const selected: string[] = [];
-          selector.entities.forEach((_value: unknown, id: string) => {
-            selected.push(id);
-          });
-
-          for (const id of selected) {
-            const node = editor.getNode(id);
-            if (node) {
-              // Remove connections first
-              const connections = editor.getConnections().filter(
-                (c: { source: string; target: string }) => c.source === id || c.target === id
-              );
-              for (const conn of connections) {
-                await editor.removeConnection(conn.id);
-              }
-              // Remove node
-              await editor.removeNode(id);
-            }
-          }
-        }
-      };
-
-      // Store handler in ref for cleanup
-      keydownHandlerRef.current = handleKeyDown;
-      document.addEventListener('keydown', handleKeyDown);
       container.setAttribute('tabindex', '0'); // Make container focusable
 
       // Handle node removal and connection changes
@@ -1209,10 +1174,6 @@ export function GraphEditor({
     initEditor();
 
     return () => {
-      // Remove keydown listener
-      if (keydownHandlerRef.current) {
-        document.removeEventListener('keydown', keydownHandlerRef.current);
-      }
       // Remove wheel listener
       if (wheelHandlerRef.current && containerRef.current) {
         containerRef.current.removeEventListener('wheel', wheelHandlerRef.current);
@@ -1234,6 +1195,82 @@ export function GraphEditor({
       }
     };
   }, [onTimelineCreate, onTimelineRemove, saveCurrentGraph]);
+
+  // Keyboard shortcuts - separate useEffect to access latest callbacks
+  useEffect(() => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      // Don't handle shortcuts if focus is on an input element
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+
+      // Delete selected nodes with Delete, Backspace, or 'd' key
+      if (e.key === 'Delete' || e.key === 'Backspace' || key === 'd') {
+        e.preventDefault();
+        deleteSelected();
+        return;
+      }
+
+      // r = add Relay node
+      if (key === 'r') {
+        e.preventDefault();
+        addNode('Relay');
+        return;
+      }
+
+      // f = toggle Filter dropdown
+      if (key === 'f') {
+        e.preventDefault();
+        setFilterDropdownOpen(prev => !prev);
+        return;
+      }
+
+      // t = add Timeline node
+      if (key === 't') {
+        e.preventDefault();
+        addNode('Timeline');
+        return;
+      }
+
+      // c = center view
+      if (key === 'c') {
+        e.preventDefault();
+        centerView();
+        return;
+      }
+
+      // o = add Operator node
+      if (key === 'o') {
+        e.preventDefault();
+        addNode('Operator');
+        setFilterDropdownOpen(false);
+        return;
+      }
+
+      // s = add Search node
+      if (key === 's') {
+        e.preventDefault();
+        addNode('Search');
+        setFilterDropdownOpen(false);
+        return;
+      }
+
+      // l = add Language node
+      if (key === 'l') {
+        e.preventDefault();
+        addNode('Language');
+        setFilterDropdownOpen(false);
+        return;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [addNode, centerView, deleteSelected]);
 
   return (
     <div className="graph-editor">

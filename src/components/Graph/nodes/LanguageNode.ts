@@ -6,6 +6,9 @@ import { eventSocket } from './types';
 import { SelectControl } from './controls';
 import type { NostrEvent } from '../../../nostr/types';
 
+// Debug flag for development
+const DEBUG = false;
+
 // Supported languages for the dropdown (ISO 639-3 codes used by franc)
 const LANGUAGES = [
   { value: 'jpn', label: 'Japanese' },
@@ -76,7 +79,7 @@ export class LanguageNode extends ClassicPreset.Node {
 
   matches(content: string): boolean {
     const detected = this.detectLanguage(content);
-    console.log('Language detection:', { content: content.substring(0, 50), detected, target: this.language, match: detected === this.language });
+    if (DEBUG) console.log('Language detection:', { content: content.substring(0, 50), detected, target: this.language, match: detected === this.language });
     if (detected === null) {
       // Undetectable language - filter out
       return false;

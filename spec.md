@@ -161,8 +161,18 @@ User Inrterface is as follows.
   - by mouse: Ctrl+click on node: toggle select/unselect the node
   - by touch: tap on node: toggle select/unselect the node
 - deletion:
-  - Delete/Backspace key: delete selected nodes and connections
+  - Delete/Backspace/d key: delete selected nodes and connections
   - Delete button (red styled): delete selected nodes and connections
+- keyboard shortcuts:
+  - r: add Relay node
+  - f: toggle Filter dropdown
+  - o: add Operator node
+  - s: add Search node
+  - l: add Language node
+  - t: add Timeline node
+  - c: center view
+  - d: delete selected nodes/connections
+  - shortcuts are disabled when focus is on input/textarea/select elements
 
 ### on load
 - load:
