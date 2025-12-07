@@ -32,9 +32,6 @@ rm -rf assets
 echo "Copying built files to root..."
 cp -r dist/* .
 
-echo "Restoring source index.html for future builds..."
-echo "$SOURCE_INDEX" > index.html
-
 echo ""
 echo "Build complete!"
 echo "Next steps:"
