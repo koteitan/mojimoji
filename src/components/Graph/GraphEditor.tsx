@@ -55,6 +55,7 @@ export function GraphEditor({
   const eventsRef = useRef<Map<string, TimelineEvent[]>>(new Map());
   const rebuildPipelineRef = useRef<(() => void) | null>(null);
   const selectedConnectionIdRef = useRef<string | null>(null);
+  const pendingConnectionRef = useRef<{ nodeId: string; socketKey: string; side: 'input' | 'output' } | null>(null);
 
   const saveCurrentGraph = useCallback(() => {
     const editor = editorRef.current;
@@ -369,12 +370,26 @@ export function GraphEditor({
   const deleteSelected = useCallback(async () => {
     const editor = editorRef.current;
     const selector = selectorRef.current;
+    const container = containerRef.current;
     if (!editor) return;
 
     // First, check if there's a selected connection to delete
     if (selectedConnectionIdRef.current) {
       await editor.removeConnection(selectedConnectionIdRef.current);
       selectedConnectionIdRef.current = null;
+      pendingConnectionRef.current = null;
+      // Clear socket selection highlight
+      if (container) {
+        container.querySelectorAll('.socket-selected').forEach(el => {
+          el.classList.remove('socket-selected');
+          const innerSocket = el.querySelector('div > div') as HTMLElement;
+          if (innerSocket) {
+            innerSocket.style.background = '';
+            innerSocket.style.borderColor = '';
+            innerSocket.style.boxShadow = '';
+          }
+        });
+      }
       return;
     }
 
@@ -527,7 +542,6 @@ export function GraphEditor({
 
       // Track socket interactions for manual connection creation and selection
       let lastPointerDownOnSocket = false;
-      let pendingConnection: { nodeId: string; socketKey: string; side: 'input' | 'output' } | null = null;
 
       // Function to find connection by socket
       const findConnectionBySocket = (nodeId: string, socketKey: string, side: 'input' | 'output') => {
@@ -581,60 +595,56 @@ export function GraphEditor({
                 }
               });
 
-              if (existingConnection) {
-                // Select this connection for potential deletion
-                selectedConnectionIdRef.current = existingConnection.id;
-                pendingConnection = null;
-                // Highlight the selected socket
-                socketContainer?.classList.add('socket-selected');
-                // Also apply inline style to the inner socket div
-                const innerSocket = socketContainer?.querySelector('div > div') as HTMLElement;
-                if (innerSocket) {
-                  innerSocket.style.background = '#ff6b6b';
-                  innerSocket.style.borderColor = '#ff4444';
-                  innerSocket.style.boxShadow = '0 0 8px rgba(255, 68, 68, 0.6)';
-                }
-              } else if (pendingConnection) {
+              if (pendingConnectionRef.current) {
                 // Second click - create connection
-                if (pendingConnection.side === 'output' && side === 'input') {
+                if (pendingConnectionRef.current.side === 'output' && side === 'input') {
                   // Connect output -> input
-                  const sourceNode = editor.getNode(pendingConnection.nodeId);
+                  const sourceNode = editor.getNode(pendingConnectionRef.current.nodeId);
                   const targetNode = editor.getNode(nodeId);
-                  if (sourceNode && targetNode && pendingConnection.nodeId !== nodeId) {
+                  if (sourceNode && targetNode && pendingConnectionRef.current.nodeId !== nodeId) {
                     const conn = new ClassicPreset.Connection(
                       sourceNode,
-                      pendingConnection.socketKey as never,
+                      pendingConnectionRef.current.socketKey as never,
                       targetNode,
                       socketKey as never
                     );
                     editor.addConnection(conn);
                   }
-                } else if (pendingConnection.side === 'input' && side === 'output') {
+                } else if (pendingConnectionRef.current.side === 'input' && side === 'output') {
                   // Connect output -> input (reverse order)
                   const sourceNode = editor.getNode(nodeId);
-                  const targetNode = editor.getNode(pendingConnection.nodeId);
-                  if (sourceNode && targetNode && pendingConnection.nodeId !== nodeId) {
+                  const targetNode = editor.getNode(pendingConnectionRef.current.nodeId);
+                  if (sourceNode && targetNode && pendingConnectionRef.current.nodeId !== nodeId) {
                     const conn = new ClassicPreset.Connection(
                       sourceNode,
                       socketKey as never,
                       targetNode,
-                      pendingConnection.socketKey as never
+                      pendingConnectionRef.current.socketKey as never
                     );
                     editor.addConnection(conn);
                   }
                 }
-                pendingConnection = null;
+                pendingConnectionRef.current = null;
                 selectedConnectionIdRef.current = null;
               } else {
-                // First click - store pending connection
-                pendingConnection = { nodeId, socketKey, side };
-                selectedConnectionIdRef.current = null;
+                // First click - store pending connection and existing connection (if any)
+                pendingConnectionRef.current = { nodeId, socketKey, side };
+                // Store existing connection for potential deletion via delete button
+                selectedConnectionIdRef.current = existingConnection?.id ?? null;
+                // Highlight the selected socket (green)
+                socketContainer?.classList.add('socket-selected');
+                const innerSocket = socketContainer?.querySelector('div > div') as HTMLElement;
+                if (innerSocket) {
+                  innerSocket.style.background = '#4ade80';
+                  innerSocket.style.borderColor = '#22c55e';
+                  innerSocket.style.boxShadow = '0 0 8px rgba(34, 197, 94, 0.6)';
+                }
               }
             }
           }
         } else {
           // Clicked elsewhere, cancel pending connection and selection
-          pendingConnection = null;
+          pendingConnectionRef.current = null;
           selectedConnectionIdRef.current = null;
           // Clear socket selection highlight
           container.querySelectorAll('.socket-selected').forEach(el => {
