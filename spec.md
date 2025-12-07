@@ -4,8 +4,11 @@
 ## UI
 User Inrterface is as follows. 
 - left(bottom for mobile) pane: Timeline list of nostr events:
-  - top line: title
-    - (>_<)-(>_<)-mojimoji version x.x.x
+  - top line: title bar
+    - format: "(>_<)-(>_<)-mojimoji version x.x.x (build timestamp)"
+    - build timestamp format:
+      - Japanese locale: JST (e.g., "2025/12/07 23:38 JST")
+      - other locales: UTC (e.g., "2025/12/07 14:38 UTC")
   - center area: timeline
     - each column: each timeline.
       - 35 charactors width.
@@ -37,6 +40,9 @@ User Inrterface is as follows.
         - nodes outputs data:
         - nodes have attributes.
       - common behaviors:
+        - node appearance:
+          - height: auto-calculated based on content (not fixed)
+          - selected border color: green (#4ade80) with box-shadow
         - terminal positions:
           - input terminals are placed at the top center of the node
           - output terminals are placed at the bottom center of the node
@@ -95,6 +101,18 @@ User Inrterface is as follows.
         - relays
         - npubs
       - the edges are colored differently by types.
+    - sockets (terminals):
+      - shape: rounded thin rectangle (40px width x 12px height, 6px border-radius)
+      - color: blue (#646cff) default, green (#4ade80) when selected
+      - selection highlight: green with box-shadow when selected
+    - click-to-connect:
+      - first click on a socket: select socket (green highlight)
+      - second click on another socket: if compatible types and directions: create connection
+      - click elsewhere: cancel pending connection
+      - duplicate connections between same sockets are prevented
+    - connection deletion:
+      - click on socket with existing connection: select connection
+      - press Delete/Backspace or click Delete button: delete selected connection
 
 ## Behavior
 ### graph editor navigation
@@ -104,36 +122,65 @@ User Inrterface is as follows.
 - pan:
   - by mouse: drag on background, right drag
   - by touch: drag on background, two fingers drag
+- center view:
+  - Center button: fit all nodes in view
 - node selection:
   - by mouse: click on node: toggle select/unselect the node
   - by touch: tap on node: toggle select/unselect the node
+  - click on background: unselect all nodes
+  - click on socket: unselect all nodes
+  - selected node border color: green (#4ade80)
 - multi selection:
   - by mouse: Ctrl+click on node: toggle select/unselect the node
   - by touch: tap on node: toggle select/unselect the node
-  - Delete/Backspace: delete selected nodes
+- deletion:
+  - Delete/Backspace key: delete selected nodes and connections
+  - Delete button (red styled): delete selected nodes and connections
 
 ### on load
 - load:
-  - automatically load localStorage when the app is started.
   - when the localStorage is empty:
     - create a default graph:
-      - one Relay node: default settings
-      - one Timeline node: timeline name: "Timeline"
+      - one Relay node: default settings, position (100, 100)
+      - one Timeline node: timeline name: "Timeline", position (120, 400)
+      - arrangement: vertical (Relay on top, Timeline below)
       - one edge: connect the Relay node output to the Timeline node input.
+  - when there is localStorage:
+    - automatically load localStorage when the app is started.
+    - do centering
+
+### control input behavior
+- text inputs (TextInput, TextArea):
+  - changes are applied on blur (losing focus)
+  - only dispatch change event when value actually differs from original
+- select and checkbox:
+  - changes are applied immediately on change
 
 ### on change connections
 - save:
   - automatically save the graph into localStorage when a node or an edge is added/removed. 
+
+### on attribute change
+- when a node attribute is changed:
+  - only downstream timelines (connected from the changed node) are cleared
+  - the observable pipeline is rebuilt
+  - subscriptions are restarted
 
 ### subscription
 - When Timeline nodes are connected from Relay nodes, the subscription is started.
 - The subscription is implemented by rx-nostr observable.
 - When the subscription receives new nostr events, the events are shown in the timelines.
 - After the EOSE(End Of Stored Events) is received, the subscription continues to listen to new events.
+- Event deduplication: duplicate events (same event ID) are filtered out
 
 ### nostr-filter resolution
 - There are hidden subscriptions:
   - kind:0: to get profile information.
+
+### debug tools
+- Browser console debug functions:
+  - dumpgraph(): output graph structure (nodes and connections)
+  - dumpsub(): output relay subscription status (ON/OFF)
 
 ## Internationalization (i18n)
 - Language detection:
@@ -160,8 +207,10 @@ User Inrterface is as follows.
   - Reactive: RxJS (required by rx-nostr)
 - libraries:
   - rete.js: for modular connector UI.
+  - rete-connection-path-plugin: for custom connection path rendering (vertical bezier curves)
   - rx-nostr v3.x: for nostr subscription.
   - @rx-nostr/crypto: for signing and verification.
+  - react-i18next: for internationalization.
 - directory structure:
   ```
   mojimoji/
@@ -181,17 +230,26 @@ User Inrterface is as follows.
   │   │   │   └── Timeline.css
   │   │   └── Graph/
   │   │       ├── GraphEditor.tsx
+  │   │       ├── GraphEditor.css
+  │   │       ├── CustomNode.tsx
+  │   │       ├── CustomNode.css
+  │   │       ├── CustomConnection.tsx
+  │   │       ├── CustomSocket.tsx
   │   │       └── nodes/
+  │   │           ├── index.ts
+  │   │           ├── types.ts
+  │   │           ├── controls.tsx
   │   │           ├── RelayNode.ts
   │   │           ├── OperatorNode.ts
   │   │           ├── SearchNode.ts
   │   │           └── TimelineNode.ts
+  │   ├── i18n/
+  │   │   ├── index.ts
+  │   │   └── locales/
+  │   │       ├── en.json
+  │   │       └── ja.json
   │   ├── nostr/
-  │   │   ├── client.ts
-  │   │   ├── subscription.ts
   │   │   └── types.ts
-  │   ├── store/
-  │   │   └── graphStore.ts
   │   └── utils/
   │       └── localStorage.ts
   └── public/
