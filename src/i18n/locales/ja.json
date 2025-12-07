@@ -1,8 +1,10 @@
 {
   "toolbar": {
     "relay": "+リレー",
+    "filter": "+フィルタ",
     "operator": "+演算",
     "search": "+検索",
+    "language": "+言語",
     "timeline": "+TL",
     "center": "center",
     "delete": "del"
@@ -23,6 +25,10 @@
       "title": "検索",
       "keyword": "キーワード",
       "regex": "正規表現"
+    },
+    "language": {
+      "title": "言語",
+      "language": "言語"
     },
     "timeline": {
       "title": "タイムライン",

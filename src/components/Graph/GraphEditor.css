@@ -42,6 +42,31 @@
   border-color: #ff6666;
 }
 
+/* Filter dropdown */
+.filter-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.filter-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 4px;
+  z-index: 100;
+}
+
+.filter-dropdown-menu button {
+  white-space: nowrap;
+}
+
 /* Node styles */
 .node {
   background: #2a2a2a !important;

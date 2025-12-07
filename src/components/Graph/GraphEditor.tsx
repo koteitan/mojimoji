@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NodeEditor, ClassicPreset } from 'rete';
 import { AreaPlugin, AreaExtensions } from 'rete-area-plugin';
@@ -7,7 +7,7 @@ import { ConnectionPathPlugin } from 'rete-connection-path-plugin';
 import { ReactPlugin, Presets } from 'rete-react-plugin';
 import { createRoot } from 'react-dom/client';
 
-import { RelayNode, OperatorNode, SearchNode, TimelineNode, getCachedProfile, getProfileCacheInfo } from './nodes';
+import { RelayNode, OperatorNode, SearchNode, LanguageNode, TimelineNode, getCachedProfile, getProfileCacheInfo } from './nodes';
 import { CustomNode } from './CustomNode';
 import { CustomConnection } from './CustomConnection';
 import { CustomSocket } from './CustomSocket';
@@ -19,7 +19,7 @@ import './GraphEditor.css';
 // Debug flag for development
 const DEBUG = false;
 
-type NodeTypes = RelayNode | OperatorNode | SearchNode | TimelineNode;
+type NodeTypes = RelayNode | OperatorNode | SearchNode | LanguageNode | TimelineNode;
 
 // Helper to get the internal node type
 const getNodeType = (node: NodeTypes): string => {
@@ -68,6 +68,9 @@ export function GraphEditor({
   const profileSubscriptionsRef = useRef<Subscription[]>([]);
   const selectedConnectionIdRef = useRef<string | null>(null);
   const pendingConnectionRef = useRef<{ nodeId: string; socketKey: string; side: 'input' | 'output' } | null>(null);
+
+  // State for filter dropdown
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
 
   const saveCurrentGraph = useCallback(() => {
     const editor = editorRef.current;
@@ -262,6 +265,8 @@ export function GraphEditor({
       return (node as OperatorNode).output$;
     } else if (getNodeType(node) === 'Search') {
       return (node as SearchNode).output$;
+    } else if (getNodeType(node) === 'Language') {
+      return (node as LanguageNode).output$;
     }
 
     return null;
@@ -289,6 +294,8 @@ export function GraphEditor({
         (node as OperatorNode).stopSubscriptions();
       } else if (getNodeType(node) === 'Search') {
         (node as SearchNode).stopSubscription();
+      } else if (getNodeType(node) === 'Language') {
+        (node as LanguageNode).stopSubscription();
       } else if (getNodeType(node) === 'Timeline') {
         (node as TimelineNode).stopSubscription();
       }
@@ -390,6 +397,20 @@ export function GraphEditor({
       }
     }
 
+    // Wire up Language nodes
+    for (const node of nodes) {
+      if (getNodeType(node) === 'Language') {
+        const languageNode = node as LanguageNode;
+
+        const inputConn = connections.find(
+          (c: { target: string }) => c.target === node.id
+        );
+        const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+
+        languageNode.setInput(input$);
+      }
+    }
+
     // Wire up Timeline nodes
     for (const node of nodes) {
       if (getNodeType(node) === 'Timeline') {
@@ -438,7 +459,7 @@ export function GraphEditor({
   // Keep ref updated
   rebuildPipelineRef.current = rebuildPipeline;
 
-  const addNode = useCallback(async (type: 'Relay' | 'Operator' | 'Search' | 'Timeline') => {
+  const addNode = useCallback(async (type: 'Relay' | 'Operator' | 'Search' | 'Language' | 'Timeline') => {
     const editor = editorRef.current;
     const area = areaRef.current;
     if (!editor || !area) return;
@@ -454,6 +475,9 @@ export function GraphEditor({
         break;
       case 'Search':
         node = new SearchNode();
+        break;
+      case 'Language':
+        node = new LanguageNode();
         break;
       case 'Timeline':
         node = new TimelineNode();
@@ -1075,6 +1099,12 @@ export function GraphEditor({
                 (node as SearchNode).deserialize(nodeData.data as { keyword: string; useRegex: boolean });
               }
               break;
+            case 'Language':
+              node = new LanguageNode();
+              if (nodeData.data) {
+                (node as LanguageNode).deserialize(nodeData.data as { language: string });
+              }
+              break;
             case 'Timeline':
             case 'Display': // backward compatibility
               node = new TimelineNode();
@@ -1209,8 +1239,18 @@ export function GraphEditor({
     <div className="graph-editor">
       <div className="graph-toolbar">
         <button onClick={() => addNode('Relay')}>{t('toolbar.relay')}</button>
-        <button onClick={() => addNode('Operator')}>{t('toolbar.operator')}</button>
-        <button onClick={() => addNode('Search')}>{t('toolbar.search')}</button>
+        <div className="filter-dropdown">
+          <button onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}>
+            {t('toolbar.filter')} ▼
+          </button>
+          {filterDropdownOpen && (
+            <div className="filter-dropdown-menu">
+              <button onClick={() => { addNode('Operator'); setFilterDropdownOpen(false); }}>{t('toolbar.operator')}</button>
+              <button onClick={() => { addNode('Search'); setFilterDropdownOpen(false); }}>{t('toolbar.search')}</button>
+              <button onClick={() => { addNode('Language'); setFilterDropdownOpen(false); }}>{t('toolbar.language')}</button>
+            </div>
+          )}
+        </div>
         <button onClick={() => addNode('Timeline')}>{t('toolbar.timeline')}</button>
         <button onClick={centerView}>{t('toolbar.center')}</button>
         <button onClick={deleteSelected} className="delete-btn">{t('toolbar.delete')}</button>

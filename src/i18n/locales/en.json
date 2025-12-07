@@ -1,8 +1,10 @@
 {
   "toolbar": {
     "relay": "+Relay",
+    "filter": "+Filter",
     "operator": "+Operator",
     "search": "+Search",
+    "language": "+Lang",
     "timeline": "+Timeline",
     "center": "Center",
     "delete": "Delete"
@@ -23,6 +25,10 @@
       "title": "Search",
       "keyword": "Keyword",
       "regex": "Regex"
+    },
+    "language": {
+      "title": "Language",
+      "language": "Language"
     },
     "timeline": {
       "title": "Timeline",

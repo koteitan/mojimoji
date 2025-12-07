@@ -29,8 +29,10 @@ User Inrterface is as follows.
 - center: Graph view: modular connectors of nostr filter by rete.js.
   - top line: toolbars:
     - +Relay button: add a Relay node.
-    - +Operator button: add an Operator node.
-    - +Search button: add a Search node.
+    - +Filter button: dropdown menu with filter node options (same button style):
+      - +Operator: add an Operator node.
+      - +Search: add a Search node.
+      - +Lang: add a Language Filter node.
     - +Timeline button: add a Timeline node.
     - Delete button: delete selected node(s).
   - center area: graph editor area.
@@ -96,6 +98,21 @@ User Inrterface is as follows.
             - regex switch: on, off
           - behavior:
             - input nostr event and filter by keyword the event.content.
+        - language filter node:
+          - input terminal:
+            - input (nostr event)
+          - output terminal:
+            - output (nostr event)
+          - attributes:
+            - language: dropdown select (single language)
+              - Japanese (jpn), English (eng), Chinese (cmn), Korean (kor), Spanish (spa), French (fra), German (deu), Portuguese (por), Russian (rus), Arabic (ara)
+              - uses ISO 639-3 language codes
+          - behavior:
+            - detect language of event.content using franc-min library
+            - pass events matching selected language
+            - events with undetectable language (< 10 chars or "und") are filtered out
+            - use Operator node for OR/AND logic with multiple languages
+          - library: franc-min (pure JavaScript, 82 languages, ~200KB)
       - Timeline node:
         - input terminal:
           - input (nostr event)
@@ -211,7 +228,7 @@ User Inrterface is as follows.
 - Non-translated UI elements:
   - Title bar: "(>_<)-(>_<)-mojimoji" (keep as-is in all languages)
 - Translated UI elements:
-  - Toolbar buttons: +Relay, +Operator, +Search, +Timeline, Delete
+  - Toolbar buttons: +Relay, +Filter (dropdown: +Operator, +Search, +Lang), +Timeline, Delete
   - Node labels and placeholders
   - Timeline headers
 - Implementation:
@@ -232,6 +249,8 @@ User Inrterface is as follows.
   - rx-nostr v3.x: for nostr subscription.
   - @rx-nostr/crypto: for signing and verification.
   - react-i18next: for internationalization.
+  - bech32: for npub encoding (NIP-19).
+  - franc-min: for language detection (82 languages, ISO 639-3 codes).
 - directory structure:
   ```
   mojimoji/
@@ -263,6 +282,7 @@ User Inrterface is as follows.
   │   │           ├── RelayNode.ts
   │   │           ├── OperatorNode.ts
   │   │           ├── SearchNode.ts
+  │   │           ├── LanguageNode.ts
   │   │           └── TimelineNode.ts
   │   ├── i18n/
   │   │   ├── index.ts
