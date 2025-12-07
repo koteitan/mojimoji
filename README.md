@@ -106,10 +106,10 @@ npm run tsc
 
 ```bash
 # Start dev server with external access (for testing on other devices)
-bash scripts/deploy.sh
+bash scripts/local-test.sh
 ```
 
-This will start the Vite dev server with `--host` option, allowing access from other devices on the same network.
+This uses `dev/vite.config.ts` with `dev/` as root, so it doesn't conflict with GitHub Pages `index.html`.
 
 ### Deploy to GitHub Pages
 
@@ -124,9 +124,9 @@ git push
 ```
 
 The deploy script:
-1. Builds the app with correct base path (`/mojimoji/`)
-2. Copies built files to root directory
-3. Restores source `index.html` for future builds
+1. Copies `src/index.html` to root for build
+2. Builds the app with correct base path (`/mojimoji/`)
+3. Copies built files to root directory (overwrites index.html with built version)
 
 ### Project Structure
 

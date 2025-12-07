@@ -106,10 +106,10 @@ npm run tsc
 
 ```bash
 # 外部アクセス可能な開発サーバーを起動（他のデバイスでのテスト用）
-bash scripts/deploy.sh
+bash scripts/local-test.sh
 ```
 
-Vite開発サーバーが`--host`オプション付きで起動し、同じネットワーク上の他のデバイスからアクセスできます。
+`dev/vite.config.ts`を使用し、`dev/`をルートとするため、GitHub Pages用の`index.html`と競合しません。
 
 ### GitHub Pagesへのデプロイ
 
@@ -124,9 +124,9 @@ git push
 ```
 
 デプロイスクリプトの動作：
-1. 正しいベースパス（`/mojimoji/`）でアプリをビルド
-2. ビルドファイルをルートディレクトリにコピー
-3. 次回ビルド用にソース`index.html`を復元
+1. ビルド用に`src/index.html`をルートにコピー
+2. 正しいベースパス（`/mojimoji/`）でアプリをビルド
+3. ビルドファイルをルートディレクトリにコピー（index.htmlはビルド版で上書き）
 
 ### プロジェクト構造
 

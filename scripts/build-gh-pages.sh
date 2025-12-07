@@ -5,32 +5,22 @@
 
 set -e
 
-# Source index.html content
-SOURCE_INDEX='<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>mojimoji-(.>_<)-(.>_<) nostr modular client</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>'
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-echo "Restoring source index.html for build..."
-echo "$SOURCE_INDEX" > index.html
+echo "Setting up source index.html for build..."
+cp "$PROJECT_DIR/src/index.html" "$PROJECT_DIR/index.html"
 
 echo "Building..."
+cd "$PROJECT_DIR"
 npm run build
 
 echo "Removing old assets..."
-rm -rf assets
+rm -rf "$PROJECT_DIR/assets"
 
 echo "Copying built files to root..."
-cp -r dist/* .
+cp -r "$PROJECT_DIR/dist/"* "$PROJECT_DIR/"
 
 echo ""
 echo "Build complete!"
