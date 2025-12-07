@@ -3,11 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { NodeEditor, ClassicPreset } from 'rete';
 import { AreaPlugin, AreaExtensions } from 'rete-area-plugin';
 import { ConnectionPlugin } from 'rete-connection-plugin';
+import { ConnectionPathPlugin } from 'rete-connection-path-plugin';
 import { ReactPlugin, Presets } from 'rete-react-plugin';
 import { createRoot } from 'react-dom/client';
 
 import { RelayNode, OperatorNode, SearchNode, TimelineNode } from './nodes';
 import { CustomNode } from './CustomNode';
+import { CustomConnection } from './CustomConnection';
 import { saveGraph, loadGraph } from '../../utils/localStorage';
 import type { TimelineEvent, NostrEvent } from '../../nostr/types';
 import type { Observable } from 'rxjs';
@@ -551,13 +553,17 @@ export function GraphEditor({
       // This prevents pseudo-connection visual artifacts
 
 
-      // Set up render presets with custom node only
+      // Set up render presets with custom node and connection
       render.addPreset(
         Presets.classic.setup({
           customize: {
             node() {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               return CustomNode as any;
+            },
+            connection() {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              return CustomConnection as any;
             },
           },
         })
@@ -566,6 +572,36 @@ export function GraphEditor({
       editor.use(area);
       area.use(connection);
       area.use(render);
+
+      // Configure connection path for vertical flow (top to bottom)
+      // Custom transformer that creates vertical bezier curves
+      // Also corrects for horizontal offset applied by classic preset
+      const verticalTransformer = () => (points: { x: number; y: number }[]) => {
+        if (points.length !== 2) throw new Error('need 2 points');
+        const [start, end] = points;
+
+        // Remove horizontal offset by moving start left and end right
+        // The classic preset adds ~12px offset (output right, input left)
+        const horizontalCorrection = 12;
+        const correctedStart = { x: start.x - horizontalCorrection, y: start.y };
+        const correctedEnd = { x: end.x + horizontalCorrection, y: end.y };
+
+        // Calculate vertical offset for bezier control points
+        const yDistance = Math.abs(correctedEnd.y - correctedStart.y);
+        const xDistance = Math.abs(correctedEnd.x - correctedStart.x);
+        const offset = Math.max(yDistance * 0.4, xDistance / 2, 30);
+
+        // Create vertical bezier: start -> control1 (below start) -> control2 (above end) -> end
+        const control1 = { x: correctedStart.x, y: correctedStart.y + offset };
+        const control2 = { x: correctedEnd.x, y: correctedEnd.y - offset };
+
+        return [correctedStart, control1, control2, correctedEnd];
+      };
+
+      const pathPlugin = new ConnectionPathPlugin<Schemes, AreaExtra>({
+        transformer: verticalTransformer,
+      });
+      render.use(pathPlugin);
 
       // Add wheel zoom handler
       const handleWheel = (e: WheelEvent) => {

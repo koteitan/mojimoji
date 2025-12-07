@@ -60,12 +60,13 @@
 }
 
 /* Input sockets container (at top) */
+/* Position sockets outside the node, centered on the top edge */
 .custom-node-inputs {
   display: flex;
   justify-content: center;
   gap: 16px;
   position: absolute;
-  top: -24px;
+  top: -8px;
   left: 0;
   right: 0;
   z-index: 100;
@@ -78,12 +79,13 @@
 }
 
 /* Output sockets container (at bottom) */
+/* Position sockets outside the node, centered on the bottom edge */
 .custom-node-outputs {
   display: flex;
   justify-content: center;
   gap: 16px;
   position: absolute;
-  bottom: -2px;
+  bottom: -8px;
   left: 0;
   right: 0;
   z-index: 100;
@@ -95,19 +97,19 @@
   z-index: 100;
 }
 
-/* Socket styles - rounded thin rectangle */
+/* Socket styles - circle for direction-agnostic connections */
 /* Target rete.js styled-components socket */
 .custom-node-input > div,
 .custom-node-output > div {
-  width: 40px !important;
-  height: 12px !important;
+  width: 16px !important;
+  height: 16px !important;
 }
 
 .custom-node-input > div > div,
 .custom-node-output > div > div {
-  width: 40px !important;
-  height: 12px !important;
-  border-radius: 6px !important;
+  width: 16px !important;
+  height: 16px !important;
+  border-radius: 50% !important;
   background: #646cff !important;
   border: 2px solid #444 !important;
   cursor: crosshair !important;

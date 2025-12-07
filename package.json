@@ -17,6 +17,7 @@
     "react-i18next": "^16.4.0",
     "rete": "^2.0.6",
     "rete-area-plugin": "^2.1.5",
+    "rete-connection-path-plugin": "^2.0.4",
     "rete-connection-plugin": "^2.0.5",
     "rete-context-menu-plugin": "^2.0.6",
     "rete-react-plugin": "^2.1.0",
