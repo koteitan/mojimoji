@@ -29,14 +29,14 @@ interface SubscriptionHandle {
 const activeSubscriptions = new Map<string, SubscriptionHandle>();
 
 export function subscribeToEvents(
-  displayNodeId: string,
+  timelineNodeId: string,
   relayUrls: string[],
   filter: Record<string, unknown>,
   onEvent: (event: TimelineEvent) => void,
   onEose?: () => void
 ): void {
-  // Cancel existing subscription for this display node
-  unsubscribe(displayNodeId);
+  // Cancel existing subscription for this timeline node
+  unsubscribe(timelineNodeId);
 
   const client = getRxNostr();
   client.setDefaultRelays(relayUrls);
@@ -91,7 +91,7 @@ export function subscribeToEvents(
   });
 
   // Store subscription handle
-  activeSubscriptions.set(displayNodeId, {
+  activeSubscriptions.set(timelineNodeId, {
     subscription,
     rxReq,
     profileSubscription,
@@ -108,14 +108,14 @@ export function subscribeToEvents(
   }
 }
 
-export function unsubscribe(displayNodeId: string): void {
-  const handle = activeSubscriptions.get(displayNodeId);
+export function unsubscribe(timelineNodeId: string): void {
+  const handle = activeSubscriptions.get(timelineNodeId);
   if (handle) {
     handle.subscription.unsubscribe();
     if (handle.profileSubscription) {
       handle.profileSubscription.unsubscribe();
     }
-    activeSubscriptions.delete(displayNodeId);
+    activeSubscriptions.delete(timelineNodeId);
   }
 }
 

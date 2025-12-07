@@ -10,14 +10,14 @@ export class EventSocket extends ClassicPreset.Socket {
 // Singleton sockets
 export const eventSocket = new EventSocket();
 
-// Filter item for Source node
+// Filter item for Relay node
 export interface FilterItem {
   name: string;
   value: string;
 }
 
 // Node data interfaces
-export interface SourceNodeControls {
+export interface RelayNodeControls {
   relayUrls: string[];
   filters: FilterItem[];
 }
@@ -31,6 +31,6 @@ export interface SearchNodeControls {
   useRegex: boolean;
 }
 
-export interface DisplayNodeControls {
+export interface TimelineNodeControls {
   timelineName: string;
 }

@@ -6,7 +6,7 @@ import { ConnectionPlugin, Presets as ConnectionPresets } from 'rete-connection-
 import { ReactPlugin, Presets } from 'rete-react-plugin';
 import { createRoot } from 'react-dom/client';
 
-import { SourceNode, OperatorNode, SearchNode, DisplayNode } from './nodes';
+import { RelayNode, OperatorNode, SearchNode, TimelineNode } from './nodes';
 import { TextInputControl, TextAreaControl, SelectControl, CheckboxControl } from './nodes/controls';
 import { TextInputComponent, TextAreaComponent, SelectComponent, CheckboxComponent } from './CustomControls';
 import { saveGraph, loadGraph } from '../../utils/localStorage';
@@ -14,7 +14,7 @@ import type { TimelineEvent, NostrEvent } from '../../nostr/types';
 import type { Observable } from 'rxjs';
 import './GraphEditor.css';
 
-type NodeTypes = SourceNode | OperatorNode | SearchNode | DisplayNode;
+type NodeTypes = RelayNode | OperatorNode | SearchNode | TimelineNode;
 
 // Helper to get the internal node type
 const getNodeType = (node: NodeTypes): string => {
@@ -86,8 +86,8 @@ export function GraphEditor({
     const node = editor.getNode(nodeId);
     if (!node) return null;
 
-    if (getNodeType(node) === 'Source') {
-      return (node as SourceNode).output$;
+    if (getNodeType(node) === 'Relay') {
+      return (node as RelayNode).output$;
     } else if (getNodeType(node) === 'Operator') {
       return (node as OperatorNode).output$;
     } else if (getNodeType(node) === 'Search') {
@@ -107,28 +107,28 @@ export function GraphEditor({
 
     // First, stop all existing subscriptions
     for (const node of nodes) {
-      if (getNodeType(node) === 'Source') {
-        (node as SourceNode).stopSubscription();
+      if (getNodeType(node) === 'Relay') {
+        (node as RelayNode).stopSubscription();
       } else if (getNodeType(node) === 'Operator') {
         (node as OperatorNode).stopSubscriptions();
       } else if (getNodeType(node) === 'Search') {
         (node as SearchNode).stopSubscription();
-      } else if (getNodeType(node) === 'Display') {
-        (node as DisplayNode).stopSubscription();
+      } else if (getNodeType(node) === 'Timeline') {
+        (node as TimelineNode).stopSubscription();
       }
     }
 
-    // Find which Source nodes need to be active (connected to a Display eventually)
-    const activeSourceIds = new Set<string>();
-    const findActiveSources = (nodeId: string, visited: Set<string>) => {
+    // Find which Relay nodes need to be active (connected to a Timeline eventually)
+    const activeRelayIds = new Set<string>();
+    const findActiveRelays = (nodeId: string, visited: Set<string>) => {
       if (visited.has(nodeId)) return;
       visited.add(nodeId);
 
       const node = editor.getNode(nodeId);
       if (!node) return;
 
-      if (getNodeType(node) === 'Source') {
-        activeSourceIds.add(nodeId);
+      if (getNodeType(node) === 'Relay') {
+        activeRelayIds.add(nodeId);
         return;
       }
 
@@ -138,21 +138,21 @@ export function GraphEditor({
       );
 
       for (const conn of incomingConns) {
-        findActiveSources(conn.source, visited);
+        findActiveRelays(conn.source, visited);
       }
     };
 
-    // Find active sources for each Display node
+    // Find active relays for each Timeline node
     for (const node of nodes) {
-      if (getNodeType(node) === 'Display') {
-        findActiveSources(node.id, new Set());
+      if (getNodeType(node) === 'Timeline') {
+        findActiveRelays(node.id, new Set());
       }
     }
 
-    // Start subscriptions on active Source nodes
+    // Start subscriptions on active Relay nodes
     for (const node of nodes) {
-      if (getNodeType(node) === 'Source' && activeSourceIds.has(node.id)) {
-        (node as SourceNode).startSubscription();
+      if (getNodeType(node) === 'Relay' && activeRelayIds.has(node.id)) {
+        (node as RelayNode).startSubscription();
       }
     }
 
@@ -193,26 +193,26 @@ export function GraphEditor({
       }
     }
 
-    // Wire up Display nodes
+    // Wire up Timeline nodes
     for (const node of nodes) {
-      if (getNodeType(node) === 'Display') {
-        const displayNode = node as DisplayNode;
-        const displayNodeId = node.id;
+      if (getNodeType(node) === 'Timeline') {
+        const timelineNode = node as TimelineNode;
+        const timelineNodeId = node.id;
 
         // Initialize events array
-        eventsRef.current.set(displayNodeId, []);
+        eventsRef.current.set(timelineNodeId, []);
 
         // Set the event callback
-        displayNode.setOnEvent((event: NostrEvent) => {
-          const events = eventsRef.current.get(displayNodeId) || [];
+        timelineNode.setOnEvent((event: NostrEvent) => {
+          const events = eventsRef.current.get(timelineNodeId) || [];
           // Add event and sort by created_at (newest first)
           const newEvents = [...events, { event, profile: undefined }].sort(
             (a, b) => b.event.created_at - a.event.created_at
           );
           // Limit to 100 events
           const limitedEvents = newEvents.slice(0, 100);
-          eventsRef.current.set(displayNodeId, limitedEvents);
-          onEventsUpdate(displayNodeId, limitedEvents);
+          eventsRef.current.set(timelineNodeId, limitedEvents);
+          onEventsUpdate(timelineNodeId, limitedEvents);
         });
 
         // Find input connection
@@ -221,7 +221,7 @@ export function GraphEditor({
         );
         const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
 
-        displayNode.setInput(input$);
+        timelineNode.setInput(input$);
       }
     }
   }, [getNodeOutput, onEventsUpdate]);
@@ -229,7 +229,7 @@ export function GraphEditor({
   // Keep ref updated
   rebuildPipelineRef.current = rebuildPipeline;
 
-  const addNode = useCallback(async (type: 'Source' | 'Operator' | 'Search' | 'Display') => {
+  const addNode = useCallback(async (type: 'Relay' | 'Operator' | 'Search' | 'Timeline') => {
     const editor = editorRef.current;
     const area = areaRef.current;
     if (!editor || !area) return;
@@ -237,8 +237,8 @@ export function GraphEditor({
     let node: NodeTypes;
 
     switch (type) {
-      case 'Source':
-        node = new SourceNode();
+      case 'Relay':
+        node = new RelayNode();
         break;
       case 'Operator':
         node = new OperatorNode();
@@ -246,9 +246,9 @@ export function GraphEditor({
       case 'Search':
         node = new SearchNode();
         break;
-      case 'Display':
-        node = new DisplayNode();
-        onTimelineCreate(node.id, (node as DisplayNode).getTimelineName());
+      case 'Timeline':
+        node = new TimelineNode();
+        onTimelineCreate(node.id, (node as TimelineNode).getTimelineName());
         break;
       default:
         return;
@@ -470,7 +470,7 @@ export function GraphEditor({
       editor.addPipe((context: any) => {
         if (context.type === 'noderemoved') {
           const node = context.data as NodeTypes;
-          if (getNodeType(node) === 'Display') {
+          if (getNodeType(node) === 'Timeline') {
             onTimelineRemove(node.id);
           }
           setTimeout(saveCurrentGraph, 0);
@@ -490,7 +490,7 @@ export function GraphEditor({
       if (savedGraph) {
         isLoadingRef.current = true;
         const nodeMap = new Map<string, NodeTypes>();
-        const displayNodes: Array<{ node: DisplayNode; id: string }> = [];
+        const timelineNodes: Array<{ node: TimelineNode; id: string }> = [];
 
         // Create nodes
         for (const nodeData of savedGraph.nodes as Array<{
@@ -502,10 +502,11 @@ export function GraphEditor({
           let node: NodeTypes;
 
           switch (nodeData.type) {
-            case 'Source':
-              node = new SourceNode();
+            case 'Relay':
+            case 'Source': // backward compatibility
+              node = new RelayNode();
               if (nodeData.data) {
-                (node as SourceNode).deserialize(nodeData.data as { relayUrls: string[]; filterJson: string });
+                (node as RelayNode).deserialize(nodeData.data as { relayUrls: string[]; filterJson: string });
               }
               break;
             case 'Operator':
@@ -520,13 +521,14 @@ export function GraphEditor({
                 (node as SearchNode).deserialize(nodeData.data as { keyword: string; useRegex: boolean });
               }
               break;
-            case 'Display':
-              node = new DisplayNode();
+            case 'Timeline':
+            case 'Display': // backward compatibility
+              node = new TimelineNode();
               if (nodeData.data) {
-                (node as DisplayNode).deserialize(nodeData.data as { timelineName: string });
+                (node as TimelineNode).deserialize(nodeData.data as { timelineName: string });
               }
               // Delay onTimelineCreate until after ID is overridden
-              displayNodes.push({ node: node as DisplayNode, id: nodeData.id });
+              timelineNodes.push({ node: node as TimelineNode, id: nodeData.id });
               break;
             default:
               continue;
@@ -539,8 +541,8 @@ export function GraphEditor({
           nodeMap.set(nodeData.id, node);
         }
 
-        // Now create timelines for Display nodes with correct IDs
-        for (const { node, id } of displayNodes) {
+        // Now create timelines for Timeline nodes with correct IDs
+        for (const { node, id } of timelineNodes) {
           onTimelineCreate(id, node.getTimelineName());
         }
 
@@ -602,10 +604,10 @@ export function GraphEditor({
   return (
     <div className="graph-editor">
       <div className="graph-toolbar">
-        <button onClick={() => addNode('Source')}>{t('toolbar.relay')}</button>
+        <button onClick={() => addNode('Relay')}>{t('toolbar.relay')}</button>
         <button onClick={() => addNode('Operator')}>{t('toolbar.operator')}</button>
         <button onClick={() => addNode('Search')}>{t('toolbar.search')}</button>
-        <button onClick={() => addNode('Display')}>{t('toolbar.timeline')}</button>
+        <button onClick={() => addNode('Timeline')}>{t('toolbar.timeline')}</button>
         <button onClick={centerView}>{t('toolbar.center')}</button>
         <button onClick={deleteSelected} className="delete-btn">{t('toolbar.delete')}</button>
       </div>

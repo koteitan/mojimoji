@@ -1,7 +1,7 @@
-export { SourceNode } from './SourceNode';
+export { RelayNode } from './RelayNode';
 export { OperatorNode } from './OperatorNode';
 export { SearchNode } from './SearchNode';
-export { DisplayNode } from './DisplayNode';
+export { TimelineNode } from './TimelineNode';
 export { eventSocket } from './types';
-export type { FilterItem, SourceNodeControls, OperatorNodeControls, SearchNodeControls, DisplayNodeControls } from './types';
+export type { FilterItem, RelayNodeControls, OperatorNodeControls, SearchNodeControls, TimelineNodeControls } from './types';
 export { TextInputControl, TextAreaControl, SelectControl, CheckboxControl } from './controls';

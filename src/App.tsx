@@ -47,7 +47,7 @@ function App() {
           {timelines.length === 0 ? (
             <div className="timeline-empty-state">
               <p>No timelines yet</p>
-              <p className="hint">Connect a Display node in the graph editor</p>
+              <p className="hint">Connect a Timeline node in the graph editor</p>
             </div>
           ) : (
             timelines.map(timeline => (

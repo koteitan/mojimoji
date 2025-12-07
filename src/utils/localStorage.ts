@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'momimomi-graph';
+const STORAGE_KEY = 'mojimoji-graph';
 
 export interface GraphData {
   nodes: unknown[];

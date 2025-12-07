@@ -11,9 +11,9 @@ import type { NostrEvent } from '../../../nostr/types';
 // Type for the result of createRxForwardReq with emit method
 type ForwardReq = ReturnType<typeof createRxForwardReq>;
 
-export class SourceNode extends ClassicPreset.Node {
-  static readonly nodeType = 'Source';
-  readonly nodeType = 'Source';
+export class RelayNode extends ClassicPreset.Node {
+  static readonly nodeType = 'Relay';
+  readonly nodeType = 'Relay';
   width = 220;
   height = 200;
 
@@ -111,7 +111,7 @@ export class SourceNode extends ClassicPreset.Node {
         this.eventSubject.next(event);
       },
       error: (err) => {
-        console.error('SourceNode subscription error:', err);
+        console.error('RelayNode subscription error:', err);
       },
     });
 

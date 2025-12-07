@@ -1,11 +1,11 @@
 import { subscribeToEvents, unsubscribe } from '../nostr/subscription';
 import type { TimelineEvent, Profile } from '../nostr/types';
-import type { SourceNode } from '../components/Graph/nodes/SourceNode';
+import type { RelayNode } from '../components/Graph/nodes/RelayNode';
 import type { OperatorNode } from '../components/Graph/nodes/OperatorNode';
 import type { SearchNode } from '../components/Graph/nodes/SearchNode';
-import type { DisplayNode } from '../components/Graph/nodes/DisplayNode';
+import type { TimelineNode } from '../components/Graph/nodes/TimelineNode';
 
-type NodeTypes = SourceNode | OperatorNode | SearchNode | DisplayNode;
+type NodeTypes = RelayNode | OperatorNode | SearchNode | TimelineNode;
 
 interface Connection {
   source: string;
@@ -43,36 +43,36 @@ export function updateConnections(connections: Connection[]): void {
 }
 
 export function registerEventListener(
-  displayNodeId: string,
+  timelineNodeId: string,
   listener: (events: TimelineEvent[]) => void
 ): void {
-  state.eventListeners.set(displayNodeId, listener);
+  state.eventListeners.set(timelineNodeId, listener);
 }
 
-export function unregisterEventListener(displayNodeId: string): void {
-  state.eventListeners.delete(displayNodeId);
-  state.timelineEvents.delete(displayNodeId);
+export function unregisterEventListener(timelineNodeId: string): void {
+  state.eventListeners.delete(timelineNodeId);
+  state.timelineEvents.delete(timelineNodeId);
 }
 
 function recalculateSubscriptions(): void {
-  // Find all Display nodes
-  const displayNodes = Array.from(state.nodes.values()).filter(
-    (node) => node.label === 'Display'
-  ) as DisplayNode[];
+  // Find all Timeline nodes
+  const timelineNodes = Array.from(state.nodes.values()).filter(
+    (node) => node.label === 'Timeline'
+  ) as TimelineNode[];
 
-  for (const displayNode of displayNodes) {
-    // Trace back to find the source
-    const sourceInfo = traceToSource(displayNode.id);
+  for (const timelineNode of timelineNodes) {
+    // Trace back to find the relay
+    const relayInfo = traceToRelay(timelineNode.id);
 
-    if (sourceInfo) {
+    if (relayInfo) {
       // Start subscription
-      const { sourceNode, searchNodes } = sourceInfo;
+      const { relayNode, searchNodes } = relayInfo;
 
-      const relayUrls = sourceNode.getRelayUrls();
-      const filter = sourceNode.getFilter();
+      const relayUrls = relayNode.getRelayUrls();
+      const filter = relayNode.getFilter();
 
       subscribeToEvents(
-        displayNode.id,
+        timelineNode.id,
         relayUrls,
         filter,
         (event: TimelineEvent) => {
@@ -87,16 +87,16 @@ function recalculateSubscriptions(): void {
 
           if (passes) {
             // Add event to timeline
-            const events = state.timelineEvents.get(displayNode.id) || [];
+            const events = state.timelineEvents.get(timelineNode.id) || [];
             events.unshift(event);
             // Keep only last 100 events
             if (events.length > 100) {
               events.pop();
             }
-            state.timelineEvents.set(displayNode.id, events);
+            state.timelineEvents.set(timelineNode.id, events);
 
             // Notify listener
-            const listener = state.eventListeners.get(displayNode.id);
+            const listener = state.eventListeners.get(timelineNode.id);
             if (listener) {
               listener([...events]);
             }
@@ -104,19 +104,19 @@ function recalculateSubscriptions(): void {
         }
       );
     } else {
-      // No source connected, stop subscription
-      unsubscribe(displayNode.id);
+      // No relay connected, stop subscription
+      unsubscribe(timelineNode.id);
     }
   }
 }
 
-interface SourceInfo {
-  sourceNode: SourceNode;
+interface RelayInfo {
+  relayNode: RelayNode;
   operatorNodes: OperatorNode[];
   searchNodes: SearchNode[];
 }
 
-function traceToSource(nodeId: string): SourceInfo | null {
+function traceToRelay(nodeId: string): RelayInfo | null {
   const node = state.nodes.get(nodeId);
   if (!node) return null;
 
@@ -133,9 +133,9 @@ function traceToSource(nodeId: string): SourceInfo | null {
     const currentNode = state.nodes.get(currentNodeId);
     if (!currentNode) return null;
 
-    if (currentNode.label === 'Source') {
+    if (currentNode.label === 'Relay') {
       return {
-        sourceNode: currentNode as SourceNode,
+        relayNode: currentNode as RelayNode,
         operatorNodes,
         searchNodes,
       };
@@ -159,17 +159,17 @@ function traceToSource(nodeId: string): SourceInfo | null {
   return null;
 }
 
-export function getTimelineEvents(displayNodeId: string): TimelineEvent[] {
-  return state.timelineEvents.get(displayNodeId) || [];
+export function getTimelineEvents(timelineNodeId: string): TimelineEvent[] {
+  return state.timelineEvents.get(timelineNodeId) || [];
 }
 
 // Profile helper
 export function updateEventProfile(
-  displayNodeId: string,
+  timelineNodeId: string,
   pubkey: string,
   profile: Profile
 ): void {
-  const events = state.timelineEvents.get(displayNodeId);
+  const events = state.timelineEvents.get(timelineNodeId);
   if (events) {
     let updated = false;
     for (const event of events) {
@@ -179,7 +179,7 @@ export function updateEventProfile(
       }
     }
     if (updated) {
-      const listener = state.eventListeners.get(displayNodeId);
+      const listener = state.eventListeners.get(timelineNodeId);
       if (listener) {
         listener([...events]);
       }

@@ -28,7 +28,7 @@ export interface FilterItem {
   value: string;
 }
 
-export interface SourceNodeData {
+export interface RelayNodeData {
   relayUrls: string[];
   filters: FilterItem[];
 }
@@ -42,6 +42,6 @@ export interface SearchNodeData {
   useRegex: boolean;
 }
 
-export interface DisplayNodeData {
+export interface TimelineNodeData {
   timelineName: string;
 }

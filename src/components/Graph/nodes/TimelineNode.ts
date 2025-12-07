@@ -5,9 +5,9 @@ import { eventSocket } from './types';
 import { TextInputControl } from './controls';
 import type { NostrEvent } from '../../../nostr/types';
 
-export class DisplayNode extends ClassicPreset.Node {
-  static readonly nodeType = 'Display';
-  readonly nodeType = 'Display';
+export class TimelineNode extends ClassicPreset.Node {
+  static readonly nodeType = 'Timeline';
+  readonly nodeType = 'Timeline';
   width = 180;
   height = 120;
 
@@ -83,7 +83,7 @@ export class DisplayNode extends ClassicPreset.Node {
         }
       },
       error: (err) => {
-        console.error('DisplayNode subscription error:', err);
+        console.error('TimelineNode subscription error:', err);
       },
     });
   }
