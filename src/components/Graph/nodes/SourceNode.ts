@@ -1,6 +1,14 @@
 import { ClassicPreset } from 'rete';
+import { Subject, Observable, share } from 'rxjs';
+import { createRxNostr, createRxForwardReq } from 'rx-nostr';
+import type { RxNostr } from 'rx-nostr';
+import { verifier } from '@rx-nostr/crypto';
 import { eventSocket } from './types';
 import { TextAreaControl } from './controls';
+import type { NostrEvent } from '../../../nostr/types';
+
+// Type for the result of createRxForwardReq with emit method
+type ForwardReq = ReturnType<typeof createRxForwardReq>;
 
 export class SourceNode extends ClassicPreset.Node {
   width = 220;
@@ -8,6 +16,15 @@ export class SourceNode extends ClassicPreset.Node {
 
   private relayUrls: string[] = ['wss://relay.damus.io'];
   private filterJson: string = '{"kinds": [1], "limit": 20}';
+
+  // RxJS Observable for output events
+  private eventSubject = new Subject<NostrEvent>();
+  private rxNostr: RxNostr | null = null;
+  private rxReq: ForwardReq | null = null;
+  private subscription: { unsubscribe: () => void } | null = null;
+
+  // Shared observable that can be subscribed to by multiple downstream nodes
+  public output$: Observable<NostrEvent> = this.eventSubject.asObservable().pipe(share());
 
   constructor() {
     super('Source');
@@ -71,5 +88,50 @@ export class SourceNode extends ClassicPreset.Node {
     if (filterControl) {
       filterControl.value = this.filterJson;
     }
+  }
+
+  // Start the nostr subscription and emit events to the Subject
+  startSubscription(): void {
+    // Stop any existing subscription first
+    this.stopSubscription();
+
+    if (this.relayUrls.length === 0) return;
+
+    this.rxNostr = createRxNostr({ verifier });
+    this.rxNostr.setDefaultRelays(this.relayUrls);
+
+    this.rxReq = createRxForwardReq();
+
+    this.subscription = this.rxNostr.use(this.rxReq).subscribe({
+      next: (packet) => {
+        const event = packet.event as NostrEvent;
+        this.eventSubject.next(event);
+      },
+      error: (err) => {
+        console.error('SourceNode subscription error:', err);
+      },
+    });
+
+    // Emit the filter to start receiving events
+    const filter = this.getFilter();
+    this.rxReq.emit(filter as { kinds?: number[]; limit?: number });
+  }
+
+  // Stop the nostr subscription
+  stopSubscription(): void {
+    if (this.subscription) {
+      this.subscription.unsubscribe();
+      this.subscription = null;
+    }
+    if (this.rxNostr) {
+      this.rxNostr.dispose();
+      this.rxNostr = null;
+    }
+    this.rxReq = null;
+  }
+
+  // Check if subscription is active
+  isSubscribed(): boolean {
+    return this.subscription !== null;
   }
 }

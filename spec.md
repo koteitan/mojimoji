@@ -21,6 +21,12 @@ User Inrterface is as follows.
           - text created at: kind0.context.created_at
           - text: event.context
 - center: Graph view: modular connectors of nostr filter by rete.js.
+  - toolbar:
+    - +Source button: add a Source node.
+    - +Operator button: add an Operator node.
+    - +Search button: add a Search node.
+    - +Display button: add a Display node.
+    - Delete button: delete selected node(s).
   - nodes:
     - description:
       - nodes inputs data.

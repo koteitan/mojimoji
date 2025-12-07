@@ -5,7 +5,7 @@ import type { TimelineEvent } from './nostr/types';
 import './App.css';
 
 // Version: Update this on each deployment
-const APP_VERSION = '0.1.1';
+const APP_VERSION = '0.1.4';
 
 interface TimelineData {
   id: string;

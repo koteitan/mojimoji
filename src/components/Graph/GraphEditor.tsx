@@ -9,7 +9,8 @@ import { SourceNode, OperatorNode, SearchNode, DisplayNode } from './nodes';
 import { TextInputControl, TextAreaControl, SelectControl, CheckboxControl } from './nodes/controls';
 import { TextInputComponent, TextAreaComponent, SelectComponent, CheckboxComponent } from './CustomControls';
 import { saveGraph, loadGraph } from '../../utils/localStorage';
-import type { TimelineEvent } from '../../nostr/types';
+import type { TimelineEvent, NostrEvent } from '../../nostr/types';
+import type { Observable } from 'rxjs';
 import './GraphEditor.css';
 
 type NodeTypes = SourceNode | OperatorNode | SearchNode | DisplayNode;
@@ -29,6 +30,7 @@ interface GraphEditorProps {
 export function GraphEditor({
   onTimelineCreate,
   onTimelineRemove,
+  onEventsUpdate,
 }: GraphEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<NodeEditor<Schemes> | null>(null);
@@ -38,6 +40,8 @@ export function GraphEditor({
   const selectorRef = useRef<any>(null);
   const isInitializedRef = useRef(false);
   const isLoadingRef = useRef(false);
+  const eventsRef = useRef<Map<string, TimelineEvent[]>>(new Map());
+  const rebuildPipelineRef = useRef<(() => void) | null>(null);
 
   const saveCurrentGraph = useCallback(() => {
     const editor = editorRef.current;
@@ -60,6 +64,157 @@ export function GraphEditor({
 
     saveGraph({ nodes, connections });
   }, []);
+
+  // Get the output Observable from a node by traversing connections
+  const getNodeOutput = useCallback((nodeId: string): Observable<NostrEvent> | null => {
+    const editor = editorRef.current;
+    if (!editor) return null;
+
+    const node = editor.getNode(nodeId);
+    if (!node) return null;
+
+    if (node.label === 'Source') {
+      return (node as SourceNode).output$;
+    } else if (node.label === 'Operator') {
+      return (node as OperatorNode).output$;
+    } else if (node.label === 'Search') {
+      return (node as SearchNode).output$;
+    }
+
+    return null;
+  }, []);
+
+  // Rebuild the Observable pipeline for all nodes
+  const rebuildPipeline = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const connections = editor.getConnections();
+    const nodes = editor.getNodes();
+
+    // First, stop all existing subscriptions
+    for (const node of nodes) {
+      if (node.label === 'Source') {
+        (node as SourceNode).stopSubscription();
+      } else if (node.label === 'Operator') {
+        (node as OperatorNode).stopSubscriptions();
+      } else if (node.label === 'Search') {
+        (node as SearchNode).stopSubscription();
+      } else if (node.label === 'Display') {
+        (node as DisplayNode).stopSubscription();
+      }
+    }
+
+    // Find which Source nodes need to be active (connected to a Display eventually)
+    const activeSourceIds = new Set<string>();
+    const findActiveSources = (nodeId: string, visited: Set<string>) => {
+      if (visited.has(nodeId)) return;
+      visited.add(nodeId);
+
+      const node = editor.getNode(nodeId);
+      if (!node) return;
+
+      if (node.label === 'Source') {
+        activeSourceIds.add(nodeId);
+        return;
+      }
+
+      // Find connections where this node is the target
+      const incomingConns = connections.filter(
+        (c: { target: string }) => c.target === nodeId
+      );
+
+      for (const conn of incomingConns) {
+        findActiveSources(conn.source, visited);
+      }
+    };
+
+    // Find active sources for each Display node
+    for (const node of nodes) {
+      if (node.label === 'Display') {
+        findActiveSources(node.id, new Set());
+      }
+    }
+
+    // Start subscriptions on active Source nodes
+    for (const node of nodes) {
+      if (node.label === 'Source' && activeSourceIds.has(node.id)) {
+        (node as SourceNode).startSubscription();
+      }
+    }
+
+    // Wire up Operator nodes
+    for (const node of nodes) {
+      if (node.label === 'Operator') {
+        const operatorNode = node as OperatorNode;
+
+        // Find input1 connection
+        const input1Conn = connections.find(
+          (c: { target: string; targetInput: string }) =>
+            c.target === node.id && c.targetInput === 'input1'
+        );
+        const input1$ = input1Conn ? getNodeOutput(input1Conn.source) : null;
+
+        // Find input2 connection
+        const input2Conn = connections.find(
+          (c: { target: string; targetInput: string }) =>
+            c.target === node.id && c.targetInput === 'input2'
+        );
+        const input2$ = input2Conn ? getNodeOutput(input2Conn.source) : null;
+
+        operatorNode.setInputs(input1$, input2$);
+      }
+    }
+
+    // Wire up Search nodes
+    for (const node of nodes) {
+      if (node.label === 'Search') {
+        const searchNode = node as SearchNode;
+
+        const inputConn = connections.find(
+          (c: { target: string }) => c.target === node.id
+        );
+        const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+
+        searchNode.setInput(input$);
+      }
+    }
+
+    // Wire up Display nodes
+    for (const node of nodes) {
+      if (node.label === 'Display') {
+        const displayNode = node as DisplayNode;
+        const displayNodeId = node.id;
+
+        // Initialize events array
+        eventsRef.current.set(displayNodeId, []);
+
+        // Set the event callback
+        displayNode.setOnEvent((event: NostrEvent) => {
+          const events = eventsRef.current.get(displayNodeId) || [];
+          // Add event and sort by created_at (newest first)
+          const newEvents = [...events, { event, profile: undefined }].sort(
+            (a, b) => b.event.created_at - a.event.created_at
+          );
+          // Limit to 100 events
+          const limitedEvents = newEvents.slice(0, 100);
+          eventsRef.current.set(displayNodeId, limitedEvents);
+          onEventsUpdate(displayNodeId, limitedEvents);
+        });
+
+        // Find input connection
+        const inputConn = connections.find(
+          (c: { target: string }) => c.target === node.id
+        );
+        const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+
+        displayNode.setInput(input$);
+      }
+    }
+  }, [getNodeOutput, onEventsUpdate]);
+
+  // Keep ref updated
+  rebuildPipelineRef.current = rebuildPipeline;
 
   const addNode = useCallback(async (type: 'Source' | 'Operator' | 'Search' | 'Display') => {
     const editor = editorRef.current;
@@ -218,7 +373,7 @@ export function GraphEditor({
       document.addEventListener('keydown', handleKeyDown);
       container.setAttribute('tabindex', '0'); // Make container focusable
 
-      // Handle node removal - clean up Display nodes
+      // Handle node removal and connection changes
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       editor.addPipe((context: any) => {
         if (context.type === 'noderemoved') {
@@ -227,9 +382,13 @@ export function GraphEditor({
             onTimelineRemove(node.id);
           }
           setTimeout(saveCurrentGraph, 0);
+          // Rebuild pipeline after node removal
+          setTimeout(() => rebuildPipelineRef.current?.(), 0);
         }
         if (context.type === 'connectioncreated' || context.type === 'connectionremoved') {
           setTimeout(saveCurrentGraph, 0);
+          // Rebuild pipeline when connections change
+          setTimeout(() => rebuildPipelineRef.current?.(), 0);
         }
         return context;
       });
@@ -319,6 +478,9 @@ export function GraphEditor({
 
         // Fit view to show all nodes
         await AreaExtensions.zoomAt(area, editor.getNodes());
+
+        // Rebuild the Observable pipeline after loading
+        setTimeout(() => rebuildPipelineRef.current?.(), 100);
       }
     };
 
