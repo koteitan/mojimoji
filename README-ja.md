@@ -1,0 +1,179 @@
+# mojimoji
+
+Nostr用のビジュアルノードベースフィルタリング機能を持つモジュラータイムラインクライアント。
+
+## 使い方
+
+### 概要
+
+mojimojiは、ノードを接続してカスタムNostrタイムラインを作成できるビジュアルグラフエディタを提供します：
+
+- **Relayノード**: Nostrリレーに接続してイベントを取得
+- **Filterノード**: 条件でイベントをフィルタリング（Operator、Search、Language）
+- **Timelineノード**: フィルタされたイベントを表示
+
+### はじめに
+
+1. ブラウザでアプリケーションを開く
+2. Relay -> Timeline のデフォルトグラフが作成される
+3. 左側のタイムラインパネルにイベントが表示され始める
+
+### グラフエディタ
+
+#### ノードの追加
+
+- ツールバーボタンをクリック: `+Relay`, `+Filter`, `+Timeline`
+- またはキーボードショートカットを使用（下記参照）
+
+#### ノードの接続
+
+1. 出力ソケット（ノードの下部）をクリック - 緑色になる
+2. 別のノードの入力ソケット（上部）をクリック
+3. 接続が作成される
+
+#### 削除
+
+- ノードをクリックして選択し、`d`または`Delete`キーを押す
+- またはツールバーの`Delete`ボタンをクリック
+
+#### ナビゲーション
+
+- **ズーム**: マウスホイールまたはピンチジェスチャー
+- **パン**: 背景をドラッグ
+- **中央に移動**: `c`キーを押すか`Center`ボタンをクリック
+
+### キーボードショートカット
+
+| キー | 動作 |
+|------|------|
+| r | Relayノードを追加 |
+| f | Filterドロップダウンを切り替え |
+| o | Operatorノードを追加 |
+| s | Searchノードを追加 |
+| l | Languageノードを追加 |
+| t | Timelineノードを追加 |
+| c | ビューを中央に |
+| d | 選択を削除 |
+
+注意: 入力フィールドでの入力中やCtrl/Alt/Metaキーが押されている時はショートカットは無効です。
+
+### ノードの種類
+
+#### Relayノード
+- **Relay URLs**: リレーのWebSocket URLを入力（1行に1つ）
+- **Filters**: NIP-01フィルタを設定（kinds、authors等）
+
+#### Operatorノード
+- 2つのイベントストリームをAND、OR、またはA-B（差分）で結合
+
+#### Searchノード
+- キーワードまたは正規表現パターンでイベントをフィルタ
+
+#### Languageノード
+- 検出された言語でイベントをフィルタ（日本語、英語、中国語など）
+
+#### Timelineノード
+- スクロール可能なリストでイベントを表示
+- カスタムタイムライン名を設定
+
+### データの永続化
+
+- グラフのレイアウトと設定は自動的にlocalStorageに保存される
+- プロファイルキャッシュは高速読み込みのために保存される
+
+## 開発者ガイド
+
+### 技術スタック
+
+- **言語**: TypeScript
+- **ビルドツール**: Vite
+- **UIフレームワーク**: React
+- **グラフエディタ**: rete.js
+- **Nostrクライアント**: rx-nostr
+- **リアクティブ**: RxJS
+- **国際化**: react-i18next
+
+### セットアップ
+
+```bash
+# 依存関係をインストール
+npm install
+
+# 開発サーバーを起動
+npm run dev
+
+# 本番用にビルド
+npm run build
+
+# GitHub Pagesにデプロイ
+npm run deploy
+
+# 型チェック
+npm run tsc
+```
+
+### プロジェクト構造
+
+```
+src/
++-- main.tsx              # エントリーポイント
++-- App.tsx               # メインアプリコンポーネント
++-- components/
+|   +-- Graph/
+|   |   +-- GraphEditor.tsx    # メイングラフエディタ
+|   |   +-- CustomNode.tsx     # ノードレンダラー
+|   |   +-- CustomSocket.tsx   # ソケットレンダラー
+|   |   +-- CustomConnection.tsx
+|   |   +-- nodes/
+|   |       +-- RelayNode.ts   # リレー購読
+|   |       +-- OperatorNode.ts
+|   |       +-- SearchNode.ts
+|   |       +-- LanguageNode.ts
+|   |       +-- TimelineNode.ts
+|   +-- Timeline/
+|       +-- Timeline.tsx
+|       +-- TimelineItem.tsx
++-- i18n/
+|   +-- locales/
+|       +-- en.json
+|       +-- ja.json
++-- nostr/
+|   +-- types.ts
++-- utils/
+    +-- localStorage.ts
+```
+
+### デバッグツール
+
+ブラウザコンソールを開いて実行：
+
+- `dumpgraph()` - グラフ構造を出力
+- `dumpsub()` - リレー購読状態を出力
+- `infocache()` - プロファイルキャッシュ情報を出力
+
+### 新しいノードタイプの追加
+
+1. `src/components/Graph/nodes/YourNode.ts`を作成
+2. `src/components/Graph/nodes/index.ts`からエクスポート
+3. `GraphEditor.tsx`の`NodeTypes`ユニオンに追加
+4. `addNode()`関数にケースを追加
+5. `rebuildPipeline()`にワイヤリングロジックを追加
+6. `locales/*.json`にi18n翻訳を追加
+7. `spec.md`を更新
+
+### コードスタイル
+
+- TypeScript strictモードを使用
+- ノード実装の既存パターンに従う
+- 開発ログ用に`DEBUG`フラグを追加
+- バンドルサイズを最小限に
+
+### 参考資料
+
+- [rete.js ドキュメント](https://rete.js.org/)
+- [rx-nostr ドキュメント](https://penpenpng.github.io/rx-nostr/)
+- [NIP-01 仕様](https://github.com/nostr-protocol/nips/blob/master/01.md)
+
+## ライセンス
+
+MIT
