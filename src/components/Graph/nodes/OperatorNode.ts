@@ -8,6 +8,8 @@ import type { NostrEvent } from '../../../nostr/types';
 export type OperatorType = 'AND' | 'OR' | 'A-B';
 
 export class OperatorNode extends ClassicPreset.Node {
+  static readonly nodeType = 'Operator';
+  readonly nodeType = 'Operator';
   width = 180;
   height = 160;
 

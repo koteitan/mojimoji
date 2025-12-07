@@ -12,6 +12,8 @@ import type { NostrEvent } from '../../../nostr/types';
 type ForwardReq = ReturnType<typeof createRxForwardReq>;
 
 export class SourceNode extends ClassicPreset.Node {
+  static readonly nodeType = 'Source';
+  readonly nodeType = 'Source';
   width = 220;
   height = 200;
 

@@ -40,11 +40,17 @@ User Inrterface is as follows.
         - output terminal:
           - output (nostr event)
         - attributes:
-          - relay URL list
+          - relay URL list:
           - filter list:
             - list item:
               - filter name: ids, authors, kinds, #?, since, until, limit
               - filter value: string
+        - default:
+          - kinds = [1]
+          - limit = 500
+          - if 
+            - locale is "ja": relay URL = wss://yabu.me
+            - otherwise     : relay URL = wss://relay.damus.io
       - original-filter node:
         - operator node:
           - input terminal:
@@ -100,17 +106,9 @@ User Inrterface is as follows.
   - automatically load localStorage when the app is started.
   - when the localStorage is empty:
     - create a default graph:
-      - one Source node:
-        - relay URL list:
-           - if the locale is "ja": wss://yabu.me
-           - otherwise: wss://relay.damus.io 
-        - filter list:
-          - kind:1
-          - limit:500
-      - one Display node:
-        - timeline name: "Timeline 1"
-      - one edge:
-        - connect the Source node and the Display node.
+      - one relay node: default node
+      - one Display node: timeline name: "Timeline 1"
+      - one edge:connect the relay node and the Display node.
 
 ### on change connections
 - save:
@@ -134,7 +132,7 @@ User Inrterface is as follows.
 - Non-translated UI elements:
   - Title bar: "(>_<)-(>_<)-mojimoji" (keep as-is in all languages)
 - Translated UI elements:
-  - Toolbar buttons: +Source, +Operator, +Search, +Display, Delete
+  - Toolbar buttons: +Relay, +Operator, +Search, +Timeline, Delete
   - Node labels and placeholders
   - Timeline headers
 - Implementation:

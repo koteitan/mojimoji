@@ -6,6 +6,8 @@ import { TextInputControl, CheckboxControl } from './controls';
 import type { NostrEvent } from '../../../nostr/types';
 
 export class SearchNode extends ClassicPreset.Node {
+  static readonly nodeType = 'Search';
+  readonly nodeType = 'Search';
   width = 200;
   height = 160;
 

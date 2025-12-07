@@ -16,6 +16,11 @@ import './GraphEditor.css';
 
 type NodeTypes = SourceNode | OperatorNode | SearchNode | DisplayNode;
 
+// Helper to get the internal node type
+const getNodeType = (node: NodeTypes): string => {
+  return (node as NodeTypes & { nodeType: string }).nodeType;
+};
+
 // Use 'any' to bypass strict Rete.js type constraints
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Schemes = any;
@@ -57,7 +62,7 @@ export function GraphEditor({
 
     const nodes = editor.getNodes().map((node: NodeTypes) => ({
       id: node.id,
-      type: node.label,
+      type: (node as NodeTypes & { nodeType: string }).nodeType,
       position: areaRef.current?.nodeViews.get(node.id)?.position || { x: 0, y: 0 },
       data: 'serialize' in node ? (node as unknown as { serialize: () => unknown }).serialize() : {},
     }));
@@ -81,11 +86,11 @@ export function GraphEditor({
     const node = editor.getNode(nodeId);
     if (!node) return null;
 
-    if (node.label === 'Source') {
+    if (getNodeType(node) === 'Source') {
       return (node as SourceNode).output$;
-    } else if (node.label === 'Operator') {
+    } else if (getNodeType(node) === 'Operator') {
       return (node as OperatorNode).output$;
-    } else if (node.label === 'Search') {
+    } else if (getNodeType(node) === 'Search') {
       return (node as SearchNode).output$;
     }
 
@@ -102,13 +107,13 @@ export function GraphEditor({
 
     // First, stop all existing subscriptions
     for (const node of nodes) {
-      if (node.label === 'Source') {
+      if (getNodeType(node) === 'Source') {
         (node as SourceNode).stopSubscription();
-      } else if (node.label === 'Operator') {
+      } else if (getNodeType(node) === 'Operator') {
         (node as OperatorNode).stopSubscriptions();
-      } else if (node.label === 'Search') {
+      } else if (getNodeType(node) === 'Search') {
         (node as SearchNode).stopSubscription();
-      } else if (node.label === 'Display') {
+      } else if (getNodeType(node) === 'Display') {
         (node as DisplayNode).stopSubscription();
       }
     }
@@ -122,7 +127,7 @@ export function GraphEditor({
       const node = editor.getNode(nodeId);
       if (!node) return;
 
-      if (node.label === 'Source') {
+      if (getNodeType(node) === 'Source') {
         activeSourceIds.add(nodeId);
         return;
       }
@@ -139,21 +144,21 @@ export function GraphEditor({
 
     // Find active sources for each Display node
     for (const node of nodes) {
-      if (node.label === 'Display') {
+      if (getNodeType(node) === 'Display') {
         findActiveSources(node.id, new Set());
       }
     }
 
     // Start subscriptions on active Source nodes
     for (const node of nodes) {
-      if (node.label === 'Source' && activeSourceIds.has(node.id)) {
+      if (getNodeType(node) === 'Source' && activeSourceIds.has(node.id)) {
         (node as SourceNode).startSubscription();
       }
     }
 
     // Wire up Operator nodes
     for (const node of nodes) {
-      if (node.label === 'Operator') {
+      if (getNodeType(node) === 'Operator') {
         const operatorNode = node as OperatorNode;
 
         // Find input1 connection
@@ -176,7 +181,7 @@ export function GraphEditor({
 
     // Wire up Search nodes
     for (const node of nodes) {
-      if (node.label === 'Search') {
+      if (getNodeType(node) === 'Search') {
         const searchNode = node as SearchNode;
 
         const inputConn = connections.find(
@@ -190,7 +195,7 @@ export function GraphEditor({
 
     // Wire up Display nodes
     for (const node of nodes) {
-      if (node.label === 'Display') {
+      if (getNodeType(node) === 'Display') {
         const displayNode = node as DisplayNode;
         const displayNodeId = node.id;
 
@@ -465,7 +470,7 @@ export function GraphEditor({
       editor.addPipe((context: any) => {
         if (context.type === 'noderemoved') {
           const node = context.data as NodeTypes;
-          if (node.label === 'Display') {
+          if (getNodeType(node) === 'Display') {
             onTimelineRemove(node.id);
           }
           setTimeout(saveCurrentGraph, 0);
