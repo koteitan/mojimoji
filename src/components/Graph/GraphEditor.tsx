@@ -1006,11 +1006,13 @@ export function GraphEditor({
 
         isLoadingRef.current = false;
 
-        // Fit view to show all nodes
-        await AreaExtensions.zoomAt(area, editor.getNodes());
-
         // Rebuild the Observable pipeline after loading
         setTimeout(() => rebuildPipelineRef.current?.(), 100);
+
+        // Fit view to show all nodes (delay to ensure DOM is ready)
+        setTimeout(async () => {
+          await AreaExtensions.zoomAt(area, editor.getNodes());
+        }, 150);
       } else {
         // Create default graph when localStorage is empty
         isLoadingRef.current = true;
@@ -1040,11 +1042,13 @@ export function GraphEditor({
         // Save the default graph
         saveCurrentGraph();
 
-        // Fit view to show all nodes
-        await AreaExtensions.zoomAt(area, editor.getNodes());
-
         // Rebuild the Observable pipeline
         setTimeout(() => rebuildPipelineRef.current?.(), 100);
+
+        // Fit view to show all nodes (delay to ensure DOM is ready)
+        setTimeout(async () => {
+          await AreaExtensions.zoomAt(area, editor.getNodes());
+        }, 150);
       }
     };
 

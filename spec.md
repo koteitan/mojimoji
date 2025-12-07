@@ -156,7 +156,7 @@ User Inrterface is as follows.
       - one edge: connect the Relay node output to the Timeline node input.
   - when there is localStorage:
     - automatically load localStorage when the app is started.
-    - do centering
+  - centering: fit all nodes in view (same as Center button)
 
 ### control input behavior
 - text inputs (TextInput, TextArea):
