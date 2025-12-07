@@ -8,6 +8,24 @@ import './App.css';
 const APP_VERSION = '0.1.13';
 const APP_NAME = '(.>_<)-(.>_<)-mojimoji';
 
+// Format build timestamp based on locale
+const formatBuildTimestamp = (): string => {
+  const utcDate = new Date(__BUILD_TIMESTAMP_UTC__);
+  const isJapanese = navigator.language.startsWith('ja');
+
+  if (isJapanese) {
+    // JST (UTC+9)
+    const jstOffset = 9 * 60 * 60 * 1000;
+    const jstDate = new Date(utcDate.getTime() + jstOffset);
+    return jstDate.toISOString().replace('T', ' ').substring(0, 19) + ' JST';
+  } else {
+    // UTC
+    return utcDate.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+  }
+};
+
+const BUILD_TIMESTAMP = formatBuildTimestamp();
+
 interface TimelineData {
   id: string;
   name: string;
@@ -41,7 +59,7 @@ function App() {
     <div className="app">
       <div className="timeline-pane">
         <div className="title-bar">
-          {APP_NAME} <span className="version">v{APP_VERSION}</span>
+          {APP_NAME} <span className="version">v{APP_VERSION} ({BUILD_TIMESTAMP})</span>
         </div>
         <div className="timeline-content">
           {timelines.length === 0 ? (

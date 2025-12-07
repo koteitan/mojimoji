@@ -575,6 +575,40 @@ export function GraphEditor({
 
         // Rebuild the Observable pipeline after loading
         setTimeout(() => rebuildPipelineRef.current?.(), 100);
+      } else {
+        // Create default graph when localStorage is empty
+        isLoadingRef.current = true;
+
+        // Create default Relay node
+        const relayNode = new RelayNode();
+        await editor.addNode(relayNode);
+        await area.translate(relayNode.id, { x: 100, y: 150 });
+
+        // Create default Timeline node
+        const timelineNode = new TimelineNode();
+        await editor.addNode(timelineNode);
+        await area.translate(timelineNode.id, { x: 400, y: 150 });
+        onTimelineCreate(timelineNode.id, timelineNode.getTimelineName());
+
+        // Connect Relay node to Timeline node
+        const conn = new ClassicPreset.Connection(
+          relayNode,
+          'output' as never,
+          timelineNode,
+          'input' as never
+        );
+        await editor.addConnection(conn);
+
+        isLoadingRef.current = false;
+
+        // Save the default graph
+        saveCurrentGraph();
+
+        // Fit view to show all nodes
+        await AreaExtensions.zoomAt(area, editor.getNodes());
+
+        // Rebuild the Observable pipeline
+        setTimeout(() => rebuildPipelineRef.current?.(), 100);
       }
     };
 
