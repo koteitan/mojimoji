@@ -1,6 +1,8 @@
 import { formatNpub, type TimelineEvent } from '../../nostr/types';
 import './Timeline.css';
 
+const DEFAULT_AVATAR = `${import.meta.env.BASE_URL}default-avatar.svg`;
+
 interface TimelineItemProps {
   event: TimelineEvent;
 }
@@ -23,10 +25,13 @@ export function TimelineItem({ event }: TimelineItemProps) {
       <div className="timeline-item-header">
         <img
           className="timeline-item-icon"
-          src={profile?.picture || '/default-avatar.svg'}
+          src={profile?.picture || DEFAULT_AVATAR}
           alt={profile?.name || 'avatar'}
           onError={(e) => {
-            (e.target as HTMLImageElement).src = '/default-avatar.svg';
+            const img = e.target as HTMLImageElement;
+            if (!img.src.endsWith('default-avatar.svg')) {
+              img.src = DEFAULT_AVATAR;
+            }
           }}
         />
         <div className="timeline-item-names">
