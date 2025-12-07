@@ -105,12 +105,35 @@ npm run dev
 # Build for production
 npm run build
 
-# Deploy to GitHub Pages
-npm run deploy
-
 # Type check
 npm run tsc
 ```
+
+### Local Testing
+
+```bash
+# Start dev server with external access (for testing on other devices)
+bash scripts/deploy.sh
+```
+
+This will start the Vite dev server with `--host` option, allowing access from other devices on the same network.
+
+### Deploy to GitHub Pages
+
+```bash
+# Build for GitHub Pages
+npm run deploy
+
+# Commit and push
+git add -A
+git commit -m "Deploy vX.X.X"
+git push
+```
+
+The deploy script:
+1. Builds the app with correct base path (`/mojimoji/`)
+2. Copies built files to root directory
+3. Restores source `index.html` for future builds
 
 ### Project Structure
 
@@ -177,3 +200,5 @@ Open browser console and run:
 ## License
 
 MIT
+
+See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for third-party library licenses.

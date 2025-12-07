@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Local test script - starts dev server for testing
+
 # Kill any existing dev servers on port 5173
 echo "Stopping old dev servers..."
 pkill -f "vite" 2>/dev/null || true

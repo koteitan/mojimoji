@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "deploy": "npm run build && rm -rf assets && cp -r dist/* .",
+    "deploy": "bash scripts/build-gh-pages.sh",
     "lint": "eslint .",
     "preview": "vite preview"
   },

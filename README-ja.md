@@ -105,12 +105,35 @@ npm run dev
 # 本番用にビルド
 npm run build
 
-# GitHub Pagesにデプロイ
-npm run deploy
-
 # 型チェック
 npm run tsc
 ```
+
+### ローカルテスト
+
+```bash
+# 外部アクセス可能な開発サーバーを起動（他のデバイスでのテスト用）
+bash scripts/deploy.sh
+```
+
+Vite開発サーバーが`--host`オプション付きで起動し、同じネットワーク上の他のデバイスからアクセスできます。
+
+### GitHub Pagesへのデプロイ
+
+```bash
+# GitHub Pages用にビルド
+npm run deploy
+
+# コミットしてプッシュ
+git add -A
+git commit -m "Deploy vX.X.X"
+git push
+```
+
+デプロイスクリプトの動作：
+1. 正しいベースパス（`/mojimoji/`）でアプリをビルド
+2. ビルドファイルをルートディレクトリにコピー
+3. 次回ビルド用にソース`index.html`を復元
 
 ### プロジェクト構造
 
@@ -177,3 +200,5 @@ src/
 ## ライセンス
 
 MIT
+
+サードパーティライブラリのライセンスは [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) を参照してください。
