@@ -38,6 +38,12 @@ export function GraphEditor({
   const editorRef = useRef<NodeEditor<Schemes> | null>(null);
   const areaRef = useRef<AreaPlugin<Schemes, AreaExtra> | null>(null);
   const keydownHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
+  const wheelHandlerRef = useRef<((e: WheelEvent) => void) | null>(null);
+  const pointerHandlersRef = useRef<{
+    down: (e: PointerEvent) => void;
+    move: (e: PointerEvent) => void;
+    up: (e: PointerEvent) => void;
+  } | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const selectorRef = useRef<any>(null);
   const isInitializedRef = useRef(false);
@@ -252,6 +258,17 @@ export function GraphEditor({
     saveCurrentGraph();
   }, [onTimelineCreate, saveCurrentGraph]);
 
+  const centerView = useCallback(async () => {
+    const editor = editorRef.current;
+    const area = areaRef.current;
+    if (!editor || !area) return;
+
+    const nodes = editor.getNodes();
+    if (nodes.length > 0) {
+      await AreaExtensions.zoomAt(area, nodes);
+    }
+  }, []);
+
   const deleteSelected = useCallback(async () => {
     const editor = editorRef.current;
     const selector = selectorRef.current;
@@ -330,6 +347,74 @@ export function GraphEditor({
       editor.use(area);
       area.use(connection);
       area.use(render);
+
+      // Add wheel zoom handler
+      const handleWheel = (e: WheelEvent) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        const { k, x, y } = area.area.transform;
+        const rect = container.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        const newZoom = Math.max(0.1, Math.min(2.0, k * delta));
+        // Calculate new position to keep mouse point fixed
+        const newX = mouseX - (mouseX - x) * (newZoom / k);
+        const newY = mouseY - (mouseY - y) * (newZoom / k);
+
+        area.area.zoom(newZoom, 0, 0);
+        area.area.translate(newX, newY);
+      };
+      wheelHandlerRef.current = handleWheel;
+      container.addEventListener('wheel', handleWheel, { passive: false });
+
+      // Add drag pan handler for background
+      let isDragging = false;
+      let lastX = 0;
+      let lastY = 0;
+
+      const handlePointerDown = (e: PointerEvent) => {
+        // Only pan if clicking on the container background (not on nodes)
+        const target = e.target as HTMLElement;
+        const isNode = target.closest('.node');
+        const isConnection = target.closest('.connection');
+        const isSocket = target.closest('.socket');
+
+        if (!isNode && !isConnection && !isSocket) {
+          isDragging = true;
+          lastX = e.clientX;
+          lastY = e.clientY;
+          container.setPointerCapture(e.pointerId);
+          e.preventDefault();
+        }
+      };
+
+      const handlePointerMove = (e: PointerEvent) => {
+        if (!isDragging) return;
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+
+        const { x, y } = area.area.transform;
+        area.area.translate(x + dx, y + dy);
+      };
+
+      const handlePointerUp = (e: PointerEvent) => {
+        if (isDragging) {
+          isDragging = false;
+          container.releasePointerCapture(e.pointerId);
+        }
+      };
+
+      pointerHandlersRef.current = {
+        down: handlePointerDown,
+        move: handlePointerMove,
+        up: handlePointerUp,
+      };
+      container.addEventListener('pointerdown', handlePointerDown);
+      container.addEventListener('pointermove', handlePointerMove);
+      container.addEventListener('pointerup', handlePointerUp);
 
       // Enable zoom and drag
       const selector = AreaExtensions.selector();
@@ -493,6 +578,16 @@ export function GraphEditor({
       if (keydownHandlerRef.current) {
         document.removeEventListener('keydown', keydownHandlerRef.current);
       }
+      // Remove wheel listener
+      if (wheelHandlerRef.current && containerRef.current) {
+        containerRef.current.removeEventListener('wheel', wheelHandlerRef.current);
+      }
+      // Remove pointer listeners
+      if (pointerHandlersRef.current && containerRef.current) {
+        containerRef.current.removeEventListener('pointerdown', pointerHandlersRef.current.down);
+        containerRef.current.removeEventListener('pointermove', pointerHandlersRef.current.move);
+        containerRef.current.removeEventListener('pointerup', pointerHandlersRef.current.up);
+      }
       if (areaRef.current) {
         areaRef.current.destroy();
       }
@@ -502,10 +597,11 @@ export function GraphEditor({
   return (
     <div className="graph-editor">
       <div className="graph-toolbar">
-        <button onClick={() => addNode('Source')}>{t('toolbar.source')}</button>
+        <button onClick={() => addNode('Source')}>{t('toolbar.relay')}</button>
         <button onClick={() => addNode('Operator')}>{t('toolbar.operator')}</button>
         <button onClick={() => addNode('Search')}>{t('toolbar.search')}</button>
-        <button onClick={() => addNode('Display')}>{t('toolbar.display')}</button>
+        <button onClick={() => addNode('Display')}>{t('toolbar.timeline')}</button>
+        <button onClick={centerView}>{t('toolbar.center')}</button>
         <button onClick={deleteSelected} className="delete-btn">{t('toolbar.delete')}</button>
       </div>
       <div ref={containerRef} className="graph-editor-container" />

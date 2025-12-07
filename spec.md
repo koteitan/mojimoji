@@ -80,13 +80,41 @@ User Inrterface is as follows.
       - the edges are colored differently by types.
 
 ## Behavior
+### graph editor navigation
+- zoom:
+  - by mouse: wheel
+  - by touch: pinch
+- pan:
+  - by mouse: drag on background, right drag
+  - by touch: drag on background, two fingers drag
+- node selection:
+  - by mouse: click on node: toggle select/unselect the node
+  - by touch: tap on node: toggle select/unselect the node
+- multi selection:
+  - by mouse: Ctrl+click on node: toggle select/unselect the node
+  - by touch: tap on node: toggle select/unselect the node
+  - Delete/Backspace: delete selected nodes
+
 ### on load
 - load:
   - automatically load localStorage when the app is started.
+  - when the localStorage is empty:
+    - create a default graph:
+      - one Source node:
+        - relay URL list:
+           - if the locale is "ja": wss://yabu.me
+           - otherwise: wss://relay.damus.io 
+        - filter list:
+          - kind:1
+          - limit:500
+      - one Display node:
+        - timeline name: "Timeline 1"
+      - one edge:
+        - connect the Source node and the Display node.
 
 ### on change connections
 - save:
-  - automatically save when a node or an edge is added/removed. 
+  - automatically save the graph into localStorage when a node or an edge is added/removed. 
 
 ### subscription
 - When display nodes are connected from the source nodes, the subscription is started.
@@ -97,9 +125,6 @@ User Inrterface is as follows.
 ### nostr-filter resolution
 - There are hidden subscriptions:
   - kind:0: to get profile information.
-- localStorage:
-  - saved data:
-    - whole connectgion of nodes and edges in the center pane.
 
 ## Internationalization (i18n)
 - Language detection:

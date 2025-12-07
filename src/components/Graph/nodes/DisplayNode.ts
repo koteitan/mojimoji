@@ -21,7 +21,7 @@ export class DisplayNode extends ClassicPreset.Node {
   private onEvent: ((event: NostrEvent) => void) | null = null;
 
   constructor() {
-    super(i18next.t('nodes.display.title'));
+    super(i18next.t('nodes.timeline.title'));
 
     this.addInput('input', new ClassicPreset.Input(eventSocket, 'Events'));
 
@@ -29,7 +29,7 @@ export class DisplayNode extends ClassicPreset.Node {
       'name',
       new TextInputControl(
         this.timelineName,
-        i18next.t('nodes.display.name'),
+        i18next.t('nodes.timeline.name'),
         (value) => {
           this.timelineName = value;
         }

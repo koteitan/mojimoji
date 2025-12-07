@@ -1,14 +1,15 @@
 {
   "toolbar": {
-    "source": "+ソース",
+    "relay": "+リレー",
     "operator": "+演算",
     "search": "+検索",
-    "display": "+表示",
-    "delete": "削除"
+    "timeline": "+TL",
+    "center": "center",
+    "delete": "del"
   },
   "nodes": {
-    "source": {
-      "title": "ソース",
+    "relay": {
+      "title": "リレー",
       "relays": "リレーURL（1行に1つ）",
       "kinds": "Kinds（カンマ区切り）"
     },
@@ -23,8 +24,8 @@
       "keyword": "キーワード",
       "regex": "正規表現"
     },
-    "display": {
-      "title": "表示",
+    "timeline": {
+      "title": "タイムライン",
       "name": "タイムライン名"
     }
   },

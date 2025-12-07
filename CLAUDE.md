@@ -2,7 +2,6 @@
 - I talk to you in English.
 - You talk to me in Japanese.
 - Write all the documents/messages/comments in English.
-- The UIs are written in English and Japenese(selected by browser locale).
 
 # git rules
 - git add/commit/push only if I ask you to do so.
@@ -31,6 +30,9 @@ or
 
 # Specifications
 - see spec.md.
+
+# others 
+- version APP_VERSION on src/App.tsx shall be updated in every deployment.
 
 # References
 - rete.js: https://rete.js.org/

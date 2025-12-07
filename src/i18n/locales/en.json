@@ -1,14 +1,15 @@
 {
   "toolbar": {
-    "source": "+Source",
+    "relay": "+Relay",
     "operator": "+Operator",
     "search": "+Search",
-    "display": "+Display",
+    "timeline": "+Timeline",
+    "center": "Center",
     "delete": "Delete"
   },
   "nodes": {
-    "source": {
-      "title": "Source",
+    "relay": {
+      "title": "Relay",
       "relays": "Relay URLs (one per line)",
       "kinds": "Kinds (comma separated)"
     },
@@ -23,8 +24,8 @@
       "keyword": "Keyword",
       "regex": "Regex"
     },
-    "display": {
-      "title": "Display",
+    "timeline": {
+      "title": "Timeline",
       "name": "Timeline Name"
     }
   },

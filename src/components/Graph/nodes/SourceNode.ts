@@ -28,7 +28,7 @@ export class SourceNode extends ClassicPreset.Node {
   public output$: Observable<NostrEvent> = this.eventSubject.asObservable().pipe(share());
 
   constructor() {
-    super(i18next.t('nodes.source.title'));
+    super(i18next.t('nodes.relay.title'));
 
     this.addOutput('output', new ClassicPreset.Output(eventSocket, 'Events'));
 
@@ -36,7 +36,7 @@ export class SourceNode extends ClassicPreset.Node {
       'relays',
       new TextAreaControl(
         this.relayUrls.join('\n'),
-        i18next.t('nodes.source.relays'),
+        i18next.t('nodes.relay.relays'),
         'wss://relay.example.com',
         (value) => {
           this.relayUrls = value.split('\n').filter(url => url.trim());
