@@ -33,6 +33,9 @@ export function GraphEditor({
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<NodeEditor<Schemes> | null>(null);
   const areaRef = useRef<AreaPlugin<Schemes, AreaExtra> | null>(null);
+  const keydownHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const selectorRef = useRef<any>(null);
 
   const saveCurrentGraph = useCallback(() => {
     const editor = editorRef.current;
@@ -90,6 +93,45 @@ export function GraphEditor({
     saveCurrentGraph();
   }, [onTimelineCreate, saveCurrentGraph]);
 
+  const deleteSelected = useCallback(async () => {
+    const editor = editorRef.current;
+    const selector = selectorRef.current;
+    console.log('deleteSelected called', { editor: !!editor, selector: !!selector });
+    if (!editor || !selector) return;
+
+    // Get selected node IDs
+    const selected: string[] = [];
+    console.log('selector.entities:', selector.entities);
+    console.log('selector.entities.size:', selector.entities.size);
+    selector.entities.forEach((value: unknown, id: string) => {
+      console.log('selected node:', id, value);
+      selected.push(id);
+    });
+
+    console.log('selected nodes:', selected);
+
+    for (const id of selected) {
+      // Remove 'node_' prefix if present (selector adds this prefix)
+      const nodeId = id.startsWith('node_') ? id.slice(5) : id;
+      const node = editor.getNode(nodeId);
+      console.log('removing node:', id, nodeId, node);
+      if (node) {
+        // Remove connections first
+        const connections = editor.getConnections().filter(
+          (c: { source: string; target: string }) => c.source === nodeId || c.target === nodeId
+        );
+        for (const conn of connections) {
+          await editor.removeConnection(conn.id);
+        }
+        // Remove node
+        await editor.removeNode(nodeId);
+        // Clear from selector
+        selector.remove({ id, label: 'node' });
+      }
+    }
+    console.log('delete completed');
+  }, []);
+
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -136,10 +178,48 @@ export function GraphEditor({
       area.use(render);
 
       // Enable zoom and drag
-      AreaExtensions.selectableNodes(area, AreaExtensions.selector(), {
+      const selector = AreaExtensions.selector();
+      selectorRef.current = selector;
+      AreaExtensions.selectableNodes(area, selector, {
         accumulating: AreaExtensions.accumulateOnCtrl(),
       });
       AreaExtensions.simpleNodesOrder(area);
+
+      // Delete selected nodes with Delete or Backspace key
+      const handleKeyDown = async (e: KeyboardEvent) => {
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          // Don't prevent default if focus is on an input element
+          if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+            return;
+          }
+          e.preventDefault();
+          // Get selected node IDs from the selector
+          const selected: string[] = [];
+          selector.entities.forEach((_value: unknown, id: string) => {
+            selected.push(id);
+          });
+
+          for (const id of selected) {
+            const node = editor.getNode(id);
+            if (node) {
+              // Remove connections first
+              const connections = editor.getConnections().filter(
+                (c: { source: string; target: string }) => c.source === id || c.target === id
+              );
+              for (const conn of connections) {
+                await editor.removeConnection(conn.id);
+              }
+              // Remove node
+              await editor.removeNode(id);
+            }
+          }
+        }
+      };
+
+      // Store handler in ref for cleanup
+      keydownHandlerRef.current = handleKeyDown;
+      document.addEventListener('keydown', handleKeyDown);
+      container.setAttribute('tabindex', '0'); // Make container focusable
 
       // Handle node removal - clean up Display nodes
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -238,6 +318,10 @@ export function GraphEditor({
     initEditor();
 
     return () => {
+      // Remove keydown listener
+      if (keydownHandlerRef.current) {
+        document.removeEventListener('keydown', keydownHandlerRef.current);
+      }
       if (areaRef.current) {
         areaRef.current.destroy();
       }
@@ -251,6 +335,7 @@ export function GraphEditor({
         <button onClick={() => addNode('Operator')}>+ Operator</button>
         <button onClick={() => addNode('Search')}>+ Search</button>
         <button onClick={() => addNode('Display')}>+ Display</button>
+        <button onClick={deleteSelected} className="delete-btn">Delete</button>
       </div>
       <div ref={containerRef} className="graph-editor-container" />
     </div>

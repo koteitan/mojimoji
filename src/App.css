@@ -63,3 +63,14 @@
     width: 100%;
   }
 }
+
+.version-info {
+  position: fixed;
+  left: 8px;
+  bottom: 8px;
+  font-size: 11px;
+  color: #444;
+  font-family: monospace;
+  pointer-events: none;
+  z-index: 1000;
+}

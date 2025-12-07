@@ -4,6 +4,9 @@ import { GraphEditor } from './components/Graph/GraphEditor';
 import type { TimelineEvent } from './nostr/types';
 import './App.css';
 
+// Version: Update this on each deployment
+const APP_VERSION = '0.1.0-dev.20251207-4';
+
 interface TimelineData {
   id: string;
   name: string;
@@ -58,6 +61,7 @@ function App() {
           onEventsUpdate={handleEventsUpdate}
         />
       </div>
+      <div className="version-info">v{APP_VERSION}</div>
     </div>
   );
 }
