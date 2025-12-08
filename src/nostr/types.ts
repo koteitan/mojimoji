@@ -15,6 +15,87 @@ export function pubkeyToNpub(pubkey: string): string {
   }
 }
 
+// Decode bech32 NIP-19 identifier to hex
+// Supports: npub, note, nprofile, nevent
+export function decodeBech32ToHex(str: string): { type: string; hex: string } | null {
+  try {
+    const trimmed = str.trim().toLowerCase();
+
+    // Check if it's a valid bech32 prefix
+    if (!trimmed.match(/^(npub|note|nprofile|nevent)1/)) {
+      return null;
+    }
+
+    const decoded = bech32.decode(trimmed, 90);
+    const prefix = decoded.prefix;
+    const data = bech32.fromWords(decoded.words);
+
+    // For simple types (npub, note), the data is just the hex
+    if (prefix === 'npub' || prefix === 'note') {
+      const hex = Array.from(data).map(b => b.toString(16).padStart(2, '0')).join('');
+      return { type: prefix, hex };
+    }
+
+    // For TLV types (nprofile, nevent), extract the main identifier
+    // TLV format: type (1 byte) | length (1 byte) | value (length bytes)
+    if (prefix === 'nprofile' || prefix === 'nevent') {
+      let i = 0;
+      while (i < data.length) {
+        const type = data[i];
+        const length = data[i + 1];
+        const value = data.slice(i + 2, i + 2 + length);
+
+        // Type 0 is the main identifier (pubkey for nprofile, event id for nevent)
+        if (type === 0) {
+          const hex = Array.from(value).map(b => b.toString(16).padStart(2, '0')).join('');
+          return { type: prefix, hex };
+        }
+
+        i += 2 + length;
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Check if string is a valid 64-character hex string
+export function isHex64(str: string): boolean {
+  return /^[0-9a-fA-F]{64}$/.test(str.trim());
+}
+
+// Parse date string to Unix timestamp (seconds)
+// Supports: YYYY-MM-DD, YYYY.MM.DD, YYYY/MM/DD
+export function parseDateToTimestamp(str: string): number | null {
+  const trimmed = str.trim();
+
+  // Match date patterns
+  const match = trimmed.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})$/);
+  if (!match) {
+    return null;
+  }
+
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10) - 1; // JS months are 0-indexed
+  const day = parseInt(match[3], 10);
+
+  // Validate date components
+  if (month < 0 || month > 11 || day < 1 || day > 31) {
+    return null;
+  }
+
+  const date = new Date(year, month, day);
+
+  // Check if date is valid
+  if (isNaN(date.getTime())) {
+    return null;
+  }
+
+  return Math.floor(date.getTime() / 1000);
+}
+
 // Format npub for display (shortened)
 export function formatNpub(pubkey: string): string {
   const npub = pubkeyToNpub(pubkey);

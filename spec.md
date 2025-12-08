@@ -66,10 +66,23 @@ User Inrterface is as follows.
               - multiple filter elements (AND logic within filter)
               - each element:
                 - dropdown: field name {kinds, ids, authors, #e, #p, #t, since, until, limit}
-                - text input: field value
+                - text input: field value (flexible input formats supported)
                   - kinds: comma-separated integers (e.g., "1,6,7")
-                  - ids, authors, #e, #p, #t: comma-separated hex strings
-                  - since, until, limit: single integer
+                  - ids: comma-separated values, supports:
+                    - hex (64-char event id)
+                    - bech32: note1..., nevent1... (auto-converted to hex internally)
+                  - authors: comma-separated values, supports:
+                    - hex (64-char pubkey)
+                    - bech32: npub1..., nprofile1... (auto-converted to hex internally)
+                    - name/display_name: partial match lookup in profile cache (all matches)
+                  - #e, #p, #t: comma-separated values, supports:
+                    - hex
+                    - bech32: npub1..., note1..., nprofile1..., nevent1...
+                    - for #p: name/display_name partial match lookup (first match only)
+                  - since, until: supports:
+                    - unix timestamp (integer)
+                    - date formats: YYYY-MM-DD, YYYY.MM.DD, YYYY/MM/DD (auto-converted to timestamp)
+                  - limit: single integer
                 - remove button (×) for element (if more than one element)
                 - add button (+) on last element to add new element
               - add button (+) at bottom to add new filter

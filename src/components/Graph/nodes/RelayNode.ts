@@ -7,6 +7,7 @@ import i18next from 'i18next';
 import { eventSocket } from './types';
 import { TextAreaControl, FilterControl, type Filters } from './controls';
 import type { NostrEvent, Profile } from '../../../nostr/types';
+import { decodeBech32ToHex, isHex64, parseDateToTimestamp } from '../../../nostr/types';
 
 const DEBUG = false;
 
@@ -92,6 +93,54 @@ const getDefaultFilters = (): Filters => [
   ],
 ];
 
+// Resolve a single identifier value to hex
+// Supports: bech32 (npub, note, nprofile, nevent), hex, name/display_name lookup
+const resolveIdentifier = (
+  value: string,
+  field: string,
+  findAllMatches: boolean = false
+): string[] => {
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+
+  // 1. Try bech32 decode
+  const decoded = decodeBech32ToHex(trimmed);
+  if (decoded) {
+    return [decoded.hex];
+  }
+
+  // 2. Check if it's already hex
+  if (isHex64(trimmed)) {
+    return [trimmed.toLowerCase()];
+  }
+
+  // 3. For pubkey fields (authors, #p), try name/display_name lookup
+  if (field === 'authors' || field === '#p') {
+    const matches: string[] = [];
+    const searchLower = trimmed.toLowerCase();
+
+    for (const [pubkey, profile] of profileCache) {
+      const name = profile.name?.toLowerCase() || '';
+      const displayName = profile.display_name?.toLowerCase() || '';
+
+      // Partial match on name or display_name
+      if (name.includes(searchLower) || displayName.includes(searchLower)) {
+        matches.push(pubkey);
+        if (!findAllMatches) {
+          break; // Return first match for tags
+        }
+      }
+    }
+
+    if (matches.length > 0) {
+      return matches;
+    }
+  }
+
+  // 4. Return as-is if nothing matched (might be a partial hex or unknown format)
+  return [trimmed];
+};
+
 // Convert Filters to nostr filter objects
 const filtersToNostrFilters = (filters: Filters): Record<string, unknown>[] => {
   return filters.map((filter) => {
@@ -104,11 +153,41 @@ const filtersToNostrFilters = (filters: Filters): Record<string, unknown>[] => {
       if (field === 'kinds') {
         // kinds is an array of integers
         nostrFilter[field] = value.split(',').map((v) => parseInt(v.trim(), 10)).filter((n) => !isNaN(n));
-      } else if (field === 'ids' || field === 'authors' || field.startsWith('#')) {
-        // Arrays of strings
-        nostrFilter[field] = value.split(',').map((v) => v.trim()).filter((v) => v);
-      } else if (field === 'since' || field === 'until' || field === 'limit') {
-        // Single integers
+      } else if (field === 'ids') {
+        // ids: support bech32 (note, nevent) and hex
+        const resolved = value.split(',').flatMap((v) => resolveIdentifier(v, field, false));
+        if (resolved.length > 0) {
+          nostrFilter[field] = resolved;
+        }
+      } else if (field === 'authors') {
+        // authors: support bech32 (npub, nprofile), hex, and name lookup (all matches)
+        const resolved = value.split(',').flatMap((v) => resolveIdentifier(v, field, true));
+        if (resolved.length > 0) {
+          nostrFilter[field] = resolved;
+        }
+      } else if (field.startsWith('#')) {
+        // Tag filters: support bech32 and name lookup (first match only)
+        const resolved = value.split(',').flatMap((v) => resolveIdentifier(v, field, false));
+        if (resolved.length > 0) {
+          nostrFilter[field] = resolved;
+        }
+      } else if (field === 'since' || field === 'until') {
+        // Support date formats (YYYY-MM-DD, YYYY.MM.DD, YYYY/MM/DD) and unix timestamp
+        const trimmedValue = value.trim();
+
+        // Try date format first
+        const timestamp = parseDateToTimestamp(trimmedValue);
+        if (timestamp !== null) {
+          nostrFilter[field] = timestamp;
+        } else {
+          // Fall back to integer parsing
+          const num = parseInt(trimmedValue, 10);
+          if (!isNaN(num)) {
+            nostrFilter[field] = num;
+          }
+        }
+      } else if (field === 'limit') {
+        // Single integer
         const num = parseInt(value.trim(), 10);
         if (!isNaN(num)) {
           nostrFilter[field] = num;
