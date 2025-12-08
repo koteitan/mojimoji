@@ -598,9 +598,27 @@ export function GraphEditor({
       selected.push(id);
     });
 
+    // Collect nodes to delete and add flash animation
+    const nodesToDelete: { id: string; nodeId: string; element: HTMLElement | null }[] = [];
     for (const id of selected) {
-      // Remove 'node_' prefix if present (selector adds this prefix)
       const nodeId = id.startsWith('node_') ? id.slice(5) : id;
+      const node = editor.getNode(nodeId);
+      if (node) {
+        const nodeElement = container?.querySelector(`[data-node-id="${nodeId}"]`) as HTMLElement | null;
+        if (nodeElement) {
+          nodeElement.classList.add('deleting');
+        }
+        nodesToDelete.push({ id, nodeId, element: nodeElement });
+      }
+    }
+
+    // Wait for flash animation to complete (300ms)
+    if (nodesToDelete.length > 0) {
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    // Now actually delete the nodes
+    for (const { id, nodeId } of nodesToDelete) {
       const node = editor.getNode(nodeId);
       if (node) {
         // Remove connections first

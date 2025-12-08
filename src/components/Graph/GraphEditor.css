@@ -10,13 +10,18 @@
   touch-action: none;
   user-select: none;
   --dot-size: 2px;
-  --dot-spacing: 20px;
+  --dot-spacing: 80px;
   --dot-color: #222;
   --bg-offset-x: 0px;
   --bg-offset-y: 0px;
-  background-image: radial-gradient(circle, var(--dot-color) var(--dot-size), transparent var(--dot-size));
+  /* 45-degree rotated diamond lattice pattern */
+  background-image:
+    radial-gradient(circle, var(--dot-color) var(--dot-size), transparent var(--dot-size)),
+    radial-gradient(circle, var(--dot-color) var(--dot-size), transparent var(--dot-size));
   background-size: var(--dot-spacing) var(--dot-spacing);
-  background-position: var(--bg-offset-x) var(--bg-offset-y);
+  background-position:
+    var(--bg-offset-x) var(--bg-offset-y),
+    calc(var(--bg-offset-x) + var(--dot-spacing) / 2) calc(var(--bg-offset-y) + var(--dot-spacing) / 2);
 }
 
 .graph-toolbar {
@@ -187,6 +192,21 @@ svg {
   width: 16px;
   height: 16px;
   cursor: pointer;
+}
+
+/* Node delete flash animation */
+@keyframes node-flash-delete {
+  0% { opacity: 1; }
+  20% { opacity: 0.2; }
+  40% { opacity: 1; }
+  60% { opacity: 0.2; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.node.deleting,
+.custom-node.deleting {
+  animation: node-flash-delete 0.3s ease-out forwards;
 }
 
 /* GitHub link */
