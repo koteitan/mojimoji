@@ -5,6 +5,7 @@
     "operator": "+演算",
     "search": "+検索",
     "language": "+言語",
+    "nostrFilter": "+Nostr",
     "timeline": "+TL",
     "center": "center",
     "delete": "del"
@@ -30,6 +31,10 @@
     "language": {
       "title": "言語",
       "language": "言語"
+    },
+    "nostrFilter": {
+      "title": "Nostrフィルタ",
+      "exclude": "除外"
     },
     "timeline": {
       "title": "タイムライン",

@@ -137,6 +137,32 @@ User Inrterface is as follows.
             - events with undetectable language (< 10 chars or "und") are filtered out
             - use Operator node for OR/AND logic with multiple languages
           - library: franc-min (pure JavaScript, 82 languages, ~200KB)
+        - nostr filter node:
+          - input terminal:
+            - input (nostr event)
+          - output terminal:
+            - output (nostr event)
+          - attributes:
+            - filter element:
+              - dropdown: field name {kinds, authors, #e, #p, #t, since, until}
+              - text input: field value
+              - field value formats:
+                - kinds: comma-separated integers (OR logic), e.g., "1,6,7"
+                - authors: comma-separated values (OR logic), supports:
+                  - hex (64-char pubkey)
+                  - bech32: npub1..., nprofile1...
+                  - name/display_name: partial match lookup (all matches)
+                - #e: comma-separated event references (OR logic), supports hex, note1..., nevent1...
+                - #p: comma-separated pubkey references (OR logic), supports hex, npub1..., name lookup (first match)
+                - #t: comma-separated hashtags (OR logic)
+                - since: unix timestamp or date format (YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD)
+                - until: unix timestamp or date format
+            - exclude: checkbox (when on, filter OUT events matching criteria)
+          - behavior:
+            - filter events that have already been fetched (pass-through filter)
+            - within a field: OR logic (event matches if ANY value matches)
+            - empty values are ignored
+            - when exclude is on: invert the result (pass events that do NOT match)
       - Timeline node:
         - input terminal:
           - input (event signal)

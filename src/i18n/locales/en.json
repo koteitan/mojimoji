@@ -5,6 +5,7 @@
     "operator": "+Operator",
     "search": "+Search",
     "language": "+Lang",
+    "nostrFilter": "+Nostr",
     "timeline": "+Timeline",
     "center": "Center",
     "delete": "Delete"
@@ -30,6 +31,10 @@
     "language": {
       "title": "Language",
       "language": "Language"
+    },
+    "nostrFilter": {
+      "title": "Nostr Filter",
+      "exclude": "Exclude"
     },
     "timeline": {
       "title": "Timeline",

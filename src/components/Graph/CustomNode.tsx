@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Presets } from 'rete-react-plugin';
-import { TextInputControl, TextAreaControl, SelectControl, CheckboxControl, FilterControl, FILTER_FIELDS, type Filters } from './nodes/controls';
+import { TextInputControl, TextAreaControl, SelectControl, CheckboxControl, FilterControl, SimpleFilterControl, FILTER_FIELDS, NOSTR_FILTER_FIELDS, type Filters, type FilterElement } from './nodes/controls';
 import './CustomNode.css';
 
 const { RefSocket } = Presets.classic;
@@ -255,9 +255,100 @@ function FilterControlComponent({ control, nodeId }: { control: FilterControl; n
   );
 }
 
+// Simple filter control component for NostrFilter node
+function SimpleFilterControlComponent({ control, nodeId }: { control: SimpleFilterControl; nodeId: string }) {
+  const [elements, setElements] = useState<FilterElement[]>(control.elements);
+  const [exclude, setExclude] = useState(control.exclude);
+
+  const commitChanges = (newElements: FilterElement[], newExclude: boolean) => {
+    control.elements = newElements;
+    control.exclude = newExclude;
+    control.onChange(newElements, newExclude);
+    dispatchControlChange(nodeId);
+  };
+
+  const removeElement = (index: number) => {
+    if (elements.length <= 1) return;
+    const newElements = elements.filter((_, i) => i !== index);
+    setElements(newElements);
+    commitChanges(newElements, exclude);
+  };
+
+  const updateElement = (index: number, field: string, value: string) => {
+    const newElements = elements.map((el, i) =>
+      i === index ? { field, value } : el
+    );
+    setElements(newElements);
+  };
+
+  const handleBlur = () => {
+    commitChanges(elements, exclude);
+  };
+
+  const handleExcludeChange = (checked: boolean) => {
+    setExclude(checked);
+    commitChanges(elements, checked);
+  };
+
+  return (
+    <div className="control-wrapper simple-filter-control">
+      {elements.map((element, index) => (
+        <div key={index} className="filter-element">
+          <select
+            className="filter-field-select"
+            value={element.field}
+            onChange={(e) => updateElement(index, e.target.value, element.value)}
+            onBlur={handleBlur}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {NOSTR_FILTER_FIELDS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+          <input
+            type="text"
+            className="filter-value-input"
+            value={element.value}
+            placeholder="value"
+            onChange={(e) => updateElement(index, element.field, e.target.value)}
+            onBlur={handleBlur}
+            onPointerDown={(e) => e.stopPropagation()}
+          />
+          {elements.length > 1 && (
+            <button
+              className="filter-element-remove-btn"
+              onClick={() => removeElement(index)}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      ))}
+      <div className="control-checkbox-wrapper">
+        <label className="control-checkbox-label">
+          <input
+            type="checkbox"
+            className="control-checkbox"
+            checked={exclude}
+            onChange={(e) => handleExcludeChange(e.target.checked)}
+            onPointerDown={(e) => e.stopPropagation()}
+          />
+          {control.excludeLabel}
+        </label>
+      </div>
+    </div>
+  );
+}
+
 // Custom control renderer
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function CustomControl({ data, nodeId }: { data: any; nodeId: string }) {
+  if (data instanceof SimpleFilterControl) {
+    return <SimpleFilterControlComponent control={data} nodeId={nodeId} />;
+  }
   if (data instanceof FilterControl) {
     return <FilterControlComponent control={data} nodeId={nodeId} />;
   }

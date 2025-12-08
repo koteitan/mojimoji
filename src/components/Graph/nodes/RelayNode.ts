@@ -60,6 +60,22 @@ export function getCachedProfile(pubkey: string): Profile | undefined {
   return profileCache.get(pubkey);
 }
 
+// Find pubkeys by name/display_name partial match (all matches)
+export function findPubkeysByName(searchTerm: string): string[] {
+  const results: string[] = [];
+  const searchLower = searchTerm.toLowerCase();
+
+  for (const [pubkey, profile] of profileCache) {
+    const name = profile.name?.toLowerCase() || '';
+    const displayName = profile.display_name?.toLowerCase() || '';
+    if (name.includes(searchLower) || displayName.includes(searchLower)) {
+      results.push(pubkey);
+    }
+  }
+
+  return results;
+}
+
 // Get cache info for debugging
 export function getProfileCacheInfo(): { count: number; bytes: number } {
   const data: Record<string, Profile> = {};

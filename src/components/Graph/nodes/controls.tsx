@@ -22,6 +22,17 @@ export const FILTER_FIELDS = [
   { value: 'limit', label: 'limit' },
 ];
 
+// Filter fields for NostrFilter node (pass-through filter, no ids/limit)
+export const NOSTR_FILTER_FIELDS = [
+  { value: 'kinds', label: 'kinds' },
+  { value: 'authors', label: 'authors' },
+  { value: '#e', label: '#e' },
+  { value: '#p', label: '#p' },
+  { value: '#t', label: '#t' },
+  { value: 'since', label: 'since' },
+  { value: 'until', label: 'until' },
+];
+
 // Filter control for nostr filters
 export class FilterControl extends ClassicPreset.Control {
   filters: Filters;
@@ -117,6 +128,27 @@ export class CheckboxControl extends ClassicPreset.Control {
     super();
     this.checked = checked;
     this.label = label;
+    this.onChange = onChange;
+  }
+}
+
+// Simple filter control for NostrFilter node (single filter with AND logic)
+export class SimpleFilterControl extends ClassicPreset.Control {
+  elements: FilterElement[];
+  exclude: boolean;
+  excludeLabel: string;
+  onChange: (elements: FilterElement[], exclude: boolean) => void;
+
+  constructor(
+    elements: FilterElement[],
+    exclude: boolean,
+    excludeLabel: string,
+    onChange: (elements: FilterElement[], exclude: boolean) => void
+  ) {
+    super();
+    this.elements = elements;
+    this.exclude = exclude;
+    this.excludeLabel = excludeLabel;
     this.onChange = onChange;
   }
 }
