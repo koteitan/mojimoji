@@ -84,7 +84,9 @@ User Inrterface is as follows.
                     - for #p: name/display_name partial match lookup (first match only)
                   - since, until: supports:
                     - unix timestamp (integer)
-                    - date formats: YYYY-MM-DD, YYYY.MM.DD, YYYY/MM/DD (auto-converted to timestamp)
+                    - date only: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD (defaults to 00:00:00)
+                    - date with time: YYYY-MM-DD HH:MM or YYYY-MM-DD HH:MM:SS
+                    - time only: HH:MM or HH:MM:SS (defaults to today)
                   - limit: single integer
                 - remove button (×) for element (if more than one element)
                 - add button (+) on last element to add new element
@@ -158,8 +160,11 @@ User Inrterface is as follows.
                 - #e: comma-separated event references (OR logic), supports hex, note1..., nevent1...
                 - #p: comma-separated pubkey references (OR logic), supports hex, npub1..., name lookup (first match)
                 - #t: comma-separated hashtags (OR logic)
-                - since: unix timestamp or date format (YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD)
-                - until: unix timestamp or date format
+                - since, until: supports:
+                  - unix timestamp (integer)
+                  - date only: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD (defaults to 00:00:00)
+                  - date with time: YYYY-MM-DD HH:MM or YYYY-MM-DD HH:MM:SS
+                  - time only: HH:MM or HH:MM:SS (defaults to today)
             - exclude: checkbox (when on, filter OUT events matching criteria)
           - behavior:
             - filter events that have already been fetched (pass-through filter)

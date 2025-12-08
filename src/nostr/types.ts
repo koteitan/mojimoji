@@ -67,33 +67,57 @@ export function isHex64(str: string): boolean {
 }
 
 // Parse date string to Unix timestamp (seconds)
-// Supports: YYYY-MM-DD, YYYY.MM.DD, YYYY/MM/DD
+// Supports:
+// - Date only: YYYY-MM-DD, YYYY.MM.DD, YYYY/MM/DD (time defaults to 00:00:00)
+// - Date with time: YYYY-MM-DD HH:MM:SS, YYYY-MM-DD HH:MM
+// - Time only: HH:MM:SS, HH:MM (date defaults to today)
 export function parseDateToTimestamp(str: string): number | null {
   const trimmed = str.trim();
 
-  // Match date patterns
-  const match = trimmed.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})$/);
-  if (!match) {
-    return null;
+  // Match date with optional time: YYYY-MM-DD[ HH:MM[:SS]]
+  const dateTimeMatch = trimmed.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (dateTimeMatch) {
+    const year = parseInt(dateTimeMatch[1], 10);
+    const month = parseInt(dateTimeMatch[2], 10) - 1; // JS months are 0-indexed
+    const day = parseInt(dateTimeMatch[3], 10);
+    const hour = dateTimeMatch[4] ? parseInt(dateTimeMatch[4], 10) : 0;
+    const minute = dateTimeMatch[5] ? parseInt(dateTimeMatch[5], 10) : 0;
+    const second = dateTimeMatch[6] ? parseInt(dateTimeMatch[6], 10) : 0;
+
+    // Validate components
+    if (month < 0 || month > 11 || day < 1 || day > 31 ||
+        hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) {
+      return null;
+    }
+
+    const date = new Date(year, month, day, hour, minute, second);
+    if (isNaN(date.getTime())) {
+      return null;
+    }
+    return Math.floor(date.getTime() / 1000);
   }
 
-  const year = parseInt(match[1], 10);
-  const month = parseInt(match[2], 10) - 1; // JS months are 0-indexed
-  const day = parseInt(match[3], 10);
+  // Match time only: HH:MM[:SS] (use today's date)
+  const timeOnlyMatch = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (timeOnlyMatch) {
+    const hour = parseInt(timeOnlyMatch[1], 10);
+    const minute = parseInt(timeOnlyMatch[2], 10);
+    const second = timeOnlyMatch[3] ? parseInt(timeOnlyMatch[3], 10) : 0;
 
-  // Validate date components
-  if (month < 0 || month > 11 || day < 1 || day > 31) {
-    return null;
+    // Validate components
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) {
+      return null;
+    }
+
+    const today = new Date();
+    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hour, minute, second);
+    if (isNaN(date.getTime())) {
+      return null;
+    }
+    return Math.floor(date.getTime() / 1000);
   }
 
-  const date = new Date(year, month, day);
-
-  // Check if date is valid
-  if (isNaN(date.getTime())) {
-    return null;
-  }
-
-  return Math.floor(date.getTime() / 1000);
+  return null;
 }
 
 // Format npub for display (shortened)
