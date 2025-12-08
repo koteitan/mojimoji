@@ -5,7 +5,7 @@ import type { TimelineEvent } from './nostr/types';
 import './App.css';
 
 // Version: Update this on each deployment
-const APP_VERSION = '0.4.1';
+const APP_VERSION = '0.5.0';
 const APP_NAME = '(.>_<)-(.>_<)-mojimoji: Nostr Modular Client';
 
 // Format build timestamp based on locale
