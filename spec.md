@@ -109,8 +109,11 @@ User Inrterface is as follows.
           - attributes:
             - keyword: string
             - regex switch: on, off
+            - exclude switch: on, off (when on, filter OUT events matching keyword)
           - behavior:
             - input nostr event and filter by keyword the event.content.
+            - when exclude is off: pass events that match the keyword
+            - when exclude is on: pass events that do NOT match the keyword
         - language filter node:
           - input terminal:
             - input (nostr event)

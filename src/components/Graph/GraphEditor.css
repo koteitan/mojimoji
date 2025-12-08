@@ -182,16 +182,18 @@ svg {
 .control-checkbox-label {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   font-size: 12px;
   color: #ddd;
   cursor: pointer;
 }
 
 .control-checkbox {
-  width: 16px;
+  width: 16px !important;
   height: 16px;
   cursor: pointer;
+  flex-shrink: 0;
+  margin-right: 8px;
 }
 
 /* Node delete flash animation */

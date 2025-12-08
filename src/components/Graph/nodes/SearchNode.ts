@@ -13,6 +13,7 @@ export class SearchNode extends ClassicPreset.Node {
 
   private keyword: string = '';
   private useRegex: boolean = false;
+  private exclude: boolean = false;
 
   // Input observable (set by GraphEditor when connections change)
   private input$: Observable<NostrEvent> | null = null;
@@ -51,6 +52,17 @@ export class SearchNode extends ClassicPreset.Node {
         }
       )
     );
+
+    this.addControl(
+      'exclude',
+      new CheckboxControl(
+        this.exclude,
+        i18next.t('nodes.search.exclude'),
+        (checked) => {
+          this.exclude = checked;
+        }
+      )
+    );
   }
 
   getKeyword(): string {
@@ -61,31 +73,42 @@ export class SearchNode extends ClassicPreset.Node {
     return this.useRegex;
   }
 
+  isExclude(): boolean {
+    return this.exclude;
+  }
+
   matches(content: string): boolean {
     if (!this.keyword) return true;
+
+    let matched: boolean;
 
     if (this.useRegex) {
       try {
         const regex = new RegExp(this.keyword, 'i');
-        return regex.test(content);
+        matched = regex.test(content);
       } catch {
-        return false;
+        matched = false;
       }
+    } else {
+      matched = content.toLowerCase().includes(this.keyword.toLowerCase());
     }
 
-    return content.toLowerCase().includes(this.keyword.toLowerCase());
+    // If exclude mode, invert the result
+    return this.exclude ? !matched : matched;
   }
 
   serialize() {
     return {
       keyword: this.keyword,
       useRegex: this.useRegex,
+      exclude: this.exclude,
     };
   }
 
-  deserialize(data: { keyword: string; useRegex: boolean }) {
+  deserialize(data: { keyword: string; useRegex: boolean; exclude?: boolean }) {
     this.keyword = data.keyword;
     this.useRegex = data.useRegex;
+    this.exclude = data.exclude ?? false;
 
     const keywordControl = this.controls['keyword'] as TextInputControl;
     if (keywordControl) {
@@ -95,6 +118,11 @@ export class SearchNode extends ClassicPreset.Node {
     const regexControl = this.controls['regex'] as CheckboxControl;
     if (regexControl) {
       regexControl.checked = this.useRegex;
+    }
+
+    const excludeControl = this.controls['exclude'] as CheckboxControl;
+    if (excludeControl) {
+      excludeControl.checked = this.exclude;
     }
   }
 

@@ -33,7 +33,7 @@
 }
 
 /* Control text styles */
-.custom-node-controls input,
+.custom-node-controls input:not([type="checkbox"]),
 .custom-node-controls textarea,
 .custom-node-controls select {
   color: #fff;

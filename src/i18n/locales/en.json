@@ -24,7 +24,8 @@
     "search": {
       "title": "Search",
       "keyword": "Keyword",
-      "regex": "Regex"
+      "regex": "Regex",
+      "exclude": "Exclude"
     },
     "language": {
       "title": "Language",

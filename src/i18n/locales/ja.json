@@ -24,7 +24,8 @@
     "search": {
       "title": "検索",
       "keyword": "キーワード",
-      "regex": "正規表現"
+      "regex": "正規表現",
+      "exclude": "除外"
     },
     "language": {
       "title": "言語",
