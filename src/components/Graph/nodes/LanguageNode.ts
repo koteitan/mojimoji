@@ -4,7 +4,7 @@ import { franc } from 'franc-min';
 import i18next from 'i18next';
 import { eventSocket } from './types';
 import { SelectControl } from './controls';
-import type { NostrEvent } from '../../../nostr/types';
+import type { EventSignal } from '../../../nostr/types';
 
 // Debug flag for development
 const DEBUG = false;
@@ -32,11 +32,11 @@ export class LanguageNode extends ClassicPreset.Node {
   private language: string = 'jpn';
 
   // Input observable
-  private input$: Observable<NostrEvent> | null = null;
+  private input$: Observable<EventSignal> | null = null;
 
   // Output observable
-  private outputSubject = new Subject<NostrEvent>();
-  public output$: Observable<NostrEvent> = this.outputSubject.asObservable().pipe(share());
+  private outputSubject = new Subject<EventSignal>();
+  public output$: Observable<EventSignal> = this.outputSubject.asObservable().pipe(share());
 
   // Subscription
   private subscription: { unsubscribe: () => void } | null = null;
@@ -102,7 +102,7 @@ export class LanguageNode extends ClassicPreset.Node {
     }
   }
 
-  setInput(input: Observable<NostrEvent> | null): void {
+  setInput(input: Observable<EventSignal> | null): void {
     this.input$ = input;
     this.rebuildPipeline();
   }
@@ -113,9 +113,9 @@ export class LanguageNode extends ClassicPreset.Node {
     if (!this.input$) return;
 
     this.subscription = this.input$.pipe(
-      filter((event) => this.matches(event.content))
+      filter((signal) => this.matches(signal.event.content))
     ).subscribe({
-      next: (event) => this.outputSubject.next(event),
+      next: (signal) => this.outputSubject.next(signal),
     });
   }
 

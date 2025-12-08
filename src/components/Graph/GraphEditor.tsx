@@ -12,12 +12,10 @@ import { CustomNode } from './CustomNode';
 import { CustomConnection } from './CustomConnection';
 import { CustomSocket } from './CustomSocket';
 import { saveGraph, loadGraph } from '../../utils/localStorage';
-import type { TimelineEvent, NostrEvent } from '../../nostr/types';
+import type { TimelineEvent, EventSignal } from '../../nostr/types';
 import type { Observable, Subscription } from 'rxjs';
 import './GraphEditor.css';
 
-// Debug flag for development
-const DEBUG = false;
 
 type NodeTypes = RelayNode | OperatorNode | SearchNode | LanguageNode | TimelineNode;
 
@@ -63,6 +61,8 @@ export function GraphEditor({
   const isInitializedRef = useRef(false);
   const isLoadingRef = useRef(false);
   const eventsRef = useRef<Map<string, TimelineEvent[]>>(new Map());
+  // Track event IDs that should be excluded (received 'remove' before 'add')
+  const excludedEventsRef = useRef<Map<string, Set<string>>>(new Map());
   const rebuildPipelineRef = useRef<(() => void) | null>(null);
   const profileSubscriptionsRef = useRef<Subscription[]>([]);
   const selectedConnectionIdRef = useRef<string | null>(null);
@@ -251,7 +251,7 @@ export function GraphEditor({
   }, [saveCurrentGraph, findDownstreamTimelines]);
 
   // Get the output Observable from a node by traversing connections
-  const getNodeOutput = useCallback((nodeId: string): Observable<NostrEvent> | null => {
+  const getNodeOutput = useCallback((nodeId: string): Observable<EventSignal> | null => {
     const editor = editorRef.current;
     if (!editor) return null;
 
@@ -428,26 +428,53 @@ export function GraphEditor({
                            !input$; // Always clear if no input connection
         if (shouldClear) {
           eventsRef.current.set(timelineNodeId, []);
+          excludedEventsRef.current.set(timelineNodeId, new Set()); // Also clear excluded set
           onEventsUpdate(timelineNodeId, []);
         }
 
-        // Set the event callback
-        timelineNode.setOnEvent((event: NostrEvent) => {
+        // Initialize excluded set for this timeline
+        if (!excludedEventsRef.current.has(timelineNodeId)) {
+          excludedEventsRef.current.set(timelineNodeId, new Set());
+        }
+        const excludedSet = excludedEventsRef.current.get(timelineNodeId)!;
+
+        // Set the signal callback - handles both 'add' and 'remove' signals
+        timelineNode.setOnSignal((signal: EventSignal) => {
           const events = eventsRef.current.get(timelineNodeId) || [];
-          // Skip if event already exists (deduplication)
-          if (events.some(e => e.event.id === event.id)) {
-            return;
+
+          if (signal.signal === 'add') {
+            // Skip if event is in excluded set (remove arrived before add)
+            if (excludedSet.has(signal.event.id)) {
+              // Remove from excluded set since we've now processed the add
+              excludedSet.delete(signal.event.id);
+              return;
+            }
+            // Skip if event already exists (deduplication)
+            if (events.some(e => e.event.id === signal.event.id)) {
+              return;
+            }
+            // Try to get cached profile
+            const cachedProfile = getCachedProfile(signal.event.pubkey);
+            // Add event and sort by created_at (newest first)
+            const newEvents = [...events, { event: signal.event, profile: cachedProfile }].sort(
+              (a, b) => b.event.created_at - a.event.created_at
+            );
+            // Limit to 100 events
+            const limitedEvents = newEvents.slice(0, 100);
+            eventsRef.current.set(timelineNodeId, limitedEvents);
+            onEventsUpdate(timelineNodeId, limitedEvents);
+          } else if (signal.signal === 'remove') {
+            // Remove event from timeline
+            const filteredEvents = events.filter(e => e.event.id !== signal.event.id);
+            // If something was removed
+            if (filteredEvents.length !== events.length) {
+              eventsRef.current.set(timelineNodeId, filteredEvents);
+              onEventsUpdate(timelineNodeId, filteredEvents);
+            } else {
+              // Event not found - add to excluded set so future 'add' will be ignored
+              excludedSet.add(signal.event.id);
+            }
           }
-          // Try to get cached profile
-          const cachedProfile = getCachedProfile(event.pubkey);
-          // Add event and sort by created_at (newest first)
-          const newEvents = [...events, { event, profile: cachedProfile }].sort(
-            (a, b) => b.event.created_at - a.event.created_at
-          );
-          // Limit to 100 events
-          const limitedEvents = newEvents.slice(0, 100);
-          eventsRef.current.set(timelineNodeId, limitedEvents);
-          onEventsUpdate(timelineNodeId, limitedEvents);
         });
 
         timelineNode.setInput(input$);
@@ -938,9 +965,7 @@ export function GraphEditor({
               }
 
               // Check if this socket has a connection
-              if (DEBUG) console.log('Socket clicked:', { nodeId, socketKey, side });
               const existingConnection = findConnectionBySocket(nodeId, socketKey, side);
-              if (DEBUG) console.log('Existing connection:', existingConnection);
 
               // Clear previous socket selection highlight
               container.querySelectorAll('.socket-selected').forEach(el => {

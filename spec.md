@@ -95,12 +95,20 @@ User Inrterface is as follows.
       - original-filter node:
         - operator node:
           - input terminal:
-            - input1
-            - input2
+            - input1 (A)
+            - input2 (B)
           - output terminal:
             - output
           - attributes:
             - operator: AND, OR, A-B
+          - behavior (signal-based architecture):
+            - events flow through graph with signals: 'add' (show) or 'remove' (hide)
+            - OR: merge both streams, pass signals as-is
+            - AND: emit when event seen from both inputs
+            - A-B: events from A pass with their signal, events from B are inverted
+              - 'add' in B → 'remove' (x is in B, so exclude from A-B)
+              - 'remove' in B → 'add' (x removed from B, so include in A-B if in A)
+            - subtraction is processed at Timeline node, allowing late B events to remove already-displayed A events
         - strict search node:
           - input terminal:
             - input
@@ -131,15 +139,20 @@ User Inrterface is as follows.
           - library: franc-min (pure JavaScript, 82 languages, ~200KB)
       - Timeline node:
         - input terminal:
-          - input (nostr event)
+          - input (event signal)
         - attributes:
           - timeline name: string
+        - behavior:
+          - receives event signals with 'add' or 'remove' type
+          - 'add' signal: adds event to timeline (if not duplicate)
+          - 'remove' signal: removes event from timeline (if present)
+          - out-of-order handling: if 'remove' arrives before 'add', the event ID is tracked in an excluded set, and subsequent 'add' for that event is ignored
     - edges:
       - edges are the connectors between nodes.
         - input: an output terminal of a node.
         - output: an input terminal of a node.
       - the edges has types:
-        - nostr events
+        - event signals (nostr events with add/remove signal)
         - relays
         - npubs
       - the edges are colored differently by types.

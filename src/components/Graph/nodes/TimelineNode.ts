@@ -3,7 +3,7 @@ import { Observable } from 'rxjs';
 import i18next from 'i18next';
 import { eventSocket } from './types';
 import { TextInputControl } from './controls';
-import type { NostrEvent } from '../../../nostr/types';
+import type { EventSignal } from '../../../nostr/types';
 
 export class TimelineNode extends ClassicPreset.Node {
   static readonly nodeType = 'Timeline';
@@ -14,13 +14,13 @@ export class TimelineNode extends ClassicPreset.Node {
   private timelineName: string = 'Timeline';
 
   // Input observable (set by GraphEditor when connections change)
-  private input$: Observable<NostrEvent> | null = null;
+  private input$: Observable<EventSignal> | null = null;
 
   // Subscription
   private subscription: { unsubscribe: () => void } | null = null;
 
-  // Callback for when events arrive
-  private onEvent: ((event: NostrEvent) => void) | null = null;
+  // Callback for when event signals arrive
+  private onSignal: ((signal: EventSignal) => void) | null = null;
 
   constructor() {
     super(i18next.t('nodes.timeline.title'));
@@ -59,13 +59,13 @@ export class TimelineNode extends ClassicPreset.Node {
     }
   }
 
-  // Set the event callback
-  setOnEvent(callback: (event: NostrEvent) => void): void {
-    this.onEvent = callback;
+  // Set the signal callback
+  setOnSignal(callback: (signal: EventSignal) => void): void {
+    this.onSignal = callback;
   }
 
   // Set input observable and start subscription
-  setInput(input: Observable<NostrEvent> | null): void {
+  setInput(input: Observable<EventSignal> | null): void {
     this.input$ = input;
     this.rebuildSubscription();
   }
@@ -75,12 +75,12 @@ export class TimelineNode extends ClassicPreset.Node {
     // Cleanup existing subscription
     this.stopSubscription();
 
-    if (!this.input$ || !this.onEvent) return;
+    if (!this.input$ || !this.onSignal) return;
 
     this.subscription = this.input$.subscribe({
-      next: (event) => {
-        if (this.onEvent) {
-          this.onEvent(event);
+      next: (signal) => {
+        if (this.onSignal) {
+          this.onSignal(signal);
         }
       },
       error: (err) => {

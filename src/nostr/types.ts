@@ -125,6 +125,16 @@ export interface TimelineEvent {
   profile?: Profile;
 }
 
+// Signal type for event flow through the graph
+// 'add' = event should be added/shown
+// 'remove' = event should be removed/hidden (used by A-B operator)
+export type SignalType = 'add' | 'remove';
+
+export interface EventSignal {
+  event: NostrEvent;
+  signal: SignalType;
+}
+
 export interface FilterItem {
   name: 'ids' | 'authors' | 'kinds' | 'since' | 'until' | 'limit' | string;
   value: string;

@@ -6,7 +6,7 @@ import { verifier } from '@rx-nostr/crypto';
 import i18next from 'i18next';
 import { eventSocket } from './types';
 import { TextAreaControl, FilterControl, type Filters } from './controls';
-import type { NostrEvent, Profile } from '../../../nostr/types';
+import type { NostrEvent, Profile, EventSignal } from '../../../nostr/types';
 import { decodeBech32ToHex, isHex64, parseDateToTimestamp } from '../../../nostr/types';
 
 const DEBUG = false;
@@ -207,8 +207,8 @@ export class RelayNode extends ClassicPreset.Node {
   private relayUrls: string[] = [getDefaultRelayUrl()];
   private filters: Filters = getDefaultFilters();
 
-  // RxJS Observable for output events
-  private eventSubject = new Subject<NostrEvent>();
+  // RxJS Observable for output events (with signal type)
+  private eventSubject = new Subject<EventSignal>();
   private rxNostr: RxNostr | null = null;
   private rxReq: ForwardReq | null = null;
   private subscription: { unsubscribe: () => void } | null = null;
@@ -221,7 +221,7 @@ export class RelayNode extends ClassicPreset.Node {
   private profileBatchTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Shared observable that can be subscribed to by multiple downstream nodes
-  public output$: Observable<NostrEvent> = this.eventSubject.asObservable().pipe(share());
+  public output$: Observable<EventSignal> = this.eventSubject.asObservable().pipe(share());
 
   // Observable for profile updates
   public profile$: Observable<{ pubkey: string; profile: Profile }> = this.profileSubject.asObservable().pipe(share());
@@ -365,8 +365,8 @@ export class RelayNode extends ClassicPreset.Node {
           return; // Don't emit profile events to the main output
         }
 
-        // Emit regular events
-        this.eventSubject.next(event);
+        // Emit regular events with 'add' signal
+        this.eventSubject.next({ event, signal: 'add' });
 
         // Queue profile request (batched)
         queueProfileRequest(event.pubkey);
