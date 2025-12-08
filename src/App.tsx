@@ -4,27 +4,7 @@ import { GraphEditor } from './components/Graph/GraphEditor';
 import type { TimelineEvent } from './nostr/types';
 import './App.css';
 
-// Version: Update this on each deployment
-const APP_VERSION = '0.5.0';
 const APP_NAME = '(.>_<)-(.>_<)-mojimoji: Nostr Modular Client';
-
-// Format build timestamp based on locale
-const formatBuildTimestamp = (): string => {
-  const utcDate = new Date(__BUILD_TIMESTAMP_UTC__);
-  const isJapanese = navigator.language.startsWith('ja');
-
-  if (isJapanese) {
-    // JST (UTC+9)
-    const jstOffset = 9 * 60 * 60 * 1000;
-    const jstDate = new Date(utcDate.getTime() + jstOffset);
-    return jstDate.toISOString().replace('T', ' ').substring(0, 19) + ' JST';
-  } else {
-    // UTC
-    return utcDate.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
-  }
-};
-
-const BUILD_TIMESTAMP = formatBuildTimestamp();
 
 interface TimelineData {
   id: string;
@@ -59,7 +39,7 @@ function App() {
     <div className="app">
       <div className="timeline-pane">
         <div className="title-bar">
-          {APP_NAME} <span className="version">v{APP_VERSION} ({BUILD_TIMESTAMP})</span>
+          {APP_NAME}
         </div>
         <div className="timeline-content">
           {timelines.length === 0 ? (

@@ -16,6 +16,26 @@ import type { TimelineEvent, EventSignal } from '../../nostr/types';
 import type { Observable, Subscription } from 'rxjs';
 import './GraphEditor.css';
 
+// Version: Update this on each deployment
+const APP_VERSION = '0.5.0';
+
+// Format build timestamp based on locale
+const formatBuildTimestamp = (): string => {
+  const utcDate = new Date(__BUILD_TIMESTAMP_UTC__);
+  const isJapanese = navigator.language.startsWith('ja');
+
+  if (isJapanese) {
+    // JST (UTC+9)
+    const jstOffset = 9 * 60 * 60 * 1000;
+    const jstDate = new Date(utcDate.getTime() + jstOffset);
+    return jstDate.toISOString().replace('T', ' ').substring(0, 19) + ' JST';
+  } else {
+    // UTC
+    return utcDate.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+  }
+};
+
+const BUILD_TIMESTAMP = formatBuildTimestamp();
 
 type NodeTypes = RelayNode | OperatorNode | SearchNode | LanguageNode | NostrFilterNode | TimelineNode;
 
@@ -1401,17 +1421,20 @@ export function GraphEditor({
         <button onClick={deleteSelected} className="delete-btn">{t('toolbar.delete')}</button>
       </div>
       <div ref={containerRef} className="graph-editor-container" />
-      <a
-        href="https://github.com/koteitan/mojimoji"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="github-link"
-        title="View on GitHub"
-      >
-        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-          <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-        </svg>
-      </a>
+      <div className="footer-info">
+        <span className="version-info">v{APP_VERSION} ({BUILD_TIMESTAMP})</span>
+        <a
+          href="https://github.com/koteitan/mojimoji"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="github-link"
+          title="View on GitHub"
+        >
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+          </svg>
+        </a>
+      </div>
     </div>
   );
 }

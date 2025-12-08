@@ -5,10 +5,7 @@
 User Inrterface is as follows. 
 - left(bottom for mobile) pane: Timeline list of nostr events:
   - top line: title bar
-    - format: "(>_<)-(>_<)-mojimoji version x.x.x (build timestamp)"
-    - build timestamp format:
-      - Japanese locale: JST (e.g., "2025/12/07 23:38 JST")
-      - other locales: UTC (e.g., "2025/12/07 14:38 UTC")
+    - format: "(.>_<)-(.>_<)-mojimoji: Nostr Modular Client"
   - center area: timeline
     - each column: each timeline.
       - 35 charactors width.
@@ -35,6 +32,12 @@ User Inrterface is as follows.
       - +Lang: add a Language Filter node.
     - +Timeline button: add a Timeline node.
     - Delete button: delete selected node(s).
+  - bottom-right: footer info
+    - version info: "vX.X.X (build timestamp)"
+      - build timestamp format:
+        - Japanese locale: JST (e.g., "2025-12-07 23:38:00 JST")
+        - other locales: UTC (e.g., "2025-12-07 14:38:00 UTC")
+    - GitHub link icon
   - center area: graph editor area.
     - nodes:
       - description:

@@ -211,13 +211,25 @@ svg {
   animation: node-flash-delete 0.3s ease-out forwards;
 }
 
-/* GitHub link */
-.github-link {
+/* Footer info (version + GitHub link) */
+.footer-info {
   position: absolute;
   bottom: 10px;
   right: 10px;
-  color: #888;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   z-index: 10;
+}
+
+.version-info {
+  color: #666;
+  font-size: 11px;
+  font-family: monospace;
+}
+
+.github-link {
+  color: #888;
   transition: color 0.2s;
 }
 
