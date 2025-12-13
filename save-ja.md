@@ -116,7 +116,12 @@ mojimoji が使用する localStorage キー:
       "targetInput": "[input-socket-key]"
     },
     ...
-  ]
+  ],
+  "viewTransform": {
+    "x": number,
+    "y": number,
+    "k": number
+  }
 }
 ```
 - ノードタイプ別のデータ形式:
@@ -126,6 +131,9 @@ mojimoji が使用する localStorage キー:
   - Language: `{ language: string }`
   - NostrFilter: `{ filterElements: FilterElement[], exclude: boolean }`
   - Timeline: `{ timelineName: string }`
+- viewTransform: グラフエディタのビュー位置（パンとズーム）
+  - x, y: パンオフセット（ピクセル単位）
+  - k: ズーム倍率（1.0 = 100%）
 
 ### （参考）現在の LocalStorage 自動保存フォーマット
 - localStorage キー: `mojimoji-graph`
@@ -198,7 +206,31 @@ mojimoji が使用する localStorage キー:
     - [Cancel] ボタン
     - [Load] ボタン
 
+## Nostr リレー保存/読込
+
+### NIP-07 による署名
+- NIP-07 ブラウザ拡張機能（nos2x、Alby など）を使用してイベントに署名
+- `window.nostr.signEvent(event)` を呼び出して公開前にイベントに署名
+- `window.nostr.getPublicKey()` を呼び出してユーザーの公開鍵を取得
+
+### デフォルトリレーリスト（kind:10002）
+- Nostr リレーに保存する際、デフォルトで kind:10002 イベントからユーザーのリレーリストを使用
+- NIP-07 から取得したユーザーの pubkey を使用して、well-known リレーから kind:10002 イベントを取得
+- イベントの `r` タグからリレーリストを解析
+- ユーザーは保存ダイアログでカスタムリレー URL を指定して上書き可能
+
+### Nostr リレーからの読込
+- NIP-07 ブラウザ拡張機能から取得した pubkey をデフォルトの検索 pubkey として使用
+- フィルタでリレーにクエリ: `{ kinds: [30078], authors: [pubkey], "#d": ["mojimoji/graphs/..."] }`
+- 公開グラフの場合は追加で: `{ kinds: [30078], "#public": [""] }`
+
 ## NIP 参照
+- NIP-07: 署名用ブラウザ拡張機能
+  - https://github.com/nostr-protocol/nips/blob/master/07.md
+  - 署名と pubkey アクセス用の `window.nostr` API を提供
+- NIP-65: リレーリストメタデータ（kind 10002）
+  - https://github.com/nostr-protocol/nips/blob/master/65.md
+  - ユーザーの優先リレーリストを保存
 - NIP-78: アプリケーション固有データ（kind 30078）
   - https://github.com/nostr-protocol/nips/blob/master/78.md
   - リレーに任意のアプリデータを保存するため

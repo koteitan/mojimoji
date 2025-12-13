@@ -8,7 +8,9 @@
     "nostrFilter": "+Nostr",
     "timeline": "+Timeline",
     "center": "Center",
-    "delete": "Delete"
+    "delete": "Delete",
+    "save": "Save",
+    "load": "Load"
   },
   "nodes": {
     "relay": {
@@ -43,5 +45,36 @@
   },
   "timeline": {
     "defaultName": "Timeline"
+  },
+  "dialogs": {
+    "cancel": "Cancel",
+    "save": {
+      "title": "Save Graph",
+      "nameLabel": "Graph Name",
+      "namePlaceholder": "Enter graph name",
+      "visibilityLabel": "Visibility",
+      "relayUrlsLabel": "Relay URLs (optional)",
+      "relayUrlsPlaceholder": "wss://relay.example.com\n(one per line, uses graph relays if empty)",
+      "newFolder": "New Folder",
+      "newFolderPrompt": "Enter folder name:",
+      "save": "Save",
+      "saving": "Saving...",
+      "emptyDirectory": "No saved graphs",
+      "errorNoName": "Please enter a graph name",
+      "errorUnknown": "Failed to save graph"
+    },
+    "load": {
+      "title": "Load Graph",
+      "pubkeyLabel": "Pubkey (npub or hex)",
+      "pubkeyPlaceholder": "Enter pubkey to search",
+      "filterLabel": "Filter",
+      "chooseFile": "Choose File",
+      "load": "Load",
+      "loading": "Loading...",
+      "emptyDirectory": "No graphs found",
+      "errorNoFile": "Please select a file",
+      "errorNoSelection": "Please select a graph",
+      "errorUnknown": "Failed to load graph"
+    }
   }
 }

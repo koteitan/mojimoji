@@ -25,6 +25,11 @@ or
     - use git diff when you make a commit message suggestion.
   - commit message suggestion is written in commit-msg.txt.
 
+# test and deployment rules
+- don't run test and deployment by yourself.
+- I run test and deployment by scripts in scripts/ directory.
+- Ask me to run test and deployment when you finish the implementation.
+
 # Project
 - This is the project to make a modular-type timeline in nostr.
 

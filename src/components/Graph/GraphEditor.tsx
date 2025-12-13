@@ -11,7 +11,18 @@ import { RelayNode, OperatorNode, SearchNode, LanguageNode, NostrFilterNode, Tim
 import { CustomNode } from './CustomNode';
 import { CustomConnection } from './CustomConnection';
 import { CustomSocket } from './CustomSocket';
-import { saveGraph, loadGraph } from '../../utils/localStorage';
+import { SaveDialog, LoadDialog } from '../Dialogs';
+import {
+  saveGraph,
+  loadGraph,
+  saveGraphToPath,
+  loadGraphFromPath,
+  getGraphsInDirectory,
+  createDirectory,
+  exportGraphToFile,
+  importGraphFromFile,
+  type GraphData,
+} from '../../utils/localStorage';
 import type { TimelineEvent, EventSignal } from '../../nostr/types';
 import type { Observable, Subscription } from 'rxjs';
 import './GraphEditor.css';
@@ -91,14 +102,20 @@ export function GraphEditor({
   // State for filter dropdown
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
 
-  const saveCurrentGraph = useCallback(() => {
+  // State for save/load dialogs
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [loadDialogOpen, setLoadDialogOpen] = useState(false);
+
+  // Get the current graph data as GraphData object
+  const getCurrentGraphData = useCallback((): GraphData | null => {
     const editor = editorRef.current;
-    if (!editor || isLoadingRef.current) return;
+    const area = areaRef.current;
+    if (!editor || isLoadingRef.current) return null;
 
     const nodes = editor.getNodes().map((node: NodeTypes) => ({
       id: node.id,
       type: (node as NodeTypes & { nodeType: string }).nodeType,
-      position: areaRef.current?.nodeViews.get(node.id)?.position || { x: 0, y: 0 },
+      position: area?.nodeViews.get(node.id)?.position || { x: 0, y: 0 },
       data: 'serialize' in node ? (node as unknown as { serialize: () => unknown }).serialize() : {},
     }));
 
@@ -110,8 +127,22 @@ export function GraphEditor({
       targetInput: conn.targetInput,
     }));
 
-    saveGraph({ nodes, connections });
+    // Get current view transform (pan and zoom)
+    const viewTransform = area ? {
+      x: area.area.transform.x,
+      y: area.area.transform.y,
+      k: area.area.transform.k,
+    } : undefined;
+
+    return { nodes, connections, viewTransform };
   }, []);
+
+  const saveCurrentGraph = useCallback(() => {
+    const data = getCurrentGraphData();
+    if (data) {
+      saveGraph(data);
+    }
+  }, [getCurrentGraphData]);
 
   // Debug function to dump graph state to console
   const dumpGraph = useCallback(() => {
@@ -522,6 +553,195 @@ export function GraphEditor({
 
   // Keep ref updated
   rebuildPipelineRef.current = rebuildPipeline;
+
+  // Load a GraphData into the editor (clears existing nodes/connections first)
+  const loadGraphData = useCallback(async (graphData: GraphData) => {
+    const editor = editorRef.current;
+    const area = areaRef.current;
+    if (!editor || !area) return;
+
+    isLoadingRef.current = true;
+
+    // Clear all existing nodes and connections
+    const existingNodes = editor.getNodes();
+    for (const node of existingNodes) {
+      // Notify timeline removal
+      if (getNodeType(node) === 'Timeline') {
+        onTimelineRemove(node.id);
+      }
+      // Remove connections first
+      const connections = editor.getConnections().filter(
+        (c: { source: string; target: string }) => c.source === node.id || c.target === node.id
+      );
+      for (const conn of connections) {
+        await editor.removeConnection(conn.id);
+      }
+      // Remove node
+      await editor.removeNode(node.id);
+    }
+
+    // Clear events
+    eventsRef.current.clear();
+    excludedEventsRef.current.clear();
+
+    const nodeMap = new Map<string, NodeTypes>();
+    const timelineNodes: Array<{ node: TimelineNode; id: string }> = [];
+
+    // Create nodes
+    for (const nodeData of graphData.nodes as Array<{
+      id: string;
+      type: string;
+      position: { x: number; y: number };
+      data: unknown;
+    }>) {
+      let node: NodeTypes;
+
+      switch (nodeData.type) {
+        case 'Relay':
+        case 'Source': // backward compatibility
+          node = new RelayNode();
+          if (nodeData.data) {
+            (node as RelayNode).deserialize(nodeData.data as { relayUrls: string[]; filterJson: string });
+          }
+          break;
+        case 'Operator':
+          node = new OperatorNode();
+          if (nodeData.data) {
+            (node as OperatorNode).deserialize(nodeData.data as { operator: 'AND' | 'OR' | 'A-B' });
+          }
+          break;
+        case 'Search':
+          node = new SearchNode();
+          if (nodeData.data) {
+            (node as SearchNode).deserialize(nodeData.data as { keyword: string; useRegex: boolean });
+          }
+          break;
+        case 'Language':
+          node = new LanguageNode();
+          if (nodeData.data) {
+            (node as LanguageNode).deserialize(nodeData.data as { language: string });
+          }
+          break;
+        case 'NostrFilter':
+          node = new NostrFilterNode();
+          if (nodeData.data) {
+            (node as NostrFilterNode).deserialize(nodeData.data as { filterElements: { field: string; value: string }[]; exclude: boolean });
+          }
+          break;
+        case 'Timeline':
+        case 'Display': // backward compatibility
+          node = new TimelineNode();
+          if (nodeData.data) {
+            (node as TimelineNode).deserialize(nodeData.data as { timelineName: string });
+          }
+          // Delay onTimelineCreate until after ID is overridden
+          timelineNodes.push({ node: node as TimelineNode, id: nodeData.id });
+          break;
+        default:
+          continue;
+      }
+
+      // Override the auto-generated ID with the saved ID
+      (node as unknown as { id: string }).id = nodeData.id;
+      await editor.addNode(node);
+      await area.translate(node.id, nodeData.position);
+      nodeMap.set(nodeData.id, node);
+    }
+
+    // Now create timelines for Timeline nodes with correct IDs
+    for (const { node, id } of timelineNodes) {
+      onTimelineCreate(id, node.getTimelineName());
+    }
+
+    // Create connections
+    for (const connData of graphData.connections as Array<{
+      id: string;
+      source: string;
+      sourceOutput: string;
+      target: string;
+      targetInput: string;
+    }>) {
+      const sourceNode = nodeMap.get(connData.source);
+      const targetNode = nodeMap.get(connData.target);
+
+      if (sourceNode && targetNode) {
+        const conn = new ClassicPreset.Connection(
+          sourceNode,
+          connData.sourceOutput as never,
+          targetNode,
+          connData.targetInput as never
+        );
+        await editor.addConnection(conn);
+      }
+    }
+
+    isLoadingRef.current = false;
+
+    // Rebuild the Observable pipeline after loading
+    setTimeout(() => rebuildPipelineRef.current?.(), 100);
+
+    // Restore view transform if available, otherwise fit view to show all nodes
+    setTimeout(async () => {
+      if (graphData.viewTransform) {
+        // Restore saved view transform
+        area.area.zoom(graphData.viewTransform.k, 0, 0);
+        area.area.translate(graphData.viewTransform.x, graphData.viewTransform.y);
+      } else {
+        // Fit view to show all nodes
+        await AreaExtensions.zoomAt(area, editor.getNodes());
+        const { x, y } = area.area.transform;
+        area.area.translate(x, y + 30);
+      }
+    }, 150);
+
+    // Save to auto-save slot
+    saveCurrentGraph();
+  }, [onTimelineCreate, onTimelineRemove, saveCurrentGraph]);
+
+  // Handle save dialog save action
+  const handleSave = useCallback(async (
+    destination: 'local' | 'nostr' | 'file',
+    path: string,
+    options?: { visibility?: 'public' | 'private'; relayUrls?: string[] }
+  ) => {
+    const graphData = getCurrentGraphData();
+    if (!graphData) return;
+
+    if (destination === 'local') {
+      saveGraphToPath(path, graphData);
+    } else if (destination === 'file') {
+      exportGraphToFile(graphData, path);
+    } else if (destination === 'nostr') {
+      // TODO: Implement Nostr relay save with NIP-78
+      console.log('Nostr save not yet implemented', { path, options });
+    }
+  }, [getCurrentGraphData]);
+
+  // Handle load dialog load action
+  const handleLoad = useCallback(async (
+    source: 'local' | 'nostr' | 'file',
+    pathOrFile: string | File
+  ) => {
+    let graphData: GraphData | null = null;
+
+    if (source === 'local' && typeof pathOrFile === 'string') {
+      graphData = loadGraphFromPath(pathOrFile);
+    } else if (source === 'file' && pathOrFile instanceof File) {
+      try {
+        const result = await importGraphFromFile(pathOrFile);
+        graphData = result.data;
+      } catch (e) {
+        console.error('Failed to import graph from file:', e);
+      }
+    } else if (source === 'nostr') {
+      // TODO: Implement Nostr relay load with NIP-78
+      console.log('Nostr load not yet implemented', { pathOrFile });
+    }
+
+    if (graphData) {
+      await loadGraphData(graphData);
+    }
+  }, [loadGraphData]);
 
   const addNode = useCallback(async (type: 'Relay' | 'Operator' | 'Search' | 'Language' | 'NostrFilter' | 'Timeline') => {
     const editor = editorRef.current;
@@ -1236,12 +1456,19 @@ export function GraphEditor({
         // Rebuild the Observable pipeline after loading
         setTimeout(() => rebuildPipelineRef.current?.(), 100);
 
-        // Fit view to show all nodes (delay to ensure DOM is ready)
+        // Restore view transform if available, otherwise fit view to show all nodes
         setTimeout(async () => {
-          await AreaExtensions.zoomAt(area, editor.getNodes());
-          // Adjust for toolbar height (move view down)
-          const { x, y } = area.area.transform;
-          area.area.translate(x, y + 30);
+          if (savedGraph.viewTransform) {
+            // Restore saved view transform
+            area.area.zoom(savedGraph.viewTransform.k, 0, 0);
+            area.area.translate(savedGraph.viewTransform.x, savedGraph.viewTransform.y);
+          } else {
+            // Fit view to show all nodes (delay to ensure DOM is ready)
+            await AreaExtensions.zoomAt(area, editor.getNodes());
+            // Adjust for toolbar height (move view down)
+            const { x, y } = area.area.transform;
+            area.area.translate(x, y + 30);
+          }
         }, 150);
       } else {
         // Create default graph when localStorage is empty
@@ -1318,12 +1545,26 @@ export function GraphEditor({
         return;
       }
 
-      // Don't handle shortcuts with modifier keys (Ctrl, Alt, Meta)
+      const key = e.key.toLowerCase();
+
+      // Handle Ctrl+S for save and Ctrl+O for load
+      if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+        if (key === 's') {
+          e.preventDefault();
+          setSaveDialogOpen(true);
+          return;
+        }
+        if (key === 'o') {
+          e.preventDefault();
+          setLoadDialogOpen(true);
+          return;
+        }
+      }
+
+      // Don't handle other shortcuts with modifier keys (Ctrl, Alt, Meta)
       if (e.ctrlKey || e.altKey || e.metaKey) {
         return;
       }
-
-      const key = e.key.toLowerCase();
 
       // Delete selected nodes with Delete, Backspace, or 'd' key
       if (e.key === 'Delete' || e.key === 'Backspace' || key === 'd') {
@@ -1419,6 +1660,9 @@ export function GraphEditor({
         <button onClick={() => addNode('Timeline')}>{t('toolbar.timeline')}</button>
         <button onClick={centerView}>{t('toolbar.center')}</button>
         <button onClick={deleteSelected} className="delete-btn">{t('toolbar.delete')}</button>
+        <div className="toolbar-separator" />
+        <button onClick={() => setSaveDialogOpen(true)}>{t('toolbar.save')}</button>
+        <button onClick={() => setLoadDialogOpen(true)}>{t('toolbar.load')}</button>
       </div>
       <div ref={containerRef} className="graph-editor-container" />
       <div className="footer-info">
@@ -1435,6 +1679,23 @@ export function GraphEditor({
           </svg>
         </a>
       </div>
+
+      {/* Save Dialog */}
+      <SaveDialog
+        isOpen={saveDialogOpen}
+        onClose={() => setSaveDialogOpen(false)}
+        onSave={handleSave}
+        getSavedGraphs={getGraphsInDirectory}
+        createDirectory={createDirectory}
+      />
+
+      {/* Load Dialog */}
+      <LoadDialog
+        isOpen={loadDialogOpen}
+        onClose={() => setLoadDialogOpen(false)}
+        onLoad={handleLoad}
+        getSavedGraphs={getGraphsInDirectory}
+      />
     </div>
   );
 }

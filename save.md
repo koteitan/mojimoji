@@ -116,7 +116,12 @@ For manual saving, we will add:
       "targetInput": "[input-socket-key]"
     },
     ...
-  ]
+  ],
+  "viewTransform": {
+    "x": number,
+    "y": number,
+    "k": number
+  }
 }
 ```
 - node data formats by type:
@@ -126,6 +131,9 @@ For manual saving, we will add:
   - Language: `{ language: string }`
   - NostrFilter: `{ filterElements: FilterElement[], exclude: boolean }`
   - Timeline: `{ timelineName: string }`
+- viewTransform: graph editor view position (pan and zoom)
+  - x, y: pan offset in pixels
+  - k: zoom scale factor (1.0 = 100%)
 
 ### (reference) Current auto saving format for LocalStorage
 - localStorage key: `mojimoji-graph`
@@ -198,7 +206,31 @@ For manual saving, we will add:
     - [Cancel] button
     - [Load] button
 
+## Nostr Relay Saving/Loading
+
+### Signing with NIP-07
+- Use NIP-07 browser extension (e.g., nos2x, Alby) for signing events
+- Call `window.nostr.signEvent(event)` to sign the event before publishing
+- Call `window.nostr.getPublicKey()` to get the user's public key
+
+### Default Relay List (kind:10002)
+- When saving to Nostr Relay, use the user's relay list from kind:10002 events as default
+- Fetch kind:10002 events from well-known relays using the user's pubkey from NIP-07
+- Parse relay list from the `r` tags in the event
+- User can override with custom relay URLs in the save dialog
+
+### Loading from Nostr Relay
+- Use the pubkey from NIP-07 browser extension as default search pubkey
+- Query relays with filter: `{ kinds: [30078], authors: [pubkey], "#d": ["mojimoji/graphs/..."] }`
+- For public graphs, also query with: `{ kinds: [30078], "#public": [""] }`
+
 ## NIP references
+- NIP-07: Browser extension for signing
+  - https://github.com/nostr-protocol/nips/blob/master/07.md
+  - Provides `window.nostr` API for signing and pubkey access
+- NIP-65: Relay List Metadata (kind 10002)
+  - https://github.com/nostr-protocol/nips/blob/master/65.md
+  - Stores user's preferred relay list
 - NIP-78: Application-specific data (kind 30078)
   - https://github.com/nostr-protocol/nips/blob/master/78.md
   - For storing arbitrary app data on relays

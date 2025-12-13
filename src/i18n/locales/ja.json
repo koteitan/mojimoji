@@ -8,7 +8,9 @@
     "nostrFilter": "+Nostr",
     "timeline": "+TL",
     "center": "center",
-    "delete": "del"
+    "delete": "del",
+    "save": "保存",
+    "load": "読込"
   },
   "nodes": {
     "relay": {
@@ -43,5 +45,36 @@
   },
   "timeline": {
     "defaultName": "タイムライン"
+  },
+  "dialogs": {
+    "cancel": "キャンセル",
+    "save": {
+      "title": "グラフを保存",
+      "nameLabel": "グラフ名",
+      "namePlaceholder": "グラフ名を入力",
+      "visibilityLabel": "公開設定",
+      "relayUrlsLabel": "リレーURL（任意）",
+      "relayUrlsPlaceholder": "wss://relay.example.com\n（1行に1つ、空の場合はグラフ内のリレーを使用）",
+      "newFolder": "新規フォルダ",
+      "newFolderPrompt": "フォルダ名を入力:",
+      "save": "保存",
+      "saving": "保存中...",
+      "emptyDirectory": "保存されたグラフがありません",
+      "errorNoName": "グラフ名を入力してください",
+      "errorUnknown": "グラフの保存に失敗しました"
+    },
+    "load": {
+      "title": "グラフを読み込む",
+      "pubkeyLabel": "公開鍵（npubまたはhex）",
+      "pubkeyPlaceholder": "検索する公開鍵を入力",
+      "filterLabel": "フィルタ",
+      "chooseFile": "ファイルを選択",
+      "load": "読込",
+      "loading": "読込中...",
+      "emptyDirectory": "グラフが見つかりません",
+      "errorNoFile": "ファイルを選択してください",
+      "errorNoSelection": "グラフを選択してください",
+      "errorUnknown": "グラフの読み込みに失敗しました"
+    }
   }
 }

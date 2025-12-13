@@ -55,6 +55,14 @@
   border-color: #ff6666;
 }
 
+/* Toolbar separator */
+.toolbar-separator {
+  width: 1px;
+  background: #444;
+  margin: 0 4px;
+  align-self: stretch;
+}
+
 /* Filter dropdown */
 .filter-dropdown {
   position: relative;
