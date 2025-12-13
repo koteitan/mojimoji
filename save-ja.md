@@ -2,13 +2,16 @@
 
 ## 保存先
 - 自動保存
-  - LocalStorage
+  - ブラウザ（localStorage）
 - 手動保存
-  - LocalStorage へ
+  - ブラウザ（localStorage）へ
+    - グラフはブラウザの localStorage に保存
+    - ブラウザのキャッシュを削除すると削除される
   - Nostr リレーへ
     - public（誰でも検索・読込可能）
     - for yourself（自分の npub でフィルタ、暗号化なし）
   - ファイルへ
+    - JSON ファイルとしてコンピュータにダウンロード
 
 ## 保存フォーマット
 
@@ -166,31 +169,35 @@ mojimoji が使用する localStorage キー:
 - 保存ダイアログ（モーダルオーバーレイ）
   - 上部: タイトル「Save Graph」
   - 中央:
-    - 保存先タブ: [LocalStorage] [Nostr Relay] [File]
+    - 「保存先:」ラベル
+    - 保存先タブ: [Browser] [Nostr Relay] [File]
+    - 保存先の説明（選択したタブに応じて変化）
     - 現在のパス: パンくずナビ（クリック可能: root > dir > subdir）
     - ディレクトリブラウザ:
       - [..] （親ディレクトリ、ルート以外）
-      - サブディレクトリ（クリックで移動）
-      - 現在のディレクトリ内のグラフ（クリックで上書き選択）
+      - サブディレクトリ（クリックで移動、ホバーで削除ボタン表示）
+      - 現在のディレクトリ内のグラフ（クリックで上書き選択、ホバーで削除ボタン表示）
     - 名前入力: グラフ名のテキストフィールド
     - （Nostr タブのみ）:
-      - 公開設定: [Public] [For yourself] ラジオボタン
-      - リレー URL: テキストエリア（省略時はグラフ内のリレーノードを使用）
+      - 公開設定: [Public] [For yourself] ラジオボタン（デフォルト: For yourself）
+      - リレー URL: テキストエリア（省略時は kind:10002 のリレーリストを使用）
   - 下部:
     - [Cancel] ボタン
-    - [New Folder] ボタン
+    - [New Folder] ボタン（セッション限定フォルダを作成、永続化されない）
     - [Save] ボタン
 
 - 読込ダイアログ（モーダルオーバーレイ）
   - 上部: タイトル「Load Graph」
   - 中央:
-    - 読込元タブ: [LocalStorage] [Nostr Relay] [File]
-    - LocalStorage タブ:
+    - 「読み込み元:」ラベル
+    - 読込元タブ: [Browser] [Nostr Relay] [File]
+    - 読込元の説明（選択したタブに応じて変化）
+    - Browser タブ:
       - 現在のパス: パンくずナビ（クリック可能: root > dir > subdir）
       - ディレクトリブラウザ:
         - [..] （親ディレクトリ、ルート以外）
-        - サブディレクトリ（クリックで移動）
-        - 現在のディレクトリ内のグラフ（パス、保存日時）- クリックで選択
+        - サブディレクトリ（クリックで移動、ホバーで削除ボタン表示）
+        - 現在のディレクトリ内のグラフ（パス、保存日時、ホバーで削除ボタン表示）- クリックで選択
     - Nostr タブ:
       - 公開鍵入力（デフォルト: ログイン中なら自分の公開鍵）
       - 公開フィルタ: [All] [Public only] [Mine only] ラジオボタン
@@ -198,13 +205,18 @@ mojimoji が使用する localStorage キー:
       - ディレクトリブラウザ:
         - [..] （親ディレクトリ、ルート以外）
         - サブディレクトリ（クリックで移動）
-        - 現在のディレクトリ内のグラフ（パス、作成日時、作者）- クリックで選択
+        - 現在のディレクトリ内のグラフ（パス、作成日時、作者、自分のグラフのみ削除ボタン）- クリックで選択
     - File タブ:
       - [Choose File] ボタン
       - 選択されたファイル名表示
   - 下部:
     - [Cancel] ボタン
     - [Load] ボタン
+
+### ディレクトリ構造
+- ディレクトリはグラフのパスから導出される（明示的なディレクトリ保存なし）
+- New Folder はセッション限定フォルダを作成（ダイアログを閉じるまで表示）
+- 保存されたグラフがあるフォルダは、グラフが存在する限り永続化
 
 ## Nostr リレー保存/読込
 
@@ -224,10 +236,48 @@ mojimoji が使用する localStorage キー:
 - フィルタでリレーにクエリ: `{ kinds: [30078], authors: [pubkey], "#d": ["mojimoji/graphs/..."] }`
 - 公開グラフの場合は追加で: `{ kinds: [30078], "#public": [""] }`
 
+## 削除
+
+### ブラウザストレージ
+- ホバー時にグラフとフォルダの削除ボタンが表示される
+- グラフの削除: localStorage から即座に削除
+- フォルダの削除: フォルダ内のすべてのグラフを削除（再帰的）
+- 削除前に確認ダイアログを表示
+
+### Nostr リレー（NIP-09）
+- 作成者（同じ pubkey）のみが自分のイベントを削除可能
+- 他のユーザーの公開グラフは削除できない（削除ボタン非表示）
+- 削除リクエストのフォーマット（kind:5）:
+```json
+{
+  "kind": 5,
+  "pubkey": "[user-pubkey]",
+  "created_at": [unix-timestamp],
+  "tags": [
+    ["a", "30078:[user-pubkey]:mojimoji/graphs/[path]"],
+    ["k", "30078"]
+  ],
+  "content": "",
+  "sig": "[signature]"
+}
+```
+- リレーは削除リクエストのタイムスタンプまでのすべてのバージョンを削除すべき（SHOULD）
+- 削除は保証されない（分散システムの制限）
+
+### UI の動作
+- ブラウザ: すべてのアイテムに削除ボタン表示（すべて自分のグラフのため）
+- Nostr リレー: 自分のグラフのみ削除ボタン表示（author === user's pubkey）
+
 ## NIP 参照
+- NIP-01: 基本プロトコル
+  - https://github.com/nostr-protocol/nips/blob/master/01.md
+  - サブスクリプション用のフィルタ構造を定義
 - NIP-07: 署名用ブラウザ拡張機能
   - https://github.com/nostr-protocol/nips/blob/master/07.md
   - 署名と pubkey アクセス用の `window.nostr` API を提供
+- NIP-09: イベント削除リクエスト
+  - https://github.com/nostr-protocol/nips/blob/master/09.md
+  - kind:5 削除リクエストイベントを定義
 - NIP-65: リレーリストメタデータ（kind 10002）
   - https://github.com/nostr-protocol/nips/blob/master/65.md
   - ユーザーの優先リレーリストを保存
@@ -237,7 +287,4 @@ mojimoji が使用する localStorage キー:
 - NIP-116（ドラフト）: イベントパス（kind 30079）
   - https://github.com/nostr-protocol/nips/pull/1266
   - パスベースのイベント整理を提案（未マージ）
-- NIP-01: 基本プロトコル
-  - https://github.com/nostr-protocol/nips/blob/master/01.md
-  - サブスクリプション用のフィルタ構造を定義
 

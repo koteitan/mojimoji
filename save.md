@@ -2,13 +2,16 @@
 
 ## saving destinations
 - Auto Saving
-  - LocalStorage
+  - Browser (localStorage)
 - Manual Saving
-  - to LocalStorage
+  - to Browser (localStorage)
+    - Graphs are stored in browser's localStorage
+    - Deleted when browser cache is cleared
   - to Nostr Relay
     - public (anyone can find and load)
     - for yourself (filtered by your npub, not encrypted)
   - to File
+    - Download as JSON file to computer
 
 ## saving formats
 
@@ -166,31 +169,35 @@ For manual saving, we will add:
 - Save Dialog (modal overlay)
   - North: Title "Save Graph"
   - Center:
-    - Destination tabs: [LocalStorage] [Nostr Relay] [File]
+    - "Save to:" label
+    - Destination tabs: [Browser] [Nostr Relay] [File]
+    - Destination description (changes based on selected tab)
     - Current path: breadcrumb navigation (clickable: root > dir > subdir)
     - Directory browser:
       - [..] (parent directory, if not root)
-      - Sub directories (click to enter)
-      - Graphs in current directory (click to select for overwrite)
+      - Sub directories (click to enter, delete button on hover)
+      - Graphs in current directory (click to select for overwrite, delete button on hover)
     - Name input: text field for graph name
     - (Nostr tab only):
-      - Visibility: [Public] [For yourself] radio buttons
-      - Relay URLs: textarea (optional, use graph's relay nodes if empty)
+      - Visibility: [Public] [For yourself] radio buttons (default: For yourself)
+      - Relay URLs: textarea (optional, use kind:10002 relay list if empty)
   - South:
     - [Cancel] button
-    - [New Folder] button
+    - [New Folder] button (creates session-only folder, not persisted)
     - [Save] button
 
 - Load Dialog (modal overlay)
   - North: Title "Load Graph"
   - Center:
-    - Source tabs: [LocalStorage] [Nostr Relay] [File]
-    - LocalStorage tab:
+    - "Load from:" label
+    - Source tabs: [Browser] [Nostr Relay] [File]
+    - Source description (changes based on selected tab)
+    - Browser tab:
       - Current path: breadcrumb navigation (clickable: root > dir > subdir)
       - Directory browser:
         - [..] (parent directory, if not root)
-        - Sub directories (click to enter)
-        - Graphs in current directory (path, savedAt) - click to select
+        - Sub directories (click to enter, delete button on hover)
+        - Graphs in current directory (path, savedAt, delete button on hover) - click to select
     - Nostr tab:
       - Pubkey input (default: own pubkey if logged in)
       - Visibility filter: [All] [Public only] [Mine only] radio buttons
@@ -198,13 +205,18 @@ For manual saving, we will add:
       - Directory browser:
         - [..] (parent directory, if not root)
         - Sub directories (click to enter)
-        - Graphs in current directory (path, created_at, author) - click to select
+        - Graphs in current directory (path, created_at, author, delete button for own graphs) - click to select
     - File tab:
       - [Choose File] button
       - Selected filename display
   - South:
     - [Cancel] button
     - [Load] button
+
+### Directory Structure
+- Directories are derived from graph paths (no explicit directory storage)
+- New Folder creates session-only folders (visible until dialog closes)
+- Folders with saved graphs persist as long as the graphs exist
 
 ## Nostr Relay Saving/Loading
 
@@ -224,10 +236,48 @@ For manual saving, we will add:
 - Query relays with filter: `{ kinds: [30078], authors: [pubkey], "#d": ["mojimoji/graphs/..."] }`
 - For public graphs, also query with: `{ kinds: [30078], "#public": [""] }`
 
+## Deletion
+
+### Browser Storage
+- Delete button appears on hover for graphs and folders
+- Graph deletion: Immediate removal from localStorage
+- Folder deletion: Removes all graphs within folder (recursive)
+- Confirmation dialog shown before deletion
+
+### Nostr Relay (NIP-09)
+- Only the author (same pubkey) can delete their own events
+- Other users' public graphs cannot be deleted (no delete button shown)
+- Deletion request format (kind:5):
+```json
+{
+  "kind": 5,
+  "pubkey": "[user-pubkey]",
+  "created_at": [unix-timestamp],
+  "tags": [
+    ["a", "30078:[user-pubkey]:mojimoji/graphs/[path]"],
+    ["k", "30078"]
+  ],
+  "content": "",
+  "sig": "[signature]"
+}
+```
+- Relays SHOULD delete all versions up to deletion request timestamp
+- Deletion is not guaranteed (distributed system limitation)
+
+### UI Behavior
+- Browser: Delete button shown for all items (all graphs are user's own)
+- Nostr Relay: Delete button shown only for user's own graphs (author === user's pubkey)
+
 ## NIP references
+- NIP-01: Basic protocol
+  - https://github.com/nostr-protocol/nips/blob/master/01.md
+  - Defines filter structure for subscriptions
 - NIP-07: Browser extension for signing
   - https://github.com/nostr-protocol/nips/blob/master/07.md
   - Provides `window.nostr` API for signing and pubkey access
+- NIP-09: Event Deletion Request
+  - https://github.com/nostr-protocol/nips/blob/master/09.md
+  - Defines kind:5 deletion request events
 - NIP-65: Relay List Metadata (kind 10002)
   - https://github.com/nostr-protocol/nips/blob/master/65.md
   - Stores user's preferred relay list
@@ -237,7 +287,4 @@ For manual saving, we will add:
 - NIP-116 (draft): Event paths (kind 30079)
   - https://github.com/nostr-protocol/nips/pull/1266
   - Proposes path-based event organization (not yet merged)
-- NIP-01: Basic protocol
-  - https://github.com/nostr-protocol/nips/blob/master/01.md
-  - Defines filter structure for subscriptions
 
