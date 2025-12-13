@@ -1,3 +1,5 @@
+[English version](save.md)
+
 # グラフ保存仕様
 
 ## 保存先
@@ -19,22 +21,6 @@
 
 #### Nostr リレー内（NIP-78 イベント）
 ```json
-// Public
-{
-  "id": "[event-id]",
-  "pubkey": "[user-pubkey]",
-  "created_at": [unix-timestamp],
-  "kind": 30078,
-  "tags": [
-    ["d", "mojimoji/graphs/[graph path]"],
-    ["public"],
-    ["client", "mojimoji"]
-  ],
-  "content": "[graph data を JSON 文字列化したもの]",
-  "sig": "[signature]"
-}
-
-// For yourself（public タグなし）
 {
   "id": "[event-id]",
   "pubkey": "[user-pubkey]",
@@ -48,8 +34,9 @@
   "sig": "[signature]"
 }
 ```
-- Public: `["public"]` タグあり、`#public` フィルタで誰でも検索可能
-- For yourself: `public` タグなし、検索には自分の pubkey を指定した `authors` フィルタが必要
+備考:
+- 公開設定（visibility）は graph data の content 内に保存される（API バージョン 2 以降）
+- 古い（バージョン 1）イベントを読み込む場合、visibility は `["public"]` Nostr タグにフォールバックして確認される
 
 #### LocalStorage 内
 mojimoji が使用する localStorage キー:
@@ -103,7 +90,7 @@ mojimoji が使用する localStorage キー:
 ### graph data（グラフデータ）
 ```json
 {
-  "version": 1,
+  "version": 2,
   "nodes": [
     {
       "id": "[node-id]",
@@ -127,10 +114,13 @@ mojimoji が使用する localStorage キー:
     "x": number,
     "y": number,
     "k": number
-  }
+  },
+  "visibility": "public" | "for yourself"
 }
 ```
-- version: データ移行用の API バージョン（現在: 1）
+- version: データ移行用の API バージョン（現在: 2）
+  - バージョン 1: 初期バージョン
+  - バージョン 2: visibility フィールドを graph data に追加（Nostr タグから移動）
 - ノードタイプ別のデータ形式:
   - Relay: `{ relaySource?: "auto" | "manual", relayUrls: string[], filters: Filters }`
     - relaySource: オプション、後方互換性のためデフォルトは "manual"
@@ -211,6 +201,14 @@ mojimoji が使用する localStorage キー:
         - キャプション: 「読み込み元リレー（デフォルト：kind:10002）」
         - テキストエリア: kind:10002 のリレーリストを自動取得して表示
       - フィルタ: [For yourself] [Public] [By author] ラジオボタン（デフォルト: For yourself）
+        - 公開設定フィルタの動作:
+
+          | フィルタ     | 自分の「For yourself」 | 自分の「Public」 | 他者の「For yourself」 | 他者の「Public」 |
+          |--------------|------------------------|------------------|------------------------|------------------|
+          | For yourself | ✔                      |                  |                        |                  |
+          | Public       |                        | ✔                |                        | ✔                |
+          | By author    | ✔ (自分の場合)         | ✔ (自分の場合)   | ✔                      | ✔                |
+
       - （By author のみ）: 作者入力（オートコンプリート付き）
         - npub、hex、または名前を入力
         - ドロップダウン候補: [アイコン] [名前]（キャッシュされた kind:0 プロフィールから）
@@ -220,7 +218,8 @@ mojimoji が使用する localStorage キー:
       - ディレクトリブラウザ（最小高さ: 2行分）:
         - [..] （親ディレクトリ、ルート以外）
         - サブディレクトリ: [📁] [名前] [× 削除ボタン] （クリックで移動）
-        - グラフ: [📄] [名前] [保存日時] [× 削除ボタン] （クリックで選択）
+        - グラフ: [📄] [名前] [作者アイコン] [作者名] [作成日時] [× 削除ボタン（自分のグラフのみ）] （クリックで選択）
+        - Nostr リレーから取得中はローディングアニメーション表示
     - File タブ:
       - [Choose File] ボタン
       - 選択されたファイル名表示
@@ -250,7 +249,8 @@ mojimoji が使用する localStorage キー:
 ### Nostr リレーからの読込
 - NIP-07 ブラウザ拡張機能から取得した pubkey をデフォルトの検索 pubkey として使用
 - フィルタでリレーにクエリ: `{ kinds: [30078], authors: [pubkey], "#d": ["mojimoji/graphs/..."] }`
-- 公開グラフの場合は追加で: `{ kinds: [30078], "#public": [""] }`
+- 公開グラフの場合（バージョン 1）: `{ kinds: [30078], "#public": [""] }` でクエリ
+- 公開グラフの場合（バージョン 2）: visibility は graph data 内に保存され、クライアント側でフィルタリング
 
 ## 削除
 

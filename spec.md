@@ -2,6 +2,7 @@
 ## purpose
 - to make a modular-type timeline in nostr.
 ## UI
+- See also: [save.md](save.md) for Save/Load dialog specifications
 User Inrterface is as follows. 
 - left(bottom for mobile) pane: Timeline list of nostr events:
   - top line: title bar
@@ -32,6 +33,8 @@ User Inrterface is as follows.
       - +Lang: add a Language Filter node.
     - +Timeline button: add a Timeline node.
     - Delete button: delete selected node(s).
+    - Save button: open Save dialog.
+    - Load button: open Load dialog.
   - bottom-right: footer info
     - version info: "vX.X.X (build timestamp)"
       - build timestamp format:
@@ -242,8 +245,10 @@ User Inrterface is as follows.
   - t: add Timeline node
   - c: center view
   - d: delete selected nodes/connections
+  - Ctrl+S: open Save dialog
+  - Ctrl+O: open Load dialog
   - shortcuts are disabled when focus is on input/textarea/select elements
-  - shortcuts are disabled when Ctrl/Alt/Meta key is pressed
+  - shortcuts (except Ctrl+S/Ctrl+O) are disabled when Ctrl/Alt/Meta key is pressed
 
 ### on load
 - load:
@@ -295,6 +300,11 @@ User Inrterface is as follows.
 - Cache is loaded from localStorage on app startup
 - Cache is saved to localStorage with debouncing (500ms delay to batch writes)
 
+### save/load
+- Save button or Ctrl+S: open Save dialog
+- Load button or Ctrl+O: open Load dialog
+- See [save.md](save.md) for detailed Save/Load dialog specifications
+
 ### debug tools
 - Browser console debug functions:
   - dumpgraph(): output graph structure (nodes and connections)
@@ -315,8 +325,8 @@ User Inrterface is as follows.
 - Implementation:
   - Use react-i18next library
   - Language files in `src/i18n/locales/`:
-    - `en.json` - English translations
-    - `ja.json` - Japanese translations
+    - [en.json](https://github.com/koteitan/koteitan.github.io/blob/main/mojimoji/src/i18n/locales/en.json) - English translations
+    - [ja.json](https://github.com/koteitan/koteitan.github.io/blob/main/mojimoji/src/i18n/locales/ja.json) - Japanese translations
 
 ## Implementation
 - platform:

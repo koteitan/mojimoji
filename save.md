@@ -1,3 +1,5 @@
+[日本語版 (Japanese)](save-ja.md)
+
 # graph saving specifications
 
 ## saving destinations

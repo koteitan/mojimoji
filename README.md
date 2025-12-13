@@ -37,6 +37,13 @@ A modular filter previewer for Nostr. modular + moderation = mojimoji
 - **Pan**: Drag on background
 - **Center**: Press `c` or click `Center` button
 
+#### Saving and Loading
+
+- **Save**: Click `Save` button or press `Ctrl+S`
+  - Save to Browser (localStorage), Nostr Relay, or File
+- **Load**: Click `Load` button or press `Ctrl+O`
+  - Load from Browser, Nostr Relay, or File
+
 ### Keyboard Shortcuts
 
 | Key | Action |
@@ -49,6 +56,8 @@ A modular filter previewer for Nostr. modular + moderation = mojimoji
 | t | Add Timeline node |
 | c | Center view |
 | d | Delete selected |
+| Ctrl+S | Save graph |
+| Ctrl+O | Load graph |
 
 ### Node Types
 
@@ -75,6 +84,17 @@ A modular filter previewer for Nostr. modular + moderation = mojimoji
 - Profile cache is stored for faster loading
 
 ## Developer Guide
+
+### Documentation
+
+| Document | Description |
+|----------|-------------|
+| [spec.md](spec.md) | Main specifications (UI, Behavior, i18n, Implementation) |
+| [save.md](save.md) | Save/Load dialog specifications |
+| [save-ja.md](save-ja.md) | Save/Load dialog specifications (Japanese) |
+| [clients.md](clients.md) | Nostr clients comparison |
+| [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) | Third-party library licenses |
+| [README-ja.md](README-ja.md) | README (Japanese) |
 
 ### Tech Stack
 
