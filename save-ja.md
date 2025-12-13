@@ -180,6 +180,7 @@ mojimoji が使用する localStorage キー:
     - 名前入力: グラフ名のテキストフィールド
     - （Nostr タブのみ）:
       - 公開設定: [Public] [For yourself] ラジオボタン（デフォルト: For yourself）
+      - 公開設定の説明: 「公開設定をPublicにすると、他人が読込ダイアログを開いてPublicを選択したときに表示されます。公開設定をFor yourselfにすると他人が読込ダイアログでauthorを指定したときだけ見えます。For yourselfにしても暗号化されるわけではないので気をつけてください。」
       - リレー URL: テキストエリア（省略時は kind:10002 のリレーリストを使用）
   - 下部:
     - [Cancel] ボタン
@@ -199,8 +200,10 @@ mojimoji が使用する localStorage キー:
         - サブディレクトリ: [アイコン] [名前] [削除ボタン] （クリックで移動）
         - グラフ: [アイコン] [名前] [保存日時] [削除ボタン] （クリックで選択）
     - Nostr タブ:
-      - 公開鍵入力（デフォルト: ログイン中なら自分の公開鍵）
-      - 公開フィルタ: [All] [Public only] [Mine only] ラジオボタン
+      - 公開フィルタ: [Public] [Mine] [By author] ラジオボタン（デフォルト: Mine）
+      - 作者入力（「By author」選択時に表示）: [アイコン][名前] のオートコンプリートコンポーネント
+        - autoComplete.js を使用（https://github.com/TarekRaafat/autoComplete.js）
+        - キャッシュされた kind:0 プロフィールから候補を表示
       - 現在のパス: パンくずナビ
       - ディレクトリブラウザ:
         - [..] （親ディレクトリ、ルート以外）

@@ -180,6 +180,7 @@ For manual saving, we will add:
     - Name input: text field for graph name
     - (Nostr tab only):
       - Visibility: [Public] [For yourself] radio buttons (default: For yourself)
+      - Visibility description: "If you set visibility to Public, the graph will be shown when others open the load dialog and select Public. If you set it to For yourself, it will only be visible when others specify your pubkey as author in the load dialog. Note that For yourself does not encrypt the data."
       - Relay URLs: textarea (optional, use kind:10002 relay list if empty)
   - South:
     - [Cancel] button
@@ -199,8 +200,10 @@ For manual saving, we will add:
         - Sub directories: [icon] [name] [delete button] (click to enter)
         - Graphs: [icon] [name] [saved time] [delete button] (click to select)
     - Nostr tab:
-      - Pubkey input (default: own pubkey if logged in)
-      - Visibility filter: [All] [Public only] [Mine only] radio buttons
+      - Visibility filter: [Public] [Mine] [By author] radio buttons (default: Mine)
+      - Author input (shown when "By author" selected): autocomplete component with [icon][name]
+        - uses autoComplete.js (https://github.com/TarekRaafat/autoComplete.js)
+        - suggestions from cached kind:0 profiles
       - Current path: breadcrumb navigation
       - Directory browser:
         - [..] (parent directory, if not root)
