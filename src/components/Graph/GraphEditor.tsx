@@ -25,10 +25,8 @@ import {
 import { saveGraphToNostr, loadGraphByPath } from '../../nostr/graphStorage';
 import type { TimelineEvent, EventSignal } from '../../nostr/types';
 import type { Observable, Subscription } from 'rxjs';
+import { APP_VERSION } from '../../App';
 import './GraphEditor.css';
-
-// Version: Update this on each deployment
-const APP_VERSION = '0.5.1';
 
 // Format build timestamp based on locale
 const formatBuildTimestamp = (): string => {

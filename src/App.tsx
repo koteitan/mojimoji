@@ -4,6 +4,9 @@ import { GraphEditor } from './components/Graph/GraphEditor';
 import type { TimelineEvent } from './nostr/types';
 import './App.css';
 
+// Version: Update this on each deployment
+export const APP_VERSION = '0.6.0';
+
 const APP_NAME = '(.>_<)-(.>_<)-mojimoji: Nostr Modular Client';
 
 interface TimelineData {
