@@ -194,12 +194,7 @@
   padding: 2px 6px;
   margin-left: 4px;
   border-radius: 3px;
-  opacity: 0;
-  transition: opacity 0.15s, background 0.15s, color 0.15s;
-}
-
-.browser-item:hover .item-delete {
-  opacity: 1;
+  transition: background 0.15s, color 0.15s;
 }
 
 .item-delete:hover {

@@ -175,8 +175,8 @@ For manual saving, we will add:
     - Current path: breadcrumb navigation (clickable: root > dir > subdir)
     - Directory browser:
       - [..] (parent directory, if not root)
-      - Sub directories (click to enter, delete button on hover)
-      - Graphs in current directory (click to select for overwrite, delete button on hover)
+      - Sub directories: [icon] [name] [delete button] (click to enter)
+      - Graphs: [icon] [name] [saved time] [delete button] (click to select for overwrite)
     - Name input: text field for graph name
     - (Nostr tab only):
       - Visibility: [Public] [For yourself] radio buttons (default: For yourself)
@@ -196,16 +196,17 @@ For manual saving, we will add:
       - Current path: breadcrumb navigation (clickable: root > dir > subdir)
       - Directory browser:
         - [..] (parent directory, if not root)
-        - Sub directories (click to enter, delete button on hover)
-        - Graphs in current directory (path, savedAt, delete button on hover) - click to select
+        - Sub directories: [icon] [name] [delete button] (click to enter)
+        - Graphs: [icon] [name] [saved time] [delete button] (click to select)
     - Nostr tab:
       - Pubkey input (default: own pubkey if logged in)
       - Visibility filter: [All] [Public only] [Mine only] radio buttons
       - Current path: breadcrumb navigation
       - Directory browser:
         - [..] (parent directory, if not root)
-        - Sub directories (click to enter)
-        - Graphs in current directory (path, created_at, author, delete button for own graphs) - click to select
+        - Sub directories: [icon] [name] (click to enter)
+        - Graphs: [icon] [name] [created_at] [author icon] [author name] [delete button for own graphs] (click to select)
+          - author icon/name: from kind:0 profile event (picture, display_name or name)
     - File tab:
       - [Choose File] button
       - Selected filename display
