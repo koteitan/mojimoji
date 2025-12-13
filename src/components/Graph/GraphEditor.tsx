@@ -1326,6 +1326,15 @@ export function GraphEditor({
         return context;
       });
 
+      // Save graph when node position changes
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      area.addPipe((context: any) => {
+        if (context.type === 'nodetranslated') {
+          setTimeout(saveCurrentGraph, 0);
+        }
+        return context;
+      });
+
       container.setAttribute('tabindex', '0'); // Make container focusable
 
       // Handle node removal and connection changes

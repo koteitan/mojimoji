@@ -15,6 +15,9 @@
   "nodes": {
     "relay": {
       "title": "リレー",
+      "source": "ソース",
+      "sourceAuto": "auto (NIP-07→kind:10002)",
+      "sourceManual": "manual",
       "relays": "リレーURL（1行に1つ）",
       "filter": "フィルター"
     },

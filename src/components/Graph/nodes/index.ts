@@ -1,4 +1,5 @@
 export { RelayNode, getCachedProfile, getProfileCacheInfo, findPubkeysByName } from './RelayNode';
+export type { RelaySourceType } from './RelayNode';
 export { OperatorNode } from './OperatorNode';
 export { SearchNode } from './SearchNode';
 export { LanguageNode } from './LanguageNode';

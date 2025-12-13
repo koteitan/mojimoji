@@ -61,7 +61,14 @@ User Inrterface is as follows.
         - output terminal:
           - output (nostr event)
         - attributes:
+          - relay source: dropdown select
+            - auto (NIP-07→kind:10002): fetch relay URLs from user's kind:10002 event via NIP-07 browser extension
+            - manual: use the relay URL textarea below
+            - default: manual
+            - fallback: manual (if no relay source is set in saved data)
           - relay URL list: multiple line text area (one URL per line)
+            - used when relay source is manual, or when auto fails to fetch relays
+            - disabled when relay source is auto
           - filters: structured filter UI (NIP-01 compliant)
             - multiple filters (OR logic between filters)
             - each filter:

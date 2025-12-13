@@ -15,6 +15,9 @@
   "nodes": {
     "relay": {
       "title": "Relay",
+      "source": "Source",
+      "sourceAuto": "auto (NIP-07→kind:10002)",
+      "sourceManual": "Manual",
       "relays": "Relay URLs (one per line)",
       "filter": "Filters"
     },

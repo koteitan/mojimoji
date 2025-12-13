@@ -132,7 +132,8 @@ mojimoji が使用する localStorage キー:
 ```
 - version: データ移行用の API バージョン（現在: 1）
 - ノードタイプ別のデータ形式:
-  - Relay: `{ relayUrls: string[], filters: Filters }`
+  - Relay: `{ relaySource?: "auto" | "manual", relayUrls: string[], filters: Filters }`
+    - relaySource: オプション、後方互換性のためデフォルトは "manual"
   - Operator: `{ operation: "and" | "or" | "a-b" }`
   - Search: `{ searchText: string, exclude: boolean }`
   - Language: `{ language: string }`

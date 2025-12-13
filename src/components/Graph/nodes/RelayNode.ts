@@ -5,9 +5,11 @@ import type { RxNostr } from 'rx-nostr';
 import { verifier } from '@rx-nostr/crypto';
 import i18next from 'i18next';
 import { eventSocket } from './types';
-import { TextAreaControl, FilterControl, type Filters } from './controls';
+import { TextAreaControl, SelectControl, FilterControl, type Filters } from './controls';
 import type { NostrEvent, Profile, EventSignal } from '../../../nostr/types';
 import { decodeBech32ToHex, isHex64, parseDateToTimestamp } from '../../../nostr/types';
+import { isNip07Available, getPubkey } from '../../../nostr/nip07';
+import { fetchUserRelays } from '../../../nostr/graphStorage';
 
 const DEBUG = false;
 
@@ -214,13 +216,18 @@ const filtersToNostrFilters = (filters: Filters): Record<string, unknown>[] => {
   }).filter((f) => Object.keys(f).length > 0);
 };
 
+// Relay source type: auto (from kind:10002) or manual (from textarea)
+export type RelaySourceType = 'auto' | 'manual';
+
 export class RelayNode extends ClassicPreset.Node {
   static readonly nodeType = 'Relay';
   readonly nodeType = 'Relay';
   width = 280;
   height: number | undefined = undefined; // auto-calculated based on content
 
+  private relaySource: RelaySourceType = 'manual';
   private relayUrls: string[] = [getDefaultRelayUrl()];
+  private autoRelayUrls: string[] = []; // Cached relay URLs from kind:10002
   private filters: Filters = getDefaultFilters();
 
   // RxJS Observable for output events (with signal type)
@@ -247,6 +254,30 @@ export class RelayNode extends ClassicPreset.Node {
 
     this.addOutput('output', new ClassicPreset.Output(eventSocket, 'Events'));
 
+    // Relay source type control
+    this.addControl(
+      'relaySource',
+      new SelectControl(
+        this.relaySource,
+        i18next.t('nodes.relay.source'),
+        [
+          { value: 'auto', label: i18next.t('nodes.relay.sourceAuto') },
+          { value: 'manual', label: i18next.t('nodes.relay.sourceManual') },
+        ],
+        (value) => {
+          this.relaySource = value as RelaySourceType;
+          // Update textarea disabled state
+          const relaysControl = this.controls['relays'] as TextAreaControl;
+          if (relaysControl) {
+            relaysControl.disabled = value === 'auto';
+          }
+          if (value === 'auto') {
+            this.loadAutoRelays();
+          }
+        }
+      )
+    );
+
     this.addControl(
       'relays',
       new TextAreaControl(
@@ -255,7 +286,8 @@ export class RelayNode extends ClassicPreset.Node {
         'wss://relay.example.com',
         (value) => {
           this.relayUrls = value.split('\n').filter(url => url.trim());
-        }
+        },
+        this.relaySource === 'auto' // disabled when auto
       )
     );
 
@@ -271,8 +303,35 @@ export class RelayNode extends ClassicPreset.Node {
     );
   }
 
+  // Load relay URLs from kind:10002 via NIP-07
+  private async loadAutoRelays(): Promise<void> {
+    if (!isNip07Available()) {
+      if (DEBUG) console.log('NIP-07 not available, cannot load auto relays');
+      return;
+    }
+
+    try {
+      const pubkey = await getPubkey();
+      const relays = await fetchUserRelays(pubkey);
+      if (relays.length > 0) {
+        this.autoRelayUrls = relays;
+        if (DEBUG) console.log('Auto relays loaded:', relays);
+      }
+    } catch (error) {
+      if (DEBUG) console.error('Failed to load auto relays:', error);
+    }
+  }
+
   getRelayUrls(): string[] {
+    // Return auto relays when source is 'auto' and we have cached auto relays
+    if (this.relaySource === 'auto' && this.autoRelayUrls.length > 0) {
+      return this.autoRelayUrls;
+    }
     return this.relayUrls;
+  }
+
+  getRelaySource(): RelaySourceType {
+    return this.relaySource;
   }
 
   getFilters(): Record<string, unknown>[] {
@@ -281,12 +340,15 @@ export class RelayNode extends ClassicPreset.Node {
 
   serialize() {
     return {
+      relaySource: this.relaySource,
       relayUrls: this.relayUrls,
       filters: this.filters,
     };
   }
 
-  deserialize(data: { relayUrls: string[]; filters?: Filters; filterJson?: string }) {
+  deserialize(data: { relaySource?: RelaySourceType; relayUrls: string[]; filters?: Filters; filterJson?: string }) {
+    // Backward compatibility: default to 'manual' if relaySource is not present
+    this.relaySource = data.relaySource || 'manual';
     this.relayUrls = data.relayUrls;
 
     // Handle backward compatibility: convert old filterJson to new filters format
@@ -307,9 +369,21 @@ export class RelayNode extends ClassicPreset.Node {
       }
     }
 
+    // Update relay source control
+    const relaySourceControl = this.controls['relaySource'] as SelectControl;
+    if (relaySourceControl) {
+      relaySourceControl.value = this.relaySource;
+    }
+
     const relaysControl = this.controls['relays'] as TextAreaControl;
     if (relaysControl) {
       relaysControl.value = this.relayUrls.join('\n');
+      relaysControl.disabled = this.relaySource === 'auto';
+    }
+
+    // If auto, load auto relays
+    if (this.relaySource === 'auto') {
+      this.loadAutoRelays();
     }
 
     const filterControl = this.controls['filter'] as FilterControl;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Presets } from 'rete-react-plugin';
 import { TextInputControl, TextAreaControl, SelectControl, CheckboxControl, FilterControl, SimpleFilterControl, FILTER_FIELDS, NOSTR_FILTER_FIELDS, type Filters, type FilterElement } from './nodes/controls';
 import './CustomNode.css';
@@ -50,6 +50,12 @@ function TextInputControlComponent({ control, nodeId }: { control: TextInputCont
 
 function TextAreaControlComponent({ control, nodeId }: { control: TextAreaControl; nodeId: string }) {
   const [value, setValue] = useState(control.value);
+  const [disabled, setDisabled] = useState(control.disabled);
+
+  // Update disabled state when control changes
+  useEffect(() => {
+    setDisabled(control.disabled);
+  }, [control.disabled]);
 
   return (
     <div className="control-wrapper">
@@ -58,6 +64,7 @@ function TextAreaControlComponent({ control, nodeId }: { control: TextAreaContro
         className="control-textarea"
         value={value}
         placeholder={control.placeholder}
+        disabled={disabled}
         onChange={(e) => setValue(e.target.value)}
         onBlur={() => {
           // Only dispatch change event if value actually changed

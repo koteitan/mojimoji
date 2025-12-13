@@ -78,18 +78,21 @@ export class TextAreaControl extends ClassicPreset.Control {
   label: string;
   placeholder: string;
   onChange: (value: string) => void;
+  disabled: boolean;
 
   constructor(
     value: string,
     label: string,
     placeholder: string,
-    onChange: (value: string) => void
+    onChange: (value: string) => void,
+    disabled: boolean = false
   ) {
     super();
     this.value = value;
     this.label = label;
     this.placeholder = placeholder;
     this.onChange = onChange;
+    this.disabled = disabled;
   }
 }
 

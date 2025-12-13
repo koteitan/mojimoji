@@ -132,7 +132,8 @@ For manual saving, we will add:
 ```
 - version: API version for data migration (current: 1)
 - node data formats by type:
-  - Relay: `{ relayUrls: string[], filters: Filters }`
+  - Relay: `{ relaySource?: "auto" | "manual", relayUrls: string[], filters: Filters }`
+    - relaySource: optional, defaults to "manual" for backward compatibility
   - Operator: `{ operation: "and" | "or" | "a-b" }`
   - Search: `{ searchText: string, exclude: boolean }`
   - Language: `{ language: string }`
