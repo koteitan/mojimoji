@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getGraphsInDirectory, deleteGraphAtPath, deleteGraphsInDirectory } from '../../utils/localStorage';
 import { isNip07Available, getPubkey } from '../../nostr/nip07';
-import { loadGraphsFromNostr, getNostrItemsInDirectory, deleteGraphFromNostr, getProfileFromCache, fetchUserRelays, type NostrGraphItem } from '../../nostr/graphStorage';
+import { loadGraphsFromNostr, getNostrItemsInDirectory, deleteGraphFromNostr, getProfileFromCache, fetchUserRelays, fetchAndCacheProfiles, type NostrGraphItem } from '../../nostr/graphStorage';
 import { formatNpub } from '../../nostr/types';
 import './Dialog.css';
 
@@ -41,7 +41,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
     }
   }, [isOpen]);
 
-  // Load user's pubkey, relay list, and Nostr graphs when Nostr tab is selected
+  // Load user's pubkey, relay list, Nostr graphs, and fetch profiles when Nostr tab is selected
   useEffect(() => {
     if (isOpen && destination === 'nostr') {
       const loadNostrData = async () => {
@@ -59,6 +59,8 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
           if (relays.length > 0) {
             setRelayUrls(relays.join('\n'));
           }
+          // Fetch and cache profiles from relays for autocomplete
+          fetchAndCacheProfiles(relays.length > 0 ? relays : undefined);
           const graphs = await loadGraphsFromNostr('mine');
           setNostrGraphs(graphs);
         } catch (e) {

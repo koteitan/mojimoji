@@ -1,7 +1,7 @@
 import type { GraphData } from '../graph/types';
 
 // Re-export graph types from shared location
-export { GRAPH_DATA_VERSION, type ViewTransform, type GraphData } from '../graph/types';
+export { GRAPH_DATA_VERSION, type ViewTransform, type GraphData, type GraphVisibility } from '../graph/types';
 
 // Auto-save key (current working graph)
 const AUTO_SAVE_KEY = 'mojimoji-graph';

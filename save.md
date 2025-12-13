@@ -19,22 +19,6 @@
 
 #### in Nostr Relay (NIP-78 event)
 ```json
-// Public
-{
-  "id": "[event-id]",
-  "pubkey": "[user-pubkey]",
-  "created_at": [unix-timestamp],
-  "kind": 30078,
-  "tags": [
-    ["d", "mojimoji/graphs/[graph path]"],
-    ["public"],
-    ["client", "mojimoji"]
-  ],
-  "content": "[graph data as JSON string]",
-  "sig": "[signature]"
-}
-
-// For yourself (no public tag)
 {
   "id": "[event-id]",
   "pubkey": "[user-pubkey]",
@@ -48,8 +32,9 @@
   "sig": "[signature]"
 }
 ```
-- Public: has `["public"]` tag, searchable by anyone using `#public` filter
-- For yourself: no `public` tag, search requires `authors` filter with your pubkey
+Note:
+- Visibility is stored in the graph data content (API version 2+)
+- When loading older (version 1) events, visibility falls back to checking the `["public"]` Nostr tag
 
 #### in LocalStorage
 Current localStorage keys used by mojimoji:
@@ -103,7 +88,7 @@ For manual saving, we will add:
 ### graph data
 ```json
 {
-  "version": 1,
+  "version": 2,
   "nodes": [
     {
       "id": "[node-id]",
@@ -127,10 +112,13 @@ For manual saving, we will add:
     "x": number,
     "y": number,
     "k": number
-  }
+  },
+  "visibility": "public" | "for yourself"
 }
 ```
-- version: API version for data migration (current: 1)
+- version: API version for data migration (current: 2)
+  - Version 1: Initial version
+  - Version 2: Added visibility field to graph data (moved from Nostr tag)
 - node data formats by type:
   - Relay: `{ relaySource?: "auto" | "manual", relayUrls: string[], filters: Filters }`
     - relaySource: optional, defaults to "manual" for backward compatibility
@@ -211,6 +199,14 @@ For manual saving, we will add:
         - caption: "Load from relays (default: kind:10002)"
         - textarea: pre-populated with kind:10002 relay list
       - Filter: [For yourself] [Public] [By author] radio buttons (default: For yourself)
+        - Visibility filter behavior:
+
+          | Filter       | My "For yourself" | My "Public" | Other's "For yourself" | Other's "Public" |
+          |--------------|-------------------|-------------|------------------------|------------------|
+          | For yourself | ✔                 |             |                        |                  |
+          | Public       |                   | ✔           |                        | ✔                |
+          | By author    | ✔ (if me)         | ✔ (if me)   | ✔                      | ✔                |
+
       - (By author only): Author input with autocomplete
         - text input for npub, hex, or name
         - dropdown suggestions: [icon] [name] (from cached kind:0 profiles)
@@ -248,7 +244,8 @@ For manual saving, we will add:
 ### Loading from Nostr Relay
 - Use the pubkey from NIP-07 browser extension as default search pubkey
 - Query relays with filter: `{ kinds: [30078], authors: [pubkey], "#d": ["mojimoji/graphs/..."] }`
-- For public graphs, also query with: `{ kinds: [30078], "#public": [""] }`
+- For public graphs (version 1): query with `{ kinds: [30078], "#public": [""] }`
+- For public graphs (version 2): visibility is stored in graph data, client-side filtering is applied
 
 ## Deletion
 

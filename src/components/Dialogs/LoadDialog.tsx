@@ -9,6 +9,7 @@ import {
   getProfileFromCache,
   getAllCachedProfiles,
   fetchUserRelays,
+  fetchAndCacheProfiles,
   type NostrGraphItem
 } from '../../nostr/graphStorage';
 import { formatNpub, decodeBech32ToHex, isHex64 } from '../../nostr/types';
@@ -55,16 +56,17 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
     }
   }, [isOpen]);
 
-  // Load user's pubkey and relay list when Nostr tab is selected
+  // Load user's pubkey, relay list, and fetch profiles when Nostr tab is selected
   useEffect(() => {
     if (isOpen && source === 'nostr') {
       const loadUserData = async () => {
+        let relays: string[] = [];
         if (isNip07Available()) {
           try {
             const pubkey = await getPubkey();
             setUserPubkey(pubkey);
             // Fetch user's relay list from kind:10002
-            const relays = await fetchUserRelays(pubkey);
+            relays = await fetchUserRelays(pubkey);
             if (relays.length > 0) {
               setRelayUrls(relays.join('\n'));
             }
@@ -72,6 +74,8 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
             // NIP-07 available but user denied
           }
         }
+        // Fetch and cache profiles from relays for autocomplete
+        fetchAndCacheProfiles(relays.length > 0 ? relays : undefined);
       };
       loadUserData();
     }
@@ -100,9 +104,12 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
             return;
           }
 
+          // Pass relay URLs from the textarea to the query
+          const relays = relayUrls.split('\n').filter(url => url.trim());
           const graphs = await loadGraphsFromNostr(
             nostrFilter,
-            nostrFilter === 'by-author' ? authorPubkey! : undefined
+            nostrFilter === 'by-author' ? authorPubkey! : undefined,
+            relays.length > 0 ? relays : undefined
           );
           setNostrGraphs(graphs);
         } catch (e) {
@@ -114,7 +121,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
       };
       loadNostrGraphs();
     }
-  }, [isOpen, source, nostrFilter, authorPubkey, t]);
+  }, [isOpen, source, nostrFilter, authorPubkey, relayUrls, t]);
 
   // Update author suggestions when input changes
   useEffect(() => {
@@ -155,8 +162,37 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
   // Get Nostr items for current directory
   const nostrItems = useMemo(() => {
     if (source !== 'nostr') return [];
-    return getNostrItemsInDirectory(nostrGraphs, fullPath, userPubkey);
-  }, [source, nostrGraphs, fullPath, userPubkey]);
+
+    // For 'by-author' filter, don't show items until an author is selected
+    if (nostrFilter === 'by-author' && !authorPubkey) {
+      return [];
+    }
+
+    const items = getNostrItemsInDirectory(nostrGraphs, fullPath, userPubkey);
+
+    // When filter is 'mine' (For yourself), show only private items
+    if (nostrFilter === 'mine') {
+      return items.filter(item => {
+        // Always show directories
+        if (item.isDirectory) return true;
+        // Show only 'For yourself' items (hide public items)
+        return item.visibility !== 'public';
+      });
+    }
+
+    // When filter is 'public', show only public items (hide all 'For yourself' items)
+    if (nostrFilter === 'public') {
+      return items.filter(item => {
+        // Always show directories
+        if (item.isDirectory) return true;
+        // Show only public items (hide 'For yourself' items from everyone including myself)
+        return item.visibility === 'public';
+      });
+    }
+
+    // 'by-author' filter shows all items (both public and private)
+    return items;
+  }, [source, nostrGraphs, fullPath, userPubkey, nostrFilter, authorPubkey]);
 
   const items = source === 'local' ? localItems : [];
 

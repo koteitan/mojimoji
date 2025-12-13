@@ -2,7 +2,12 @@
 // Used by localStorage, Nostr relay storage, and file export/import
 
 // Current graph data version for migration support
-export const GRAPH_DATA_VERSION = 1;
+// Version history:
+//   1: Initial version
+//   2: Added visibility field to graph data (moved from Nostr tag)
+export const GRAPH_DATA_VERSION = 2;
+
+export type GraphVisibility = 'public' | 'private';
 
 export interface ViewTransform {
   x: number;
@@ -15,4 +20,5 @@ export interface GraphData {
   nodes: unknown[];
   connections: unknown[];
   viewTransform?: ViewTransform;
+  visibility?: GraphVisibility;
 }

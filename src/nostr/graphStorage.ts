@@ -7,7 +7,7 @@ import { verifier } from '@rx-nostr/crypto';
 import { getPubkey, signEvent, isNip07Available } from './nip07';
 import type { UnsignedEvent } from './nip07';
 import type { NostrEvent, Profile } from './types';
-import type { GraphData } from '../utils/localStorage';
+import type { GraphData, GraphVisibility } from '../graph/types';
 
 // Kind constants
 const KIND_RELAY_LIST = 10002;
@@ -41,6 +41,7 @@ export interface NostrGraphItem {
   createdAt: number;
   pubkey: string;
   isDirectory: boolean;
+  visibility?: GraphVisibility;
   event?: NostrEvent;
 }
 
@@ -123,21 +124,24 @@ export async function saveGraphToNostr(
     }
   }
 
-  // Build tags
+  // Build tags (visibility is stored in graph data, not as a tag in version 2)
   const tags: string[][] = [
     ['d', GRAPH_PATH_PREFIX + path],
     ['client', 'mojimoji'],
   ];
-  if (options.visibility === 'public') {
-    tags.push(['public', '']);
-  }
+
+  // Add visibility to graph data (API version 2)
+  const graphDataWithVisibility: GraphData = {
+    ...graphData,
+    visibility: options.visibility,
+  };
 
   // Create unsigned event
   const unsignedEvent: UnsignedEvent = {
     kind: KIND_APP_DATA,
     created_at: Math.floor(Date.now() / 1000),
     tags,
-    content: JSON.stringify(graphData),
+    content: JSON.stringify(graphDataWithVisibility),
   };
 
   // Sign event
@@ -354,6 +358,23 @@ export async function deleteGraphFromNostr(
   await new Promise(resolve => setTimeout(resolve, 1000));
 }
 
+// Extract visibility from event (check graph data first, then fall back to tag)
+function extractVisibility(event: NostrEvent): GraphVisibility {
+  // First, try to get visibility from graph data (API version 2+)
+  try {
+    const graphData = JSON.parse(event.content) as GraphData;
+    if (graphData.visibility) {
+      return graphData.visibility;
+    }
+  } catch {
+    // Failed to parse content, fall back to tag
+  }
+
+  // Fall back to checking Nostr tag (API version 1 compatibility)
+  const hasPublicTag = event.tags.some(t => t[0] === 'public');
+  return hasPublicTag ? 'public' : 'private';
+}
+
 // Parse graph events into directory structure
 function parseGraphEvents(events: NostrEvent[], _userPubkey: string | null): NostrGraphItem[] {
   const items: NostrGraphItem[] = [];
@@ -373,12 +394,16 @@ function parseGraphEvents(events: NostrEvent[], _userPubkey: string | null): Nos
       directories.add(dirPath);
     }
 
+    // Extract visibility from graph data or tag
+    const visibility = extractVisibility(event);
+
     items.push({
       path: fullPath,
       name,
       createdAt: event.created_at,
       pubkey: event.pubkey,
       isDirectory: false,
+      visibility,
       event,
     });
   }
@@ -476,4 +501,91 @@ export function getAllCachedProfiles(): Array<{ pubkey: string; profile: Profile
   } catch {
     return [];
   }
+}
+
+// Update profile cache with new profiles
+function updateProfileCache(profiles: Record<string, Profile>): void {
+  const cacheStr = localStorage.getItem('mojimoji-profile-cache');
+  let cache: Record<string, Profile> = {};
+  if (cacheStr) {
+    try {
+      cache = JSON.parse(cacheStr) as Record<string, Profile>;
+    } catch {
+      // ignore
+    }
+  }
+  // Merge new profiles into cache
+  Object.assign(cache, profiles);
+  localStorage.setItem('mojimoji-profile-cache', JSON.stringify(cache));
+}
+
+// Fetch profiles from relays and update cache
+export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<number> {
+  let relays = relayUrls?.filter(url => url.trim());
+  if (!relays || relays.length === 0) {
+    // Try to get user's relays from NIP-07
+    if (isNip07Available()) {
+      try {
+        const pubkey = await getPubkey();
+        relays = await fetchUserRelays(pubkey);
+      } catch {
+        // ignore
+      }
+    }
+  }
+  if (!relays || relays.length === 0) {
+    relays = WELL_KNOWN_RELAYS;
+  }
+
+  return new Promise((resolve) => {
+    const client = getRxNostr();
+    client.setDefaultRelays(relays!);
+
+    const rxReq = createRxForwardReq();
+    const profiles: Record<string, Profile> = {};
+    let resolved = false;
+
+    const subscription = client.use(rxReq).subscribe({
+      next: (packet) => {
+        const event = packet.event as NostrEvent;
+        if (event.kind === 0) {
+          try {
+            const content = JSON.parse(event.content);
+            profiles[event.pubkey] = {
+              name: content.name || '',
+              display_name: content.display_name || '',
+              picture: content.picture || '',
+              about: content.about || '',
+              nip05: content.nip05 || '',
+            };
+          } catch {
+            // ignore parse errors
+          }
+        }
+      },
+      error: () => {
+        if (!resolved) {
+          resolved = true;
+          updateProfileCache(profiles);
+          resolve(Object.keys(profiles).length);
+        }
+      },
+    });
+
+    // Emit filter for recent profiles
+    rxReq.emit({
+      kinds: [0],
+      limit: 500,
+    });
+
+    // Timeout after 5 seconds
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        subscription.unsubscribe();
+        updateProfileCache(profiles);
+        resolve(Object.keys(profiles).length);
+      }
+    }, 5000);
+  });
 }
