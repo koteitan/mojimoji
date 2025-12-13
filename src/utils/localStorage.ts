@@ -1,24 +1,13 @@
+import type { GraphData } from '../graph/types';
+
+// Re-export graph types from shared location
+export { GRAPH_DATA_VERSION, type ViewTransform, type GraphData } from '../graph/types';
+
 // Auto-save key (current working graph)
 const AUTO_SAVE_KEY = 'mojimoji-graph';
 
 // Manual saves key (array of saved graphs)
 const SAVED_GRAPHS_KEY = 'mojimoji-saved-graphs';
-
-export interface ViewTransform {
-  x: number;
-  y: number;
-  k: number;
-}
-
-// Current graph data version for migration support
-export const GRAPH_DATA_VERSION = 1;
-
-export interface GraphData {
-  version?: number;
-  nodes: unknown[];
-  connections: unknown[];
-  viewTransform?: ViewTransform;
-}
 
 export interface SavedGraphEntry {
   path: string;

@@ -250,7 +250,7 @@ User Inrterface is as follows.
   - when the localStorage is empty:
     - create a default graph:
       - one Relay node: default settings, position (100, 100)
-      - one Timeline node: timeline name: "Timeline", position (120, 400)
+      - one Timeline node: timeline name: "Timeline", position (120, 650)
       - arrangement: vertical (Relay on top, Timeline below)
       - one edge: connect the Relay node output to the Timeline node input.
   - when there is localStorage:
@@ -370,6 +370,8 @@ User Inrterface is as follows.
   │   │   └── locales/
   │   │       ├── en.json
   │   │       └── ja.json
+  │   ├── graph/
+  │   │   └── types.ts
   │   ├── nostr/
   │   │   └── types.ts
   │   └── utils/

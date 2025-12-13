@@ -1493,7 +1493,7 @@ export function GraphEditor({
         // Create default Timeline node (below Relay node - vertical arrangement)
         const timelineNode = new TimelineNode();
         await editor.addNode(timelineNode);
-        await area.translate(timelineNode.id, { x: 120, y: 400 });
+        await area.translate(timelineNode.id, { x: 120, y: 650 });
         onTimelineCreate(timelineNode.id, timelineNode.getTimelineName());
 
         // Connect Relay node to Timeline node
