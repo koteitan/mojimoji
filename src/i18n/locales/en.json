@@ -50,6 +50,10 @@
     "cancel": "Cancel",
     "save": {
       "title": "Save Graph",
+      "saveTo": "Save to:",
+      "browserDescription": "Save graphs in your browser. The graphs will be deleted when you clear the browser cache.",
+      "nostrDescription": "Save graphs to your relays listed in kind:10002. Your pubkey is obtained from the NIP-07 extension.",
+      "fileDescription": "Download the graph as a JSON file to your computer.",
       "nameLabel": "Graph Name",
       "namePlaceholder": "Enter graph name",
       "visibilityLabel": "Visibility",
@@ -65,6 +69,10 @@
     },
     "load": {
       "title": "Load Graph",
+      "loadFrom": "Load from:",
+      "browserDescription": "Load graphs saved in your browser.",
+      "nostrDescription": "Load graphs from your relays listed in kind:10002. Your pubkey is obtained from the NIP-07 extension.",
+      "fileDescription": "Load a graph from a JSON file on your computer.",
       "pubkeyLabel": "Pubkey (npub or hex)",
       "pubkeyPlaceholder": "Enter pubkey to search",
       "filterLabel": "Filter",
@@ -74,7 +82,11 @@
       "emptyDirectory": "No graphs found",
       "errorNoFile": "Please select a file",
       "errorNoSelection": "Please select a graph",
-      "errorUnknown": "Failed to load graph"
+      "errorUnknown": "Failed to load graph",
+      "deleteGraph": "Delete graph",
+      "deleteFolder": "Delete folder",
+      "confirmDeleteGraph": "Delete \"{{name}}\"?",
+      "confirmDeleteFolder": "Delete folder \"{{name}}\" and all graphs inside?"
     }
   }
 }

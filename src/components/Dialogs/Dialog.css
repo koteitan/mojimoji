@@ -60,11 +60,30 @@
   padding: 16px;
 }
 
+/* Destination/Source label */
+.dialog-destination-label {
+  font-size: 13px;
+  color: #aaa;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+/* Destination/Source description */
+.dialog-destination-description {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  background: #252525;
+  border-radius: 4px;
+  line-height: 1.4;
+}
+
 /* Dialog tabs */
 .dialog-tabs {
   display: flex;
   gap: 4px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .dialog-tab {
@@ -164,6 +183,28 @@
 .item-date {
   font-size: 11px;
   color: #888;
+}
+
+.item-delete {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  margin-left: 4px;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+
+.browser-item:hover .item-delete {
+  opacity: 1;
+}
+
+.item-delete:hover {
+  background: #533;
+  color: #faa;
 }
 
 .item-author {

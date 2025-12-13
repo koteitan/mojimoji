@@ -119,98 +119,54 @@ export function deleteGraphAtPath(path: string): void {
   setSavedGraphsData(filtered);
 }
 
-// Key for storing explicit directories
-const SAVED_DIRECTORIES_KEY = 'mojimoji-saved-directories';
-
-function getSavedDirectories(): string[] {
-  try {
-    const data = localStorage.getItem(SAVED_DIRECTORIES_KEY);
-    if (data) {
-      return JSON.parse(data) as string[];
-    }
-  } catch (e) {
-    console.error('Failed to load saved directories:', e);
-  }
-  return [];
-}
-
-function setSavedDirectories(dirs: string[]): void {
-  try {
-    localStorage.setItem(SAVED_DIRECTORIES_KEY, JSON.stringify(dirs));
-  } catch (e) {
-    console.error('Failed to save directories:', e);
-  }
-}
-
-// Create an empty directory
-export function createDirectory(path: string): void {
-  const dirs = getSavedDirectories();
-  if (!dirs.includes(path)) {
-    dirs.push(path);
-    setSavedDirectories(dirs);
-  }
+// Delete all graphs in a directory (folder)
+export function deleteGraphsInDirectory(directory: string): number {
+  const entries = getSavedGraphsData();
+  const prefix = `${directory}/`;
+  const filtered = entries.filter(e => !e.path.startsWith(prefix) && e.path !== directory);
+  const deletedCount = entries.length - filtered.length;
+  setSavedGraphsData(filtered);
+  return deletedCount;
 }
 
 // Get list of graphs and directories in a directory
-export function getGraphsInDirectory(directory: string): SavedGraphItem[] {
+// Directories are derived from graph paths (no explicit directory storage)
+// localDirectories: optional array of locally-created directories (for session-only folders)
+export function getGraphsInDirectory(directory: string, localDirectories?: string[]): SavedGraphItem[] {
   const entries = getSavedGraphsData();
-  const explicitDirs = getSavedDirectories();
   const prefix = directory ? `${directory}/` : '';
   const items: SavedGraphItem[] = [];
   const seenDirs = new Set<string>();
 
-  // Add explicitly created directories
-  for (const dir of explicitDirs) {
-    if (!directory && !dir.includes('/')) {
-      // Top-level directory at root
-      if (!seenDirs.has(dir)) {
-        seenDirs.add(dir);
-        items.push({
-          path: dir,
-          name: dir,
-          savedAt: Date.now(),
-          isDirectory: true,
-        });
-      }
-    } else if (directory && dir.startsWith(prefix)) {
-      // Subdirectory within current directory
-      const relativePath = dir.slice(prefix.length);
-      if (!relativePath.includes('/')) {
-        // Direct child directory
+  // Add locally-created directories (session-only, not persisted)
+  if (localDirectories) {
+    for (const dir of localDirectories) {
+      if (!directory && !dir.includes('/')) {
+        // Top-level directory at root
         if (!seenDirs.has(dir)) {
           seenDirs.add(dir);
           items.push({
             path: dir,
-            name: relativePath,
+            name: dir,
             savedAt: Date.now(),
             isDirectory: true,
           });
         }
-      } else {
-        // Nested subdirectory - add only the immediate child
-        const subDir = relativePath.split('/')[0];
-        const fullSubDirPath = prefix + subDir;
-        if (!seenDirs.has(fullSubDirPath)) {
-          seenDirs.add(fullSubDirPath);
-          items.push({
-            path: fullSubDirPath,
-            name: subDir,
-            savedAt: Date.now(),
-            isDirectory: true,
-          });
+      } else if (directory && dir.startsWith(prefix)) {
+        // Subdirectory within current directory
+        const relativePath = dir.slice(prefix.length);
+        if (!relativePath.includes('/')) {
+          // Direct child directory
+          if (!seenDirs.has(dir)) {
+            seenDirs.add(dir);
+            items.push({
+              path: dir,
+              name: relativePath,
+              savedAt: Date.now(),
+              isDirectory: true,
+            });
+          }
         }
-      }
-    } else if (!directory && dir.includes('/')) {
-      // Nested directory at root - add only the top-level part
-      const topDir = dir.split('/')[0];
-      if (!seenDirs.has(topDir)) {
-        seenDirs.add(topDir);
-        items.push({
-          path: topDir,
-          name: topDir,
-          savedAt: Date.now(),
-          isDirectory: true,
-        });
       }
     }
   }

@@ -1,24 +1,17 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getGraphsInDirectory, deleteGraphAtPath, deleteGraphsInDirectory } from '../../utils/localStorage';
 import './Dialog.css';
 
 type LoadSource = 'local' | 'nostr' | 'file';
-
-interface SavedGraph {
-  path: string;
-  name: string;
-  savedAt: number;
-  isDirectory: boolean;
-}
 
 interface LoadDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onLoad: (source: LoadSource, pathOrFile: string | File) => Promise<void>;
-  getSavedGraphs: (directory: string) => SavedGraph[];
 }
 
-export function LoadDialog({ isOpen, onClose, onLoad, getSavedGraphs }: LoadDialogProps) {
+export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
   const { t } = useTranslation();
   const [source, setSource] = useState<LoadSource>('local');
   const [currentPath, setCurrentPath] = useState<string[]>([]);
@@ -28,10 +21,13 @@ export function LoadDialog({ isOpen, onClose, onLoad, getSavedGraphs }: LoadDial
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const fullPath = currentPath.length > 0 ? currentPath.join('/') : '';
-  // Only get saved graphs for localStorage - Nostr will be implemented later
-  const items = source === 'local' ? getSavedGraphs(fullPath) : [];
+  // Get saved graphs - directories are derived from graph paths
+  const items = useMemo(() => {
+    return source === 'local' ? getGraphsInDirectory(fullPath) : [];
+  }, [source, fullPath, refreshKey]);
 
   const handleNavigate = useCallback((name: string) => {
     setCurrentPath(prev => [...prev, name]);
@@ -51,6 +47,23 @@ export function LoadDialog({ isOpen, onClose, onLoad, getSavedGraphs }: LoadDial
   const handleSelectGraph = useCallback((path: string) => {
     setSelectedGraph(path);
   }, []);
+
+  const handleDeleteGraph = useCallback((e: React.MouseEvent, path: string, name: string) => {
+    e.stopPropagation();
+    if (confirm(t('dialogs.load.confirmDeleteGraph', { name }))) {
+      deleteGraphAtPath(path);
+      setSelectedGraph(null);
+      setRefreshKey(prev => prev + 1);
+    }
+  }, [t]);
+
+  const handleDeleteFolder = useCallback((e: React.MouseEvent, path: string, name: string) => {
+    e.stopPropagation();
+    if (confirm(t('dialogs.load.confirmDeleteFolder', { name }))) {
+      deleteGraphsInDirectory(path);
+      setRefreshKey(prev => prev + 1);
+    }
+  }, [t]);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -113,13 +126,14 @@ export function LoadDialog({ isOpen, onClose, onLoad, getSavedGraphs }: LoadDial
         </div>
 
         <div className="dialog-content">
-          {/* Source tabs */}
+          {/* Source label and tabs */}
+          <div className="dialog-destination-label">{t('dialogs.load.loadFrom')}</div>
           <div className="dialog-tabs">
             <button
               className={`dialog-tab ${source === 'local' ? 'active' : ''}`}
               onClick={(e) => { e.stopPropagation(); setSource('local'); setCurrentPath([]); setSelectedGraph(null); }}
             >
-              LocalStorage
+              Browser
             </button>
             <button
               className={`dialog-tab ${source === 'nostr' ? 'active' : ''}`}
@@ -133,6 +147,11 @@ export function LoadDialog({ isOpen, onClose, onLoad, getSavedGraphs }: LoadDial
             >
               File
             </button>
+          </div>
+          <div className="dialog-destination-description">
+            {source === 'local' && t('dialogs.load.browserDescription')}
+            {source === 'nostr' && t('dialogs.load.nostrDescription')}
+            {source === 'file' && t('dialogs.load.fileDescription')}
           </div>
 
           {source === 'nostr' && (
@@ -192,6 +211,13 @@ export function LoadDialog({ isOpen, onClose, onLoad, getSavedGraphs }: LoadDial
                   >
                     <span className="item-icon">📁</span>
                     <span className="item-name">{item.name}</span>
+                    <button
+                      className="item-delete"
+                      onClick={(e) => handleDeleteFolder(e, item.path, item.name)}
+                      title={t('dialogs.load.deleteFolder')}
+                    >
+                      ×
+                    </button>
                   </div>
                 ))}
                 {items.filter(item => !item.isDirectory).map(item => (
@@ -205,6 +231,13 @@ export function LoadDialog({ isOpen, onClose, onLoad, getSavedGraphs }: LoadDial
                     <span className="item-date">
                       {new Date(item.savedAt).toLocaleString()}
                     </span>
+                    <button
+                      className="item-delete"
+                      onClick={(e) => handleDeleteGraph(e, item.path, item.name)}
+                      title={t('dialogs.load.deleteGraph')}
+                    >
+                      ×
+                    </button>
                   </div>
                 ))}
                 {items.length === 0 && (

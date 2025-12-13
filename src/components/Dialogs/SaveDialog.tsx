@@ -1,26 +1,18 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getGraphsInDirectory, deleteGraphAtPath, deleteGraphsInDirectory } from '../../utils/localStorage';
 import './Dialog.css';
 
 type SaveDestination = 'local' | 'nostr' | 'file';
 type NostrVisibility = 'public' | 'private';
 
-interface SavedGraph {
-  path: string;
-  name: string;
-  savedAt: number;
-  isDirectory: boolean;
-}
-
 interface SaveDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (destination: SaveDestination, path: string, options?: { visibility?: NostrVisibility; relayUrls?: string[] }) => Promise<void>;
-  getSavedGraphs: (directory: string) => SavedGraph[];
-  createDirectory: (path: string) => void;
 }
 
-export function SaveDialog({ isOpen, onClose, onSave, getSavedGraphs, createDirectory }: SaveDialogProps) {
+export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
   const { t } = useTranslation();
   const [destination, setDestination] = useState<SaveDestination>('local');
   const [currentPath, setCurrentPath] = useState<string[]>([]);
@@ -29,14 +21,16 @@ export function SaveDialog({ isOpen, onClose, onSave, getSavedGraphs, createDire
   const [relayUrls, setRelayUrls] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Session-only directories (not persisted to localStorage)
+  const [localDirectories, setLocalDirectories] = useState<string[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const fullPath = currentPath.length > 0 ? currentPath.join('/') : '';
-  // Only get saved graphs for localStorage - Nostr will be implemented later
-  // refreshKey is used to force re-fetch when a folder is created
+  // Get saved graphs with locally-created directories
+  // Directories are derived from graph paths + session-only local directories
   const items = useMemo(() => {
-    return destination === 'local' ? getSavedGraphs(fullPath) : [];
-  }, [destination, fullPath, getSavedGraphs, refreshKey]);
+    return destination === 'local' ? getGraphsInDirectory(fullPath, localDirectories) : [];
+  }, [destination, fullPath, localDirectories, refreshKey]);
 
   const handleNavigate = useCallback((name: string) => {
     setCurrentPath(prev => [...prev, name]);
@@ -54,15 +48,35 @@ export function SaveDialog({ isOpen, onClose, onSave, getSavedGraphs, createDire
     setGraphName(name);
   }, []);
 
+  const handleDeleteGraph = useCallback((e: React.MouseEvent, path: string, name: string) => {
+    e.stopPropagation();
+    if (confirm(t('dialogs.load.confirmDeleteGraph', { name }))) {
+      deleteGraphAtPath(path);
+      if (graphName === name) {
+        setGraphName('');
+      }
+      setRefreshKey(prev => prev + 1);
+    }
+  }, [t, graphName]);
+
+  const handleDeleteFolder = useCallback((e: React.MouseEvent, path: string, name: string) => {
+    e.stopPropagation();
+    if (confirm(t('dialogs.load.confirmDeleteFolder', { name }))) {
+      deleteGraphsInDirectory(path);
+      // Also remove from local directories if it was session-only
+      setLocalDirectories(prev => prev.filter(d => d !== path && !d.startsWith(path + '/')));
+      setRefreshKey(prev => prev + 1);
+    }
+  }, [t]);
+
   const handleNewFolder = useCallback(() => {
     const folderName = prompt(t('dialogs.save.newFolderPrompt'));
     if (folderName && folderName.trim()) {
       const newPath = fullPath ? `${fullPath}/${folderName.trim()}` : folderName.trim();
-      createDirectory(newPath);
-      // Force refresh to show the new folder
-      setRefreshKey(prev => prev + 1);
+      // Add to session-only local directories
+      setLocalDirectories(prev => [...prev, newPath]);
     }
-  }, [fullPath, createDirectory, t]);
+  }, [fullPath, t]);
 
   const handleSave = useCallback(async () => {
     if (!graphName.trim()) {
@@ -106,13 +120,14 @@ export function SaveDialog({ isOpen, onClose, onSave, getSavedGraphs, createDire
         </div>
 
         <div className="dialog-content">
-          {/* Destination tabs */}
+          {/* Destination label and tabs */}
+          <div className="dialog-destination-label">{t('dialogs.save.saveTo')}</div>
           <div className="dialog-tabs">
             <button
               className={`dialog-tab ${destination === 'local' ? 'active' : ''}`}
               onClick={(e) => { e.stopPropagation(); setDestination('local'); setCurrentPath([]); }}
             >
-              LocalStorage
+              Browser
             </button>
             <button
               className={`dialog-tab ${destination === 'nostr' ? 'active' : ''}`}
@@ -126,6 +141,11 @@ export function SaveDialog({ isOpen, onClose, onSave, getSavedGraphs, createDire
             >
               File
             </button>
+          </div>
+          <div className="dialog-destination-description">
+            {destination === 'local' && t('dialogs.save.browserDescription')}
+            {destination === 'nostr' && t('dialogs.save.nostrDescription')}
+            {destination === 'file' && t('dialogs.save.fileDescription')}
           </div>
 
           {destination !== 'file' && (
@@ -167,6 +187,13 @@ export function SaveDialog({ isOpen, onClose, onSave, getSavedGraphs, createDire
                   >
                     <span className="item-icon">📁</span>
                     <span className="item-name">{item.name}</span>
+                    <button
+                      className="item-delete"
+                      onClick={(e) => handleDeleteFolder(e, item.path, item.name)}
+                      title={t('dialogs.load.deleteFolder')}
+                    >
+                      ×
+                    </button>
                   </div>
                 ))}
                 {items.filter(item => !item.isDirectory).map(item => (
@@ -180,6 +207,13 @@ export function SaveDialog({ isOpen, onClose, onSave, getSavedGraphs, createDire
                     <span className="item-date">
                       {new Date(item.savedAt).toLocaleString()}
                     </span>
+                    <button
+                      className="item-delete"
+                      onClick={(e) => handleDeleteGraph(e, item.path, item.name)}
+                      title={t('dialogs.load.deleteGraph')}
+                    >
+                      ×
+                    </button>
                   </div>
                 ))}
                 {items.length === 0 && currentPath.length === 0 && (

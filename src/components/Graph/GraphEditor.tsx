@@ -17,8 +17,6 @@ import {
   loadGraph,
   saveGraphToPath,
   loadGraphFromPath,
-  getGraphsInDirectory,
-  createDirectory,
   exportGraphToFile,
   importGraphFromFile,
   type GraphData,
@@ -1685,8 +1683,6 @@ export function GraphEditor({
         isOpen={saveDialogOpen}
         onClose={() => setSaveDialogOpen(false)}
         onSave={handleSave}
-        getSavedGraphs={getGraphsInDirectory}
-        createDirectory={createDirectory}
       />
 
       {/* Load Dialog */}
@@ -1694,7 +1690,6 @@ export function GraphEditor({
         isOpen={loadDialogOpen}
         onClose={() => setLoadDialogOpen(false)}
         onLoad={handleLoad}
-        getSavedGraphs={getGraphsInDirectory}
       />
     </div>
   );

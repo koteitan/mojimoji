@@ -50,6 +50,10 @@
     "cancel": "キャンセル",
     "save": {
       "title": "グラフを保存",
+      "saveTo": "保存先:",
+      "browserDescription": "グラフをブラウザに保存します。ブラウザのキャッシュを削除するとグラフも削除されます。",
+      "nostrDescription": "kind:10002に登録されたリレーにグラフを保存します。公開鍵はNIP-07拡張機能から取得されます。",
+      "fileDescription": "グラフをJSONファイルとしてコンピュータにダウンロードします。",
       "nameLabel": "グラフ名",
       "namePlaceholder": "グラフ名を入力",
       "visibilityLabel": "公開設定",
@@ -65,6 +69,10 @@
     },
     "load": {
       "title": "グラフを読み込む",
+      "loadFrom": "読み込み元:",
+      "browserDescription": "ブラウザに保存されたグラフを読み込みます。",
+      "nostrDescription": "kind:10002に登録されたリレーからグラフを読み込みます。公開鍵はNIP-07拡張機能から取得されます。",
+      "fileDescription": "コンピュータ上のJSONファイルからグラフを読み込みます。",
       "pubkeyLabel": "公開鍵（npubまたはhex）",
       "pubkeyPlaceholder": "検索する公開鍵を入力",
       "filterLabel": "フィルタ",
@@ -74,7 +82,11 @@
       "emptyDirectory": "グラフが見つかりません",
       "errorNoFile": "ファイルを選択してください",
       "errorNoSelection": "グラフを選択してください",
-      "errorUnknown": "グラフの読み込みに失敗しました"
+      "errorUnknown": "グラフの読み込みに失敗しました",
+      "deleteGraph": "グラフを削除",
+      "deleteFolder": "フォルダを削除",
+      "confirmDeleteGraph": "「{{name}}」を削除しますか？",
+      "confirmDeleteFolder": "フォルダ「{{name}}」と中のすべてのグラフを削除しますか？"
     }
   }
 }
