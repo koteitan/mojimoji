@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getGraphsInDirectory, deleteGraphAtPath, deleteGraphsInDirectory } from '../../utils/localStorage';
 import './Dialog.css';
@@ -22,6 +22,15 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Track if mousedown started on overlay (for proper click-outside handling)
+  const [mouseDownOnOverlay, setMouseDownOnOverlay] = useState(false);
+
+  // Refresh data when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      setRefreshKey(prev => prev + 1);
+    }
+  }, [isOpen]);
 
   const fullPath = currentPath.length > 0 ? currentPath.join('/') : '';
   // Get saved graphs - directories are derived from graph paths
@@ -115,11 +124,26 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
     }
   }, [onClose]);
 
+  const handleOverlayMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only set true if mousedown is directly on the overlay (not on dialog)
+    if (e.target === e.currentTarget) {
+      setMouseDownOnOverlay(true);
+    }
+  }, []);
+
+  const handleOverlayClick = useCallback((e: React.MouseEvent) => {
+    // Only close if both mousedown and click happened on overlay
+    if (e.target === e.currentTarget && mouseDownOnOverlay) {
+      onClose();
+    }
+    setMouseDownOnOverlay(false);
+  }, [mouseDownOnOverlay, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="dialog-overlay" onClick={onClose} onKeyDown={handleKeyDown}>
-      <div className="dialog" onClick={e => e.stopPropagation()}>
+    <div className="dialog-overlay" onMouseDown={handleOverlayMouseDown} onClick={handleOverlayClick} onKeyDown={handleKeyDown}>
+      <div className="dialog">
         <div className="dialog-header">
           <h2>{t('dialogs.load.title')}</h2>
           <button className="dialog-close" onClick={onClose}>×</button>
