@@ -54,6 +54,15 @@
   border-color: #646cff;
 }
 
+.custom-node-controls input:disabled,
+.custom-node-controls textarea:disabled,
+.custom-node-controls select:disabled {
+  background: #333;
+  color: #888;
+  cursor: not-allowed;
+  border-color: #333;
+}
+
 .custom-node-controls label {
   color: #ccc;
   font-size: 14px;

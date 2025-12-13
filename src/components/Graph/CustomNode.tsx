@@ -50,12 +50,27 @@ function TextInputControlComponent({ control, nodeId }: { control: TextInputCont
 
 function TextAreaControlComponent({ control, nodeId }: { control: TextAreaControl; nodeId: string }) {
   const [value, setValue] = useState(control.value);
-  const [disabled, setDisabled] = useState(control.disabled);
+  const [, forceUpdate] = useState(0);
 
-  // Update disabled state when control changes
+  // Listen for control changes to force re-render
   useEffect(() => {
-    setDisabled(control.disabled);
-  }, [control.disabled]);
+    const handleControlChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      // Only update if this is for our node
+      if (detail?.nodeId === nodeId) {
+        forceUpdate(n => n + 1);
+        // Also sync value if it changed externally
+        setValue(control.value);
+      }
+    };
+    window.addEventListener('graph-control-change', handleControlChange);
+    return () => {
+      window.removeEventListener('graph-control-change', handleControlChange);
+    };
+  }, [control, nodeId]);
+
+  // Read disabled directly from control on each render
+  const disabled = control.disabled;
 
   return (
     <div className="control-wrapper">
