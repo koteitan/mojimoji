@@ -167,29 +167,36 @@ For manual saving, we will add:
   - Bottom-right: Version info + GitHub link
 
 - Save Dialog (modal overlay)
-  - North: Title "Save Graph"
-  - Center:
+  - Header:
+    - Title "Save Graph"
+    - [×] close button
+  - Content:
     - "Save to:" label
     - Destination tabs: [Browser] [Nostr Relay] [File]
     - Destination description (changes based on selected tab)
-    - Current path: breadcrumb navigation (clickable: root > dir > subdir)
-    - Directory browser:
-      - [..] (parent directory, if not root)
-      - Sub directories: [icon] [name] [delete button] (click to enter)
-      - Graphs: [icon] [name] [saved time] [delete button] (click to select for overwrite)
+    - (Browser/Nostr tabs only):
+      - Current path: breadcrumb navigation (clickable: root > dir > subdir)
+      - (Nostr tab only): User info display: [icon] [name] (from kind:0 profile)
+      - Directory browser:
+        - [..] (parent directory, if not root)
+        - Sub directories: [📁] [name] [× delete button] (click to enter, delete only for Browser)
+        - Graphs: [📄] [name] [saved time] [× delete button] (click to select for overwrite)
     - Name input: text field for graph name
     - (Nostr tab only):
       - Visibility: [Public] [For yourself] radio buttons (default: For yourself)
-      - Visibility description: "If you set visibility to Public, the graph will be shown when others open the load dialog and select Public. If you set it to For yourself, it will only be visible when others specify your pubkey as author in the load dialog. Note that For yourself does not encrypt the data."
-      - Relay URLs: textarea (optional, use kind:10002 relay list if empty)
-  - South:
+      - Visibility description text
+      - Relay URLs: textarea (optional, uses kind:10002 relay list if empty)
+    - Error message (if any)
+  - Footer:
     - [Cancel] button
-    - [New Folder] button (creates session-only folder, not persisted)
-    - [Save] button
+    - [New Folder] button (Browser/Nostr tabs only, creates session-only folder)
+    - [Save] button (primary)
 
 - Load Dialog (modal overlay)
-  - North: Title "Load Graph"
-  - Center:
+  - Header:
+    - Title "Load Graph"
+    - [×] close button
+  - Content:
     - "Load from:" label
     - Source tabs: [Browser] [Nostr Relay] [File]
     - Source description (changes based on selected tab)
@@ -197,25 +204,28 @@ For manual saving, we will add:
       - Current path: breadcrumb navigation (clickable: root > dir > subdir)
       - Directory browser:
         - [..] (parent directory, if not root)
-        - Sub directories: [icon] [name] [delete button] (click to enter)
-        - Graphs: [icon] [name] [saved time] [delete button] (click to select)
+        - Sub directories: [📁] [name] [× delete button] (click to enter)
+        - Graphs: [📄] [name] [saved time] [× delete button] (click to select)
     - Nostr tab:
-      - Visibility filter: [Public] [Mine] [By author] radio buttons (default: Mine)
-      - Author input (shown when "By author" selected): autocomplete component with [icon][name]
-        - uses autoComplete.js (https://github.com/TarekRaafat/autoComplete.js)
-        - suggestions from cached kind:0 profiles
-      - Current path: breadcrumb navigation
+      - Filter: [Public] [Mine] [By author] radio buttons (default: Mine)
+      - (By author only): Author input with autocomplete
+        - text input for npub, hex, or name
+        - dropdown suggestions: [icon] [name] (from cached kind:0 profiles)
+        - searches both display_name and name fields
+      - (Mine only): User info display: [icon] [name] (from kind:0 profile)
+      - Current path: breadcrumb navigation (clickable: root > dir > subdir)
       - Directory browser:
         - [..] (parent directory, if not root)
-        - Sub directories: [icon] [name] (click to enter)
-        - Graphs: [icon] [name] [created_at] [author icon] [author name] [delete button for own graphs] (click to select)
+        - Sub directories: [📁] [name] (click to enter)
+        - Graphs: [📄] [name] [created_at] [author icon] [author name] [× delete button for own graphs] (click to select)
           - author icon/name: from kind:0 profile event (picture, display_name or name)
     - File tab:
       - [Choose File] button
       - Selected filename display
-  - South:
+    - Error message (if any)
+  - Footer:
     - [Cancel] button
-    - [Load] button
+    - [Load] button (primary)
 
 ### Directory Structure
 - Directories are derived from graph paths (no explicit directory storage)

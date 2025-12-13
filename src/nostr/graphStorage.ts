@@ -196,7 +196,8 @@ export async function loadGraphsFromNostr(
     client.setDefaultRelays(relays!);
 
     const rxReq = createRxForwardReq();
-    const events: NostrEvent[] = [];
+    // Use Map to deduplicate events by d-tag (addressable event identifier)
+    const eventsMap = new Map<string, NostrEvent>();
     let resolved = false;
 
     const subscription = client.use(rxReq).subscribe({
@@ -205,14 +206,19 @@ export async function loadGraphsFromNostr(
         // Check if it's a mojimoji graph event
         const dTag = event.tags.find(t => t[0] === 'd' && t[1]?.startsWith(GRAPH_PATH_PREFIX));
         if (dTag) {
-          events.push(event);
+          // Deduplicate by kind:pubkey:d-tag, keeping the newest event
+          const key = `${event.kind}:${event.pubkey}:${dTag[1]}`;
+          const existing = eventsMap.get(key);
+          if (!existing || event.created_at > existing.created_at) {
+            eventsMap.set(key, event);
+          }
         }
       },
       error: (err) => {
         console.error('Error loading graphs:', err);
         if (!resolved) {
           resolved = true;
-          resolve(parseGraphEvents(events, userPubkey));
+          resolve(parseGraphEvents(Array.from(eventsMap.values()), userPubkey));
         }
       },
     });
@@ -238,7 +244,7 @@ export async function loadGraphsFromNostr(
       if (!resolved) {
         resolved = true;
         subscription.unsubscribe();
-        resolve(parseGraphEvents(events, userPubkey));
+        resolve(parseGraphEvents(Array.from(eventsMap.values()), userPubkey));
       }
     }, 10000);
   });

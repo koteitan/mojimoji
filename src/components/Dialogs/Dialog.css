@@ -354,6 +354,9 @@
 
 /* User info display */
 .dialog-user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
   color: #888;
   margin-bottom: 8px;
@@ -366,6 +369,29 @@
   color: #6af;
   font-family: monospace;
   font-size: 11px;
+}
+
+.user-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-icon-placeholder {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #444;
+  border-radius: 50%;
+  font-size: 14px;
+}
+
+.user-name {
+  color: #ccc;
+  font-size: 13px;
 }
 
 /* Author autocomplete */

@@ -116,8 +116,11 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
       const searchLower = authorInput.toLowerCase();
       const matches = profiles
         .filter(p => {
-          const name = p.profile.display_name || p.profile.name || '';
-          return name.toLowerCase().includes(searchLower) ||
+          // Search both name and display_name independently
+          const displayName = p.profile.display_name || '';
+          const name = p.profile.name || '';
+          return displayName.toLowerCase().includes(searchLower) ||
+            name.toLowerCase().includes(searchLower) ||
             p.pubkey.includes(authorInput) ||
             formatNpub(p.pubkey).includes(authorInput);
         })
@@ -410,12 +413,22 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                 </div>
               )}
 
-              {/* User's npub display */}
-              {userPubkey && nostrFilter === 'mine' && (
-                <div className="dialog-user-info">
-                  {t('dialogs.load.yourPubkey')}: <span className="user-npub">{formatNpub(userPubkey)}</span>
-                </div>
-              )}
+              {/* User's info display */}
+              {userPubkey && nostrFilter === 'mine' && (() => {
+                const profile = getProfileFromCache(userPubkey);
+                return (
+                  <div className="dialog-user-info">
+                    {profile?.picture ? (
+                      <img src={profile.picture} alt="" className="user-icon" />
+                    ) : (
+                      <span className="user-icon-placeholder">👤</span>
+                    )}
+                    <span className="user-name">
+                      {profile?.display_name || profile?.name || formatNpub(userPubkey)}
+                    </span>
+                  </div>
+                );
+              })()}
 
               {/* Breadcrumb navigation */}
               <div className="dialog-breadcrumb">

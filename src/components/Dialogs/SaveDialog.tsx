@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getGraphsInDirectory, deleteGraphAtPath, deleteGraphsInDirectory } from '../../utils/localStorage';
 import { isNip07Available, getPubkey } from '../../nostr/nip07';
-import { loadGraphsFromNostr, getNostrItemsInDirectory, deleteGraphFromNostr, type NostrGraphItem } from '../../nostr/graphStorage';
+import { loadGraphsFromNostr, getNostrItemsInDirectory, deleteGraphFromNostr, getProfileFromCache, type NostrGraphItem } from '../../nostr/graphStorage';
 import { formatNpub } from '../../nostr/types';
 import './Dialog.css';
 
@@ -248,12 +248,22 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                 ))}
               </div>
 
-              {/* User's npub display for Nostr */}
-              {destination === 'nostr' && userPubkey && (
-                <div className="dialog-user-info">
-                  {t('dialogs.save.yourPubkey')}: <span className="user-npub">{formatNpub(userPubkey)}</span>
-                </div>
-              )}
+              {/* User's info display for Nostr */}
+              {destination === 'nostr' && userPubkey && (() => {
+                const profile = getProfileFromCache(userPubkey);
+                return (
+                  <div className="dialog-user-info">
+                    {profile?.picture ? (
+                      <img src={profile.picture} alt="" className="user-icon" />
+                    ) : (
+                      <span className="user-icon-placeholder">👤</span>
+                    )}
+                    <span className="user-name">
+                      {profile?.display_name || profile?.name || formatNpub(userPubkey)}
+                    </span>
+                  </div>
+                );
+              })()}
 
               {/* Directory browser */}
               <div className="dialog-browser">
