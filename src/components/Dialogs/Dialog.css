@@ -117,6 +117,11 @@
   color: #888;
 }
 
+.breadcrumb-label {
+  color: #666;
+  margin-right: 8px;
+}
+
 .breadcrumb-item.clickable {
   color: #6af;
   cursor: pointer;
@@ -135,6 +140,7 @@
 .dialog-browser {
   border: 1px solid #444;
   border-radius: 4px;
+  min-height: 74px; /* 2 lines minimum (37px per line) */
   max-height: 200px;
   overflow-y: auto;
   margin-bottom: 12px;
@@ -221,6 +227,32 @@
   text-align: center;
   color: #666;
   font-size: 13px;
+}
+
+/* Loading animation */
+.browser-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  color: #888;
+  font-size: 13px;
+}
+
+.loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #444;
+  border-top-color: #6af;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Input groups */
@@ -363,6 +395,11 @@
   padding: 6px 10px;
   background: #252525;
   border-radius: 4px;
+}
+
+.user-info-label {
+  color: #666;
+  margin-right: 4px;
 }
 
 .user-npub {

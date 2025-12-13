@@ -8,6 +8,7 @@ import {
   deleteGraphFromNostr,
   getProfileFromCache,
   getAllCachedProfiles,
+  fetchUserRelays,
   type NostrGraphItem
 } from '../../nostr/graphStorage';
 import { formatNpub, decodeBech32ToHex, isHex64 } from '../../nostr/types';
@@ -45,6 +46,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
   const [userPubkey, setUserPubkey] = useState<string | null>(null);
   const [authorSuggestions, setAuthorSuggestions] = useState<Array<{ pubkey: string; name: string; picture?: string }>>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [relayUrls, setRelayUrls] = useState('');
 
   // Refresh data when dialog opens
   useEffect(() => {
@@ -53,20 +55,25 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
     }
   }, [isOpen]);
 
-  // Load user's pubkey when Nostr tab is selected
+  // Load user's pubkey and relay list when Nostr tab is selected
   useEffect(() => {
     if (isOpen && source === 'nostr') {
-      const loadUserPubkey = async () => {
+      const loadUserData = async () => {
         if (isNip07Available()) {
           try {
             const pubkey = await getPubkey();
             setUserPubkey(pubkey);
+            // Fetch user's relay list from kind:10002
+            const relays = await fetchUserRelays(pubkey);
+            if (relays.length > 0) {
+              setRelayUrls(relays.join('\n'));
+            }
           } catch {
             // NIP-07 available but user denied
           }
         }
       };
-      loadUserPubkey();
+      loadUserData();
     }
   }, [isOpen, source]);
 
@@ -127,7 +134,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
         .slice(0, 10)
         .map(p => ({
           pubkey: p.pubkey,
-          name: p.profile.display_name || p.profile.name || formatNpub(p.pubkey),
+          name: p.profile.name || formatNpub(p.pubkey),
           picture: p.profile.picture,
         }));
       setAuthorSuggestions(matches);
@@ -225,7 +232,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
   const handleAuthorSelect = useCallback((pubkey: string) => {
     setAuthorPubkey(pubkey);
     const profile = getProfileFromCache(pubkey);
-    setAuthorInput(profile?.display_name || profile?.name || formatNpub(pubkey));
+    setAuthorInput(profile?.name || formatNpub(pubkey));
     setShowSuggestions(false);
   }, []);
 
@@ -337,13 +344,24 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
             </button>
           </div>
           <div className="dialog-destination-description">
-            {source === 'local' && t('dialogs.load.browserDescription')}
             {source === 'nostr' && t('dialogs.load.nostrDescription')}
+            {source === 'local' && t('dialogs.load.browserDescription')}
             {source === 'file' && t('dialogs.load.fileDescription')}
           </div>
 
           {source === 'nostr' && (
             <>
+              {/* Relay URLs */}
+              <div className="dialog-input-group">
+                <label>{t('dialogs.load.relayUrlsLabel')}</label>
+                <textarea
+                  value={relayUrls}
+                  onChange={e => setRelayUrls(e.target.value)}
+                  placeholder={t('dialogs.load.relayUrlsPlaceholder')}
+                  rows={3}
+                />
+              </div>
+
               {/* Visibility filter */}
               <div className="dialog-input-group">
                 <label>{t('dialogs.load.filterLabel')}</label>
@@ -352,19 +370,19 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                     <input
                       type="radio"
                       name="nostrFilter"
-                      checked={nostrFilter === 'public'}
-                      onChange={() => setNostrFilter('public')}
+                      checked={nostrFilter === 'mine'}
+                      onChange={() => setNostrFilter('mine')}
                     />
-                    Public
+                    For yourself
                   </label>
                   <label>
                     <input
                       type="radio"
                       name="nostrFilter"
-                      checked={nostrFilter === 'mine'}
-                      onChange={() => setNostrFilter('mine')}
+                      checked={nostrFilter === 'public'}
+                      onChange={() => setNostrFilter('public')}
                     />
-                    Mine
+                    Public
                   </label>
                   <label>
                     <input
@@ -413,25 +431,9 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                 </div>
               )}
 
-              {/* User's info display */}
-              {userPubkey && nostrFilter === 'mine' && (() => {
-                const profile = getProfileFromCache(userPubkey);
-                return (
-                  <div className="dialog-user-info">
-                    {profile?.picture ? (
-                      <img src={profile.picture} alt="" className="user-icon" />
-                    ) : (
-                      <span className="user-icon-placeholder">👤</span>
-                    )}
-                    <span className="user-name">
-                      {profile?.display_name || profile?.name || formatNpub(userPubkey)}
-                    </span>
-                  </div>
-                );
-              })()}
-
-              {/* Breadcrumb navigation */}
+              {/* Breadcrumb navigation with path: caption */}
               <div className="dialog-breadcrumb">
+                <span className="breadcrumb-label">path:</span>
                 <span
                   className="breadcrumb-item clickable"
                   onClick={() => handleBreadcrumbClick(0)}
@@ -454,7 +456,10 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
               {/* Nostr directory browser */}
               <div className="dialog-browser">
                 {nostrLoading ? (
-                  <div className="browser-empty">{t('dialogs.load.loadingGraphs')}</div>
+                  <div className="browser-loading">
+                    <span className="loading-spinner"></span>
+                    {t('dialogs.load.loadingGraphs')}
+                  </div>
                 ) : (
                   <>
                     {currentPath.length > 0 && (
@@ -484,9 +489,6 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                         >
                           <span className="item-icon">📄</span>
                           <span className="item-name">{item.name}</span>
-                          <span className="item-date">
-                            {item.createdAt > 0 ? new Date(item.createdAt * 1000).toLocaleString() : ''}
-                          </span>
                           {/* Author info */}
                           <span className="item-author-info">
                             {profile?.picture ? (
@@ -495,8 +497,11 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                               <span className="item-author-picture-placeholder">👤</span>
                             )}
                             <span className="item-author-name">
-                              {profile?.display_name || profile?.name || formatNpub(item.pubkey)}
+                              {profile?.name || formatNpub(item.pubkey)}
                             </span>
+                          </span>
+                          <span className="item-date">
+                            {item.createdAt > 0 ? new Date(item.createdAt * 1000).toLocaleString() : ''}
                           </span>
                           {/* Delete button (only for own graphs) */}
                           {isOwn && (
@@ -522,8 +527,9 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
 
           {source === 'local' && (
             <>
-              {/* Breadcrumb navigation */}
+              {/* Breadcrumb navigation with path: caption */}
               <div className="dialog-breadcrumb">
+                <span className="breadcrumb-label">path:</span>
                 <span
                   className="breadcrumb-item clickable"
                   onClick={() => handleBreadcrumbClick(0)}

@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getGraphsInDirectory, deleteGraphAtPath, deleteGraphsInDirectory } from '../../utils/localStorage';
 import { isNip07Available, getPubkey } from '../../nostr/nip07';
-import { loadGraphsFromNostr, getNostrItemsInDirectory, deleteGraphFromNostr, getProfileFromCache, type NostrGraphItem } from '../../nostr/graphStorage';
+import { loadGraphsFromNostr, getNostrItemsInDirectory, deleteGraphFromNostr, getProfileFromCache, fetchUserRelays, type NostrGraphItem } from '../../nostr/graphStorage';
 import { formatNpub } from '../../nostr/types';
 import './Dialog.css';
 
@@ -41,7 +41,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
     }
   }, [isOpen]);
 
-  // Load user's pubkey and Nostr graphs when Nostr tab is selected
+  // Load user's pubkey, relay list, and Nostr graphs when Nostr tab is selected
   useEffect(() => {
     if (isOpen && destination === 'nostr') {
       const loadNostrData = async () => {
@@ -54,6 +54,11 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
           setError(null);
           const pubkey = await getPubkey();
           setUserPubkey(pubkey);
+          // Fetch user's relay list from kind:10002
+          const relays = await fetchUserRelays(pubkey);
+          if (relays.length > 0) {
+            setRelayUrls(relays.join('\n'));
+          }
           const graphs = await loadGraphsFromNostr('mine');
           setNostrGraphs(graphs);
         } catch (e) {
@@ -73,11 +78,54 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
     return destination === 'local' ? getGraphsInDirectory(fullPath, localDirectories) : [];
   }, [destination, fullPath, localDirectories, refreshKey]);
 
-  // Get Nostr items for current directory
+  // Get Nostr items for current directory (including session-only folders)
   const nostrItems = useMemo(() => {
     if (destination !== 'nostr') return [];
-    return getNostrItemsInDirectory(nostrGraphs, fullPath, userPubkey);
-  }, [destination, nostrGraphs, fullPath, userPubkey]);
+    const items = getNostrItemsInDirectory(nostrGraphs, fullPath, userPubkey);
+
+    // Add session-only local directories
+    const seenDirs = new Set(items.filter(i => i.isDirectory).map(i => i.name));
+    for (const dir of localDirectories) {
+      if (!fullPath && !dir.includes('/')) {
+        // Top-level directory at root
+        if (!seenDirs.has(dir)) {
+          seenDirs.add(dir);
+          items.push({
+            path: dir,
+            name: dir,
+            createdAt: Math.floor(Date.now() / 1000),
+            pubkey: '',
+            isDirectory: true,
+          });
+        }
+      } else if (fullPath && dir.startsWith(fullPath + '/')) {
+        // Subdirectory within current directory
+        const relativePath = dir.slice(fullPath.length + 1);
+        if (!relativePath.includes('/')) {
+          if (!seenDirs.has(relativePath)) {
+            seenDirs.add(relativePath);
+            items.push({
+              path: dir,
+              name: relativePath,
+              createdAt: Math.floor(Date.now() / 1000),
+              pubkey: '',
+              isDirectory: true,
+            });
+          }
+        }
+      }
+    }
+
+    // Sort: directories first, then by name
+    items.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) {
+        return a.isDirectory ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+    return items;
+  }, [destination, nostrGraphs, fullPath, userPubkey, localDirectories]);
 
   // Combined items for current destination
   const items = destination === 'local' ? localItems : nostrItems;
@@ -227,8 +275,9 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
 
           {destination !== 'file' && (
             <>
-              {/* Breadcrumb navigation */}
+              {/* Breadcrumb navigation with path: caption */}
               <div className="dialog-breadcrumb">
+                <span className="breadcrumb-label">path:</span>
                 <span
                   className="breadcrumb-item clickable"
                   onClick={() => handleBreadcrumbClick(0)}
@@ -248,27 +297,13 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                 ))}
               </div>
 
-              {/* User's info display for Nostr */}
-              {destination === 'nostr' && userPubkey && (() => {
-                const profile = getProfileFromCache(userPubkey);
-                return (
-                  <div className="dialog-user-info">
-                    {profile?.picture ? (
-                      <img src={profile.picture} alt="" className="user-icon" />
-                    ) : (
-                      <span className="user-icon-placeholder">👤</span>
-                    )}
-                    <span className="user-name">
-                      {profile?.display_name || profile?.name || formatNpub(userPubkey)}
-                    </span>
-                  </div>
-                );
-              })()}
-
               {/* Directory browser */}
               <div className="dialog-browser">
                 {nostrLoading && destination === 'nostr' ? (
-                  <div className="browser-empty">{t('dialogs.save.loadingGraphs')}</div>
+                  <div className="browser-loading">
+                    <span className="loading-spinner"></span>
+                    {t('dialogs.save.loadingGraphs')}
+                  </div>
                 ) : (
                   <>
                     {currentPath.length > 0 && (
@@ -298,6 +333,8 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                     ))}
                     {items.filter(item => !item.isDirectory).map(item => {
                       const timestamp = 'savedAt' in item ? item.savedAt : ('createdAt' in item ? (item as NostrGraphItem).createdAt * 1000 : 0);
+                      const nostrItem = destination === 'nostr' ? item as NostrGraphItem : null;
+                      const profile = nostrItem ? getProfileFromCache(nostrItem.pubkey) : null;
                       return (
                         <div
                           key={item.path}
@@ -306,6 +343,19 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                         >
                           <span className="item-icon">📄</span>
                           <span className="item-name">{item.name}</span>
+                          {/* Author info (Nostr only) */}
+                          {nostrItem && (
+                            <span className="item-author-info">
+                              {profile?.picture ? (
+                                <img src={profile.picture} alt="" className="item-author-picture" />
+                              ) : (
+                                <span className="item-author-picture-placeholder">👤</span>
+                              )}
+                              <span className="item-author-name">
+                                {profile?.name || formatNpub(nostrItem.pubkey)}
+                              </span>
+                            </span>
+                          )}
                           <span className="item-date">
                             {timestamp > 0 ? new Date(timestamp).toLocaleString() : ''}
                           </span>
@@ -349,19 +399,19 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                     <input
                       type="radio"
                       name="visibility"
-                      checked={visibility === 'public'}
-                      onChange={() => setVisibility('public')}
+                      checked={visibility === 'private'}
+                      onChange={() => setVisibility('private')}
                     />
-                    Public
+                    For yourself
                   </label>
                   <label>
                     <input
                       type="radio"
                       name="visibility"
-                      checked={visibility === 'private'}
-                      onChange={() => setVisibility('private')}
+                      checked={visibility === 'public'}
+                      onChange={() => setVisibility('public')}
                     />
-                    For yourself
+                    Public
                   </label>
                 </div>
                 <div className="dialog-visibility-description">
@@ -378,6 +428,24 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                   rows={3}
                 />
               </div>
+
+              {/* User's info display with as: caption */}
+              {userPubkey && (() => {
+                const profile = getProfileFromCache(userPubkey);
+                return (
+                  <div className="dialog-user-info">
+                    <span className="user-info-label">as:</span>
+                    {profile?.picture ? (
+                      <img src={profile.picture} alt="" className="user-icon" />
+                    ) : (
+                      <span className="user-icon-placeholder">👤</span>
+                    )}
+                    <span className="user-name">
+                      {profile?.name || formatNpub(userPubkey)}
+                    </span>
+                  </div>
+                );
+              })()}
             </>
           )}
 

@@ -58,7 +58,7 @@
       "namePlaceholder": "グラフ名を入力",
       "visibilityLabel": "公開設定",
       "visibilityDescription": "公開設定をPublicにすると、他人が読込ダイアログを開いてPublicを選択したときに表示されます。公開設定をFor yourselfにすると他人が読込ダイアログでauthorを指定したときだけ見えます。For yourselfにしても暗号化されるわけではないので気をつけてください。",
-      "relayUrlsLabel": "リレーURL（任意）",
+      "relayUrlsLabel": "保存先リレー（デフォルト：kind:10002）",
       "relayUrlsPlaceholder": "wss://relay.example.com\n（1行に1つ、空の場合はkind:10002のリレーを使用）",
       "newFolder": "新規フォルダ",
       "newFolderPrompt": "フォルダ名を入力:",
@@ -93,7 +93,9 @@
       "deleteGraph": "グラフを削除",
       "deleteFolder": "フォルダを削除",
       "confirmDeleteGraph": "「{{name}}」を削除しますか？",
-      "confirmDeleteFolder": "フォルダ「{{name}}」と中のすべてのグラフを削除しますか？"
+      "confirmDeleteFolder": "フォルダ「{{name}}」と中のすべてのグラフを削除しますか？",
+      "relayUrlsLabel": "読み込み元リレー（デフォルト：kind:10002）",
+      "relayUrlsPlaceholder": "wss://relay.example.com\n（1行に1つ、空の場合はkind:10002のリレーを使用）"
     }
   }
 }

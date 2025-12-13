@@ -27,7 +27,8 @@
   "kind": 30078,
   "tags": [
     ["d", "mojimoji/graphs/[graph path]"],
-    ["public"]
+    ["public"],
+    ["client", "mojimoji"]
   ],
   "content": "[graph data as JSON string]",
   "sig": "[signature]"
@@ -40,7 +41,8 @@
   "created_at": [unix-timestamp],
   "kind": 30078,
   "tags": [
-    ["d", "mojimoji/graphs/[graph path]"]
+    ["d", "mojimoji/graphs/[graph path]"],
+    ["client", "mojimoji"]
   ],
   "content": "[graph data as JSON string]",
   "sig": "[signature]"
@@ -101,6 +103,7 @@ For manual saving, we will add:
 ### graph data
 ```json
 {
+  "version": 1,
   "nodes": [
     {
       "id": "[node-id]",
@@ -127,6 +130,7 @@ For manual saving, we will add:
   }
 }
 ```
+- version: API version for data migration (current: 1)
 - node data formats by type:
   - Relay: `{ relayUrls: string[], filters: Filters }`
   - Operator: `{ operation: "and" | "or" | "a-b" }`
@@ -175,17 +179,18 @@ For manual saving, we will add:
     - Destination tabs: [Browser] [Nostr Relay] [File]
     - Destination description (changes based on selected tab)
     - (Browser/Nostr tabs only):
-      - Current path: breadcrumb navigation (clickable: root > dir > subdir)
-      - (Nostr tab only): User info display: [icon] [name] (from kind:0 profile)
-      - Directory browser:
+      - "path:" label + Current path: breadcrumb navigation (clickable: root > dir > subdir)
+      - Directory browser (min-height: 2 lines):
         - [..] (parent directory, if not root)
         - Sub directories: [📁] [name] [× delete button] (click to enter, delete only for Browser)
-        - Graphs: [📄] [name] [saved time] [× delete button] (click to select for overwrite)
+        - Graphs: [📄] [name] [author icon] [author name] [saved time] [× delete button] (click to select for overwrite, author info shown for Nostr only)
+        - Loading animation when fetching from Nostr relay
     - Name input: text field for graph name
     - (Nostr tab only):
-      - Visibility: [Public] [For yourself] radio buttons (default: For yourself)
+      - Visibility: [For yourself] [Public] radio buttons (default: For yourself)
       - Visibility description text
-      - Relay URLs: textarea (optional, uses kind:10002 relay list if empty)
+      - Relay URLs: textarea (pre-populated with kind:10002 relay list)
+      - "as:" label + User info display: [icon] [name] (from kind:0 profile, uses "name" field)
     - Error message (if any)
   - Footer:
     - [Cancel] button
@@ -196,32 +201,26 @@ For manual saving, we will add:
   - Header:
     - Title "Load Graph"
     - [×] close button
-  - Content:
+  - Content (note: Nostr tab content comes before Browser tab content, different from Save Dialog):
     - "Load from:" label
-    - Source tabs: [Browser] [Nostr Relay] [File]
+    - Source tabs: [Browser] [Nostr Relay] [File] (default: Browser)
     - Source description (changes based on selected tab)
-    - Browser tab:
-      - Current path: breadcrumb navigation (clickable: root > dir > subdir)
-      - Directory browser:
-        - [..] (parent directory, if not root)
-        - Sub directories: [📁] [name] [× delete button] (click to enter)
-        - Graphs: [📄] [name] [saved time] [× delete button] (click to select)
     - Nostr tab:
-      - Filter: [Public] [Mine] [By author] radio buttons (default: Mine)
+      - Relay list:
+        - caption: "Load from relays (default: kind:10002)"
+        - textarea: pre-populated with kind:10002 relay list
+      - Filter: [For yourself] [Public] [By author] radio buttons (default: For yourself)
       - (By author only): Author input with autocomplete
         - text input for npub, hex, or name
         - dropdown suggestions: [icon] [name] (from cached kind:0 profiles)
         - searches both display_name and name fields
-      - (Mine only): User info display: [icon] [name] (from kind:0 profile)
-      - Current path: breadcrumb navigation (clickable: root > dir > subdir)
-      - Directory browser:
+    - Browser tab:
+      - "path:" label + Current path: breadcrumb navigation (clickable: root > dir > subdir)
+      - Directory browser (min-height: 2 lines):
         - [..] (parent directory, if not root)
-        - Sub directories: [📁] [name] (click to enter)
-        - Graphs: [📄] [name] [created_at] [author icon] [author name] [× delete button for own graphs] (click to select)
-          - author icon/name: from kind:0 profile event (picture, display_name or name)
-    - File tab:
-      - [Choose File] button
-      - Selected filename display
+        - Sub directories: [📁] [name] [× delete button] (click to enter)
+        - Graphs: [📄] [name] [author icon] [author name] [created_at] [× delete button for own graphs] (click to select)
+        - Loading animation when fetching from Nostr relay
     - Error message (if any)
   - Footer:
     - [Cancel] button

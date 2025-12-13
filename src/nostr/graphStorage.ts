@@ -126,6 +126,7 @@ export async function saveGraphToNostr(
   // Build tags
   const tags: string[][] = [
     ['d', GRAPH_PATH_PREFIX + path],
+    ['client', 'mojimoji'],
   ];
   if (options.visibility === 'public') {
     tags.push(['public', '']);

@@ -10,7 +10,11 @@ export interface ViewTransform {
   k: number;
 }
 
+// Current graph data version for migration support
+export const GRAPH_DATA_VERSION = 1;
+
 export interface GraphData {
+  version?: number;
   nodes: unknown[];
   connections: unknown[];
   viewTransform?: ViewTransform;

@@ -58,7 +58,7 @@
       "namePlaceholder": "Enter graph name",
       "visibilityLabel": "Visibility",
       "visibilityDescription": "If you set visibility to Public, the graph will be shown when others open the load dialog and select Public. If you set it to For yourself, it will only be visible when others specify your pubkey as author in the load dialog. Note that For yourself does not encrypt the data.",
-      "relayUrlsLabel": "Relay URLs (optional)",
+      "relayUrlsLabel": "Save to relays (default: kind:10002)",
       "relayUrlsPlaceholder": "wss://relay.example.com\n(one per line, uses kind:10002 relays if empty)",
       "newFolder": "New Folder",
       "newFolderPrompt": "Enter folder name:",
@@ -93,7 +93,9 @@
       "deleteGraph": "Delete graph",
       "deleteFolder": "Delete folder",
       "confirmDeleteGraph": "Delete \"{{name}}\"?",
-      "confirmDeleteFolder": "Delete folder \"{{name}}\" and all graphs inside?"
+      "confirmDeleteFolder": "Delete folder \"{{name}}\" and all graphs inside?",
+      "relayUrlsLabel": "Load from relays (default: kind:10002)",
+      "relayUrlsPlaceholder": "wss://relay.example.com\n(one per line, uses kind:10002 relays if empty)"
     }
   }
 }

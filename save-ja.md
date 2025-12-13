@@ -27,7 +27,8 @@
   "kind": 30078,
   "tags": [
     ["d", "mojimoji/graphs/[graph path]"],
-    ["public"]
+    ["public"],
+    ["client", "mojimoji"]
   ],
   "content": "[graph data を JSON 文字列化したもの]",
   "sig": "[signature]"
@@ -40,7 +41,8 @@
   "created_at": [unix-timestamp],
   "kind": 30078,
   "tags": [
-    ["d", "mojimoji/graphs/[graph path]"]
+    ["d", "mojimoji/graphs/[graph path]"],
+    ["client", "mojimoji"]
   ],
   "content": "[graph data を JSON 文字列化したもの]",
   "sig": "[signature]"
@@ -101,6 +103,7 @@ mojimoji が使用する localStorage キー:
 ### graph data（グラフデータ）
 ```json
 {
+  "version": 1,
   "nodes": [
     {
       "id": "[node-id]",
@@ -127,6 +130,7 @@ mojimoji が使用する localStorage キー:
   }
 }
 ```
+- version: データ移行用の API バージョン（現在: 1）
 - ノードタイプ別のデータ形式:
   - Relay: `{ relayUrls: string[], filters: Filters }`
   - Operator: `{ operation: "and" | "or" | "a-b" }`
@@ -175,17 +179,18 @@ mojimoji が使用する localStorage キー:
     - 保存先タブ: [Browser] [Nostr Relay] [File]
     - 保存先の説明（選択したタブに応じて変化）
     - （Browser/Nostr タブのみ）:
-      - 現在のパス: パンくずナビ（クリック可能: root > dir > subdir）
-      - （Nostr タブのみ）: ユーザー情報表示: [アイコン] [名前]（kind:0 プロフィールから取得）
-      - ディレクトリブラウザ:
+      - 「path:」ラベル + 現在のパス: パンくずナビ（クリック可能: root > dir > subdir）
+      - ディレクトリブラウザ（最小高さ: 2行分）:
         - [..] （親ディレクトリ、ルート以外）
         - サブディレクトリ: [📁] [名前] [× 削除ボタン] （クリックで移動、削除は Browser のみ）
-        - グラフ: [📄] [名前] [保存日時] [× 削除ボタン] （クリックで上書き選択）
+        - グラフ: [📄] [名前] [作者アイコン] [作者名] [保存日時] [× 削除ボタン] （クリックで上書き選択、作者情報は Nostr のみ表示）
+        - Nostr リレーからの読み込み時はローディングアニメーション表示
     - 名前入力: グラフ名のテキストフィールド
     - （Nostr タブのみ）:
-      - 公開設定: [Public] [For yourself] ラジオボタン（デフォルト: For yourself）
+      - 公開設定: [For yourself] [Public] ラジオボタン（デフォルト: For yourself）
       - 公開設定の説明テキスト
-      - リレー URL: テキストエリア（省略時は kind:10002 のリレーリストを使用）
+      - リレー URL: テキストエリア（kind:10002 のリレーリストを自動取得して表示）
+      - 「as:」ラベル + ユーザー情報表示: [アイコン] [名前]（kind:0 プロフィールから取得、"name" フィールドを使用）
     - エラーメッセージ（発生時）
   - フッター:
     - [Cancel] ボタン
@@ -196,29 +201,25 @@ mojimoji が使用する localStorage キー:
   - ヘッダー:
     - タイトル「Load Graph」
     - [×] 閉じるボタン
-  - コンテンツ:
+  - コンテンツ（注: Nostrタブのコンテンツが Browserタブより先に配置、保存ダイアログとは異なる）:
     - 「読み込み元:」ラベル
-    - 読込元タブ: [Browser] [Nostr Relay] [File]
+    - 読込元タブ: [Browser] [Nostr Relay] [File]（デフォルト: Browser）
     - 読込元の説明（選択したタブに応じて変化）
-    - Browser タブ:
-      - 現在のパス: パンくずナビ（クリック可能: root > dir > subdir）
-      - ディレクトリブラウザ:
-        - [..] （親ディレクトリ、ルート以外）
-        - サブディレクトリ: [📁] [名前] [× 削除ボタン] （クリックで移動）
-        - グラフ: [📄] [名前] [保存日時] [× 削除ボタン] （クリックで選択）
     - Nostr タブ:
-      - フィルタ: [Public] [Mine] [By author] ラジオボタン（デフォルト: Mine）
+      - リレーリスト:
+        - キャプション: 「読み込み元リレー（デフォルト：kind:10002）」
+        - テキストエリア: kind:10002 のリレーリストを自動取得して表示
+      - フィルタ: [For yourself] [Public] [By author] ラジオボタン（デフォルト: For yourself）
       - （By author のみ）: 作者入力（オートコンプリート付き）
         - npub、hex、または名前を入力
         - ドロップダウン候補: [アイコン] [名前]（キャッシュされた kind:0 プロフィールから）
         - display_name と name の両方を検索
-      - （Mine のみ）: ユーザー情報表示: [アイコン] [名前]（kind:0 プロフィールから取得）
-      - 現在のパス: パンくずナビ（クリック可能: root > dir > subdir）
-      - ディレクトリブラウザ:
+    - Browser タブ:
+      - 「path:」ラベル + 現在のパス: パンくずナビ（クリック可能: root > dir > subdir）
+      - ディレクトリブラウザ（最小高さ: 2行分）:
         - [..] （親ディレクトリ、ルート以外）
-        - サブディレクトリ: [📁] [名前] （クリックで移動）
-        - グラフ: [📄] [名前] [作成日時] [作者アイコン] [作者名] [× 削除ボタン（自分のグラフのみ）] （クリックで選択）
-          - 作者アイコン/名前: kind:0 プロフィールイベントから取得（picture, display_name または name）
+        - サブディレクトリ: [📁] [名前] [× 削除ボタン] （クリックで移動）
+        - グラフ: [📄] [名前] [保存日時] [× 削除ボタン] （クリックで選択）
     - File タブ:
       - [Choose File] ボタン
       - 選択されたファイル名表示

@@ -19,6 +19,7 @@ import {
   loadGraphFromPath,
   exportGraphToFile,
   importGraphFromFile,
+  GRAPH_DATA_VERSION,
   type GraphData,
 } from '../../utils/localStorage';
 import { saveGraphToNostr, loadGraphByPath } from '../../nostr/graphStorage';
@@ -133,7 +134,7 @@ export function GraphEditor({
       k: area.area.transform.k,
     } : undefined;
 
-    return { nodes, connections, viewTransform };
+    return { version: GRAPH_DATA_VERSION, nodes, connections, viewTransform };
   }, []);
 
   const saveCurrentGraph = useCallback(() => {
