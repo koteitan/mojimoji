@@ -1,0 +1,472 @@
+// Nostr Graph Storage - Save/Load graphs to/from Nostr relays
+// Uses NIP-78 (kind:30078) for application-specific data
+
+import { createRxNostr, createRxForwardReq } from 'rx-nostr';
+import type { RxNostr } from 'rx-nostr';
+import { verifier } from '@rx-nostr/crypto';
+import { getPubkey, signEvent, isNip07Available } from './nip07';
+import type { UnsignedEvent } from './nip07';
+import type { NostrEvent, Profile } from './types';
+import type { GraphData } from '../utils/localStorage';
+
+// Kind constants
+const KIND_RELAY_LIST = 10002;
+const KIND_APP_DATA = 30078;
+const KIND_DELETE = 5;
+
+// Graph path prefix
+const GRAPH_PATH_PREFIX = 'mojimoji/graphs/';
+
+// Well-known relays for fetching user metadata
+const WELL_KNOWN_RELAYS = [
+  'wss://relay.damus.io',
+  'wss://relay.nostr.band',
+  'wss://nos.lol',
+];
+
+// Singleton rx-nostr instance for graph storage
+let rxNostr: RxNostr | null = null;
+
+function getRxNostr(): RxNostr {
+  if (!rxNostr) {
+    rxNostr = createRxNostr({ verifier });
+  }
+  return rxNostr;
+}
+
+// Nostr graph item for display in dialogs
+export interface NostrGraphItem {
+  path: string;
+  name: string;
+  createdAt: number;
+  pubkey: string;
+  isDirectory: boolean;
+  event?: NostrEvent;
+}
+
+// Fetch user's relay list from kind:10002
+export async function fetchUserRelays(pubkey: string): Promise<string[]> {
+  return new Promise((resolve) => {
+    const client = getRxNostr();
+    client.setDefaultRelays(WELL_KNOWN_RELAYS);
+
+    const rxReq = createRxForwardReq();
+    const relays: string[] = [];
+    let resolved = false;
+
+    const subscription = client.use(rxReq).subscribe({
+      next: (packet) => {
+        const event = packet.event as NostrEvent;
+        if (event.kind === KIND_RELAY_LIST) {
+          // Extract relay URLs from 'r' tags
+          for (const tag of event.tags) {
+            if (tag[0] === 'r' && tag[1]) {
+              // tag[2] might be 'read' or 'write', but we want all for now
+              relays.push(tag[1]);
+            }
+          }
+          if (!resolved) {
+            resolved = true;
+            subscription.unsubscribe();
+            resolve(relays);
+          }
+        }
+      },
+      error: () => {
+        if (!resolved) {
+          resolved = true;
+          resolve([]);
+        }
+      },
+    });
+
+    // Emit filter for relay list
+    rxReq.emit({
+      kinds: [KIND_RELAY_LIST],
+      authors: [pubkey],
+      limit: 1,
+    });
+
+    // Timeout after 5 seconds
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        subscription.unsubscribe();
+        resolve(relays);
+      }
+    }, 5000);
+  });
+}
+
+// Save graph to Nostr relay
+export async function saveGraphToNostr(
+  path: string,
+  graphData: GraphData,
+  options: {
+    visibility: 'public' | 'private';
+    relayUrls?: string[];
+  }
+): Promise<void> {
+  if (!isNip07Available()) {
+    throw new Error('NIP-07 extension not available. Please install a Nostr signer extension like nos2x or Alby.');
+  }
+
+  // Get user's pubkey
+  const pubkey = await getPubkey();
+
+  // Get relay URLs
+  let relayUrls = options.relayUrls?.filter(url => url.trim());
+  if (!relayUrls || relayUrls.length === 0) {
+    relayUrls = await fetchUserRelays(pubkey);
+    if (relayUrls.length === 0) {
+      throw new Error('No relay URLs specified and no relay list found. Please specify relay URLs.');
+    }
+  }
+
+  // Build tags
+  const tags: string[][] = [
+    ['d', GRAPH_PATH_PREFIX + path],
+  ];
+  if (options.visibility === 'public') {
+    tags.push(['public', '']);
+  }
+
+  // Create unsigned event
+  const unsignedEvent: UnsignedEvent = {
+    kind: KIND_APP_DATA,
+    created_at: Math.floor(Date.now() / 1000),
+    tags,
+    content: JSON.stringify(graphData),
+  };
+
+  // Sign event
+  const signedEvent = await signEvent(unsignedEvent);
+
+  // Publish to relays
+  const client = getRxNostr();
+  client.setDefaultRelays(relayUrls);
+  client.send(signedEvent);
+
+  // Wait a bit for the event to be sent
+  await new Promise(resolve => setTimeout(resolve, 1000));
+}
+
+// Load graphs from Nostr relay
+export async function loadGraphsFromNostr(
+  filter: 'public' | 'mine' | 'by-author',
+  authorPubkey?: string,
+  relayUrls?: string[]
+): Promise<NostrGraphItem[]> {
+  // Build relay list
+  let relays = relayUrls?.filter(url => url.trim());
+
+  // For 'mine' filter, we need the user's pubkey and relays
+  let userPubkey: string | null = null;
+  if (filter === 'mine') {
+    if (!isNip07Available()) {
+      throw new Error('NIP-07 extension not available');
+    }
+    userPubkey = await getPubkey();
+    if (!relays || relays.length === 0) {
+      relays = await fetchUserRelays(userPubkey);
+    }
+  }
+
+  // For 'by-author', use the provided pubkey
+  if (filter === 'by-author') {
+    if (!authorPubkey) {
+      throw new Error('Author pubkey is required for by-author filter');
+    }
+    if (!relays || relays.length === 0) {
+      relays = await fetchUserRelays(authorPubkey);
+    }
+  }
+
+  // For 'public', use well-known relays if not specified
+  if (filter === 'public' && (!relays || relays.length === 0)) {
+    relays = WELL_KNOWN_RELAYS;
+  }
+
+  if (!relays || relays.length === 0) {
+    relays = WELL_KNOWN_RELAYS;
+  }
+
+  return new Promise((resolve) => {
+    const client = getRxNostr();
+    client.setDefaultRelays(relays!);
+
+    const rxReq = createRxForwardReq();
+    const events: NostrEvent[] = [];
+    let resolved = false;
+
+    const subscription = client.use(rxReq).subscribe({
+      next: (packet) => {
+        const event = packet.event as NostrEvent;
+        // Check if it's a mojimoji graph event
+        const dTag = event.tags.find(t => t[0] === 'd' && t[1]?.startsWith(GRAPH_PATH_PREFIX));
+        if (dTag) {
+          events.push(event);
+        }
+      },
+      error: (err) => {
+        console.error('Error loading graphs:', err);
+        if (!resolved) {
+          resolved = true;
+          resolve(parseGraphEvents(events, userPubkey));
+        }
+      },
+    });
+
+    // Build filter based on type
+    const nostrFilter: Record<string, unknown> = {
+      kinds: [KIND_APP_DATA],
+      limit: 100,
+    };
+
+    if (filter === 'mine' && userPubkey) {
+      nostrFilter.authors = [userPubkey];
+    } else if (filter === 'by-author' && authorPubkey) {
+      nostrFilter.authors = [authorPubkey];
+    } else if (filter === 'public') {
+      nostrFilter['#public'] = [''];
+    }
+
+    rxReq.emit(nostrFilter as { kinds: number[]; limit: number });
+
+    // Timeout after 10 seconds
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        subscription.unsubscribe();
+        resolve(parseGraphEvents(events, userPubkey));
+      }
+    }, 10000);
+  });
+}
+
+// Load a single graph by path
+export async function loadGraphByPath(
+  path: string,
+  pubkey: string,
+  relayUrls?: string[]
+): Promise<GraphData | null> {
+  let relays = relayUrls?.filter(url => url.trim());
+  if (!relays || relays.length === 0) {
+    relays = await fetchUserRelays(pubkey);
+  }
+  if (relays.length === 0) {
+    relays = WELL_KNOWN_RELAYS;
+  }
+
+  return new Promise((resolve) => {
+    const client = getRxNostr();
+    client.setDefaultRelays(relays!);
+
+    const rxReq = createRxForwardReq();
+    let resolved = false;
+
+    const subscription = client.use(rxReq).subscribe({
+      next: (packet) => {
+        const event = packet.event as NostrEvent;
+        const dTag = event.tags.find(t => t[0] === 'd');
+        if (dTag && dTag[1] === GRAPH_PATH_PREFIX + path) {
+          if (!resolved) {
+            resolved = true;
+            subscription.unsubscribe();
+            try {
+              const graphData = JSON.parse(event.content) as GraphData;
+              resolve(graphData);
+            } catch {
+              resolve(null);
+            }
+          }
+        }
+      },
+      error: () => {
+        if (!resolved) {
+          resolved = true;
+          resolve(null);
+        }
+      },
+    });
+
+    rxReq.emit({
+      kinds: [KIND_APP_DATA],
+      authors: [pubkey],
+      '#d': [GRAPH_PATH_PREFIX + path],
+      limit: 1,
+    });
+
+    // Timeout after 5 seconds
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        subscription.unsubscribe();
+        resolve(null);
+      }
+    }, 5000);
+  });
+}
+
+// Delete graph from Nostr relay (NIP-09)
+export async function deleteGraphFromNostr(
+  path: string,
+  relayUrls?: string[]
+): Promise<void> {
+  if (!isNip07Available()) {
+    throw new Error('NIP-07 extension not available');
+  }
+
+  const pubkey = await getPubkey();
+
+  let relays = relayUrls?.filter(url => url.trim());
+  if (!relays || relays.length === 0) {
+    relays = await fetchUserRelays(pubkey);
+  }
+  if (relays.length === 0) {
+    throw new Error('No relay URLs available for deletion');
+  }
+
+  // Create deletion event (NIP-09)
+  const unsignedEvent: UnsignedEvent = {
+    kind: KIND_DELETE,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [
+      ['a', `${KIND_APP_DATA}:${pubkey}:${GRAPH_PATH_PREFIX}${path}`],
+      ['k', String(KIND_APP_DATA)],
+    ],
+    content: '',
+  };
+
+  const signedEvent = await signEvent(unsignedEvent);
+
+  const client = getRxNostr();
+  client.setDefaultRelays(relays);
+  client.send(signedEvent);
+
+  await new Promise(resolve => setTimeout(resolve, 1000));
+}
+
+// Parse graph events into directory structure
+function parseGraphEvents(events: NostrEvent[], _userPubkey: string | null): NostrGraphItem[] {
+  const items: NostrGraphItem[] = [];
+  const directories = new Set<string>();
+
+  for (const event of events) {
+    const dTag = event.tags.find(t => t[0] === 'd');
+    if (!dTag || !dTag[1]?.startsWith(GRAPH_PATH_PREFIX)) continue;
+
+    const fullPath = dTag[1].slice(GRAPH_PATH_PREFIX.length);
+    const parts = fullPath.split('/');
+    const name = parts[parts.length - 1];
+
+    // Add parent directories
+    for (let i = 0; i < parts.length - 1; i++) {
+      const dirPath = parts.slice(0, i + 1).join('/');
+      directories.add(dirPath);
+    }
+
+    items.push({
+      path: fullPath,
+      name,
+      createdAt: event.created_at,
+      pubkey: event.pubkey,
+      isDirectory: false,
+      event,
+    });
+  }
+
+  // Add directory items
+  for (const dirPath of directories) {
+    const parts = dirPath.split('/');
+    const name = parts[parts.length - 1];
+    items.push({
+      path: dirPath,
+      name,
+      createdAt: 0,
+      pubkey: '',
+      isDirectory: true,
+    });
+  }
+
+  return items;
+}
+
+// Get items in a specific directory
+export function getNostrItemsInDirectory(
+  allItems: NostrGraphItem[],
+  directory: string,
+  _userPubkey: string | null
+): NostrGraphItem[] {
+  const result: NostrGraphItem[] = [];
+  const seenDirs = new Set<string>();
+
+  for (const item of allItems) {
+    const parentDir = item.path.includes('/')
+      ? item.path.slice(0, item.path.lastIndexOf('/'))
+      : '';
+
+    // Check if this item is in the target directory
+    if (parentDir === directory) {
+      if (item.isDirectory) {
+        if (!seenDirs.has(item.name)) {
+          seenDirs.add(item.name);
+          result.push(item);
+        }
+      } else {
+        result.push(item);
+      }
+    } else if (item.path.startsWith(directory ? directory + '/' : '')) {
+      // Check for subdirectories
+      const relativePath = directory ? item.path.slice(directory.length + 1) : item.path;
+      const firstSlash = relativePath.indexOf('/');
+      if (firstSlash > 0) {
+        const subDir = relativePath.slice(0, firstSlash);
+        if (!seenDirs.has(subDir)) {
+          seenDirs.add(subDir);
+          result.push({
+            path: directory ? `${directory}/${subDir}` : subDir,
+            name: subDir,
+            createdAt: 0,
+            pubkey: '',
+            isDirectory: true,
+          });
+        }
+      }
+    }
+  }
+
+  // Sort: directories first, then by name
+  result.sort((a, b) => {
+    if (a.isDirectory !== b.isDirectory) {
+      return a.isDirectory ? -1 : 1;
+    }
+    return a.name.localeCompare(b.name);
+  });
+
+  return result;
+}
+
+// Profile utilities for author display
+export function getProfileFromCache(pubkey: string): Profile | undefined {
+  const cacheStr = localStorage.getItem('mojimoji-profile-cache');
+  if (!cacheStr) return undefined;
+  try {
+    const cache = JSON.parse(cacheStr) as Record<string, Profile>;
+    return cache[pubkey];
+  } catch {
+    return undefined;
+  }
+}
+
+// Get all cached profiles for autocomplete
+export function getAllCachedProfiles(): Array<{ pubkey: string; profile: Profile }> {
+  const cacheStr = localStorage.getItem('mojimoji-profile-cache');
+  if (!cacheStr) return [];
+  try {
+    const cache = JSON.parse(cacheStr) as Record<string, Profile>;
+    return Object.entries(cache).map(([pubkey, profile]) => ({ pubkey, profile }));
+  } catch {
+    return [];
+  }
+}

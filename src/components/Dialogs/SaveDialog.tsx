@@ -1,6 +1,9 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getGraphsInDirectory, deleteGraphAtPath, deleteGraphsInDirectory } from '../../utils/localStorage';
+import { isNip07Available, getPubkey } from '../../nostr/nip07';
+import { loadGraphsFromNostr, getNostrItemsInDirectory, deleteGraphFromNostr, type NostrGraphItem } from '../../nostr/graphStorage';
+import { formatNpub } from '../../nostr/types';
 import './Dialog.css';
 
 type SaveDestination = 'local' | 'nostr' | 'file';
@@ -26,6 +29,10 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
   const [refreshKey, setRefreshKey] = useState(0);
   // Track if mousedown started on overlay (for proper click-outside handling)
   const [mouseDownOnOverlay, setMouseDownOnOverlay] = useState(false);
+  // Nostr state
+  const [nostrGraphs, setNostrGraphs] = useState<NostrGraphItem[]>([]);
+  const [nostrLoading, setNostrLoading] = useState(false);
+  const [userPubkey, setUserPubkey] = useState<string | null>(null);
 
   // Refresh data when dialog opens
   useEffect(() => {
@@ -34,12 +41,46 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
     }
   }, [isOpen]);
 
+  // Load user's pubkey and Nostr graphs when Nostr tab is selected
+  useEffect(() => {
+    if (isOpen && destination === 'nostr') {
+      const loadNostrData = async () => {
+        if (!isNip07Available()) {
+          setError(t('dialogs.save.errorNoNip07'));
+          return;
+        }
+        try {
+          setNostrLoading(true);
+          setError(null);
+          const pubkey = await getPubkey();
+          setUserPubkey(pubkey);
+          const graphs = await loadGraphsFromNostr('mine');
+          setNostrGraphs(graphs);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : t('dialogs.save.errorUnknown'));
+        } finally {
+          setNostrLoading(false);
+        }
+      };
+      loadNostrData();
+    }
+  }, [isOpen, destination, t]);
+
   const fullPath = currentPath.length > 0 ? currentPath.join('/') : '';
   // Get saved graphs with locally-created directories
   // Directories are derived from graph paths + session-only local directories
-  const items = useMemo(() => {
+  const localItems = useMemo(() => {
     return destination === 'local' ? getGraphsInDirectory(fullPath, localDirectories) : [];
   }, [destination, fullPath, localDirectories, refreshKey]);
+
+  // Get Nostr items for current directory
+  const nostrItems = useMemo(() => {
+    if (destination !== 'nostr') return [];
+    return getNostrItemsInDirectory(nostrGraphs, fullPath, userPubkey);
+  }, [destination, nostrGraphs, fullPath, userPubkey]);
+
+  // Combined items for current destination
+  const items = destination === 'local' ? localItems : nostrItems;
 
   const handleNavigate = useCallback((name: string) => {
     setCurrentPath(prev => [...prev, name]);
@@ -57,16 +98,28 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
     setGraphName(name);
   }, []);
 
-  const handleDeleteGraph = useCallback((e: React.MouseEvent, path: string, name: string) => {
+  const handleDeleteGraph = useCallback(async (e: React.MouseEvent, path: string, name: string) => {
     e.stopPropagation();
     if (confirm(t('dialogs.load.confirmDeleteGraph', { name }))) {
-      deleteGraphAtPath(path);
+      if (destination === 'local') {
+        deleteGraphAtPath(path);
+        setRefreshKey(prev => prev + 1);
+      } else if (destination === 'nostr') {
+        try {
+          const relays = relayUrls.split('\n').filter(url => url.trim());
+          await deleteGraphFromNostr(path, relays.length > 0 ? relays : undefined);
+          // Reload Nostr graphs
+          const graphs = await loadGraphsFromNostr('mine');
+          setNostrGraphs(graphs);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : t('dialogs.save.errorUnknown'));
+        }
+      }
       if (graphName === name) {
         setGraphName('');
       }
-      setRefreshKey(prev => prev + 1);
     }
-  }, [t, graphName]);
+  }, [t, graphName, destination, relayUrls]);
 
   const handleDeleteFolder = useCallback((e: React.MouseEvent, path: string, name: string) => {
     e.stopPropagation();
@@ -195,53 +248,71 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                 ))}
               </div>
 
+              {/* User's npub display for Nostr */}
+              {destination === 'nostr' && userPubkey && (
+                <div className="dialog-user-info">
+                  {t('dialogs.save.yourPubkey')}: <span className="user-npub">{formatNpub(userPubkey)}</span>
+                </div>
+              )}
+
               {/* Directory browser */}
               <div className="dialog-browser">
-                {currentPath.length > 0 && (
-                  <div className="browser-item directory" onClick={handleNavigateUp}>
-                    <span className="item-icon">📁</span>
-                    <span className="item-name">..</span>
-                  </div>
-                )}
-                {items.filter(item => item.isDirectory).map(item => (
-                  <div
-                    key={item.path}
-                    className="browser-item directory"
-                    onClick={() => handleNavigate(item.name)}
-                  >
-                    <span className="item-icon">📁</span>
-                    <span className="item-name">{item.name}</span>
-                    <button
-                      className="item-delete"
-                      onClick={(e) => handleDeleteFolder(e, item.path, item.name)}
-                      title={t('dialogs.load.deleteFolder')}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-                {items.filter(item => !item.isDirectory).map(item => (
-                  <div
-                    key={item.path}
-                    className={`browser-item graph ${graphName === item.name ? 'selected' : ''}`}
-                    onClick={() => handleSelectGraph(item.name)}
-                  >
-                    <span className="item-icon">📄</span>
-                    <span className="item-name">{item.name}</span>
-                    <span className="item-date">
-                      {new Date(item.savedAt).toLocaleString()}
-                    </span>
-                    <button
-                      className="item-delete"
-                      onClick={(e) => handleDeleteGraph(e, item.path, item.name)}
-                      title={t('dialogs.load.deleteGraph')}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-                {items.length === 0 && currentPath.length === 0 && (
-                  <div className="browser-empty">{t('dialogs.save.emptyDirectory')}</div>
+                {nostrLoading && destination === 'nostr' ? (
+                  <div className="browser-empty">{t('dialogs.save.loadingGraphs')}</div>
+                ) : (
+                  <>
+                    {currentPath.length > 0 && (
+                      <div className="browser-item directory" onClick={handleNavigateUp}>
+                        <span className="item-icon">📁</span>
+                        <span className="item-name">..</span>
+                      </div>
+                    )}
+                    {items.filter(item => item.isDirectory).map(item => (
+                      <div
+                        key={item.path}
+                        className="browser-item directory"
+                        onClick={() => handleNavigate(item.name)}
+                      >
+                        <span className="item-icon">📁</span>
+                        <span className="item-name">{item.name}</span>
+                        {destination === 'local' && (
+                          <button
+                            className="item-delete"
+                            onClick={(e) => handleDeleteFolder(e, item.path, item.name)}
+                            title={t('dialogs.load.deleteFolder')}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {items.filter(item => !item.isDirectory).map(item => {
+                      const timestamp = 'savedAt' in item ? item.savedAt : ('createdAt' in item ? (item as NostrGraphItem).createdAt * 1000 : 0);
+                      return (
+                        <div
+                          key={item.path}
+                          className={`browser-item graph ${graphName === item.name ? 'selected' : ''}`}
+                          onClick={() => handleSelectGraph(item.name)}
+                        >
+                          <span className="item-icon">📄</span>
+                          <span className="item-name">{item.name}</span>
+                          <span className="item-date">
+                            {timestamp > 0 ? new Date(timestamp).toLocaleString() : ''}
+                          </span>
+                          <button
+                            className="item-delete"
+                            onClick={(e) => handleDeleteGraph(e, item.path, item.name)}
+                            title={t('dialogs.load.deleteGraph')}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {items.length === 0 && currentPath.length === 0 && (
+                      <div className="browser-empty">{t('dialogs.save.emptyDirectory')}</div>
+                    )}
+                  </>
                 )}
               </div>
             </>
@@ -282,6 +353,9 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                     />
                     For yourself
                   </label>
+                </div>
+                <div className="dialog-visibility-description">
+                  {t('dialogs.save.visibilityDescription')}
                 </div>
               </div>
 

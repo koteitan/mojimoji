@@ -21,6 +21,7 @@ import {
   importGraphFromFile,
   type GraphData,
 } from '../../utils/localStorage';
+import { saveGraphToNostr, loadGraphByPath } from '../../nostr/graphStorage';
 import type { TimelineEvent, EventSignal } from '../../nostr/types';
 import type { Observable, Subscription } from 'rxjs';
 import './GraphEditor.css';
@@ -710,15 +711,18 @@ export function GraphEditor({
     } else if (destination === 'file') {
       exportGraphToFile(graphData, path);
     } else if (destination === 'nostr') {
-      // TODO: Implement Nostr relay save with NIP-78
-      console.log('Nostr save not yet implemented', { path, options });
+      await saveGraphToNostr(path, graphData, {
+        visibility: options?.visibility || 'private',
+        relayUrls: options?.relayUrls,
+      });
     }
   }, [getCurrentGraphData]);
 
   // Handle load dialog load action
   const handleLoad = useCallback(async (
     source: 'local' | 'nostr' | 'file',
-    pathOrFile: string | File
+    pathOrFile: string | File,
+    options?: { pubkey?: string }
   ) => {
     let graphData: GraphData | null = null;
 
@@ -731,9 +735,8 @@ export function GraphEditor({
       } catch (e) {
         console.error('Failed to import graph from file:', e);
       }
-    } else if (source === 'nostr') {
-      // TODO: Implement Nostr relay load with NIP-78
-      console.log('Nostr load not yet implemented', { pathOrFile });
+    } else if (source === 'nostr' && typeof pathOrFile === 'string' && options?.pubkey) {
+      graphData = await loadGraphByPath(pathOrFile, options.pubkey);
     }
 
     if (graphData) {

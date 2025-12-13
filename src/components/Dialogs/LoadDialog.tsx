@@ -1,14 +1,25 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getGraphsInDirectory, deleteGraphAtPath, deleteGraphsInDirectory } from '../../utils/localStorage';
+import { isNip07Available, getPubkey } from '../../nostr/nip07';
+import {
+  loadGraphsFromNostr,
+  getNostrItemsInDirectory,
+  deleteGraphFromNostr,
+  getProfileFromCache,
+  getAllCachedProfiles,
+  type NostrGraphItem
+} from '../../nostr/graphStorage';
+import { formatNpub, decodeBech32ToHex, isHex64 } from '../../nostr/types';
 import './Dialog.css';
 
 type LoadSource = 'local' | 'nostr' | 'file';
+type NostrFilter = 'public' | 'mine' | 'by-author';
 
 interface LoadDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoad: (source: LoadSource, pathOrFile: string | File) => Promise<void>;
+  onLoad: (source: LoadSource, pathOrFile: string | File, options?: { pubkey?: string }) => Promise<void>;
 }
 
 export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
@@ -16,7 +27,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
   const [source, setSource] = useState<LoadSource>('local');
   const [currentPath, setCurrentPath] = useState<string[]>([]);
   const [selectedGraph, setSelectedGraph] = useState<string | null>(null);
-  const [pubkeyInput, setPubkeyInput] = useState('');
+  const [selectedNostrGraph, setSelectedNostrGraph] = useState<NostrGraphItem | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -25,6 +36,16 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
   // Track if mousedown started on overlay (for proper click-outside handling)
   const [mouseDownOnOverlay, setMouseDownOnOverlay] = useState(false);
 
+  // Nostr state
+  const [nostrFilter, setNostrFilter] = useState<NostrFilter>('mine');
+  const [authorInput, setAuthorInput] = useState('');
+  const [authorPubkey, setAuthorPubkey] = useState<string | null>(null);
+  const [nostrGraphs, setNostrGraphs] = useState<NostrGraphItem[]>([]);
+  const [nostrLoading, setNostrLoading] = useState(false);
+  const [userPubkey, setUserPubkey] = useState<string | null>(null);
+  const [authorSuggestions, setAuthorSuggestions] = useState<Array<{ pubkey: string; name: string; picture?: string }>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
   // Refresh data when dialog opens
   useEffect(() => {
     if (isOpen) {
@@ -32,32 +53,130 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
     }
   }, [isOpen]);
 
+  // Load user's pubkey when Nostr tab is selected
+  useEffect(() => {
+    if (isOpen && source === 'nostr') {
+      const loadUserPubkey = async () => {
+        if (isNip07Available()) {
+          try {
+            const pubkey = await getPubkey();
+            setUserPubkey(pubkey);
+          } catch {
+            // NIP-07 available but user denied
+          }
+        }
+      };
+      loadUserPubkey();
+    }
+  }, [isOpen, source]);
+
+  // Load Nostr graphs when filter or author changes
+  useEffect(() => {
+    if (isOpen && source === 'nostr') {
+      const loadNostrGraphs = async () => {
+        setNostrLoading(true);
+        setError(null);
+        setSelectedNostrGraph(null);
+        setCurrentPath([]);
+
+        try {
+          if (nostrFilter === 'mine') {
+            if (!isNip07Available()) {
+              setError(t('dialogs.load.errorNoNip07'));
+              setNostrGraphs([]);
+              return;
+            }
+          }
+
+          if (nostrFilter === 'by-author' && !authorPubkey) {
+            setNostrGraphs([]);
+            return;
+          }
+
+          const graphs = await loadGraphsFromNostr(
+            nostrFilter,
+            nostrFilter === 'by-author' ? authorPubkey! : undefined
+          );
+          setNostrGraphs(graphs);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : t('dialogs.load.errorUnknown'));
+          setNostrGraphs([]);
+        } finally {
+          setNostrLoading(false);
+        }
+      };
+      loadNostrGraphs();
+    }
+  }, [isOpen, source, nostrFilter, authorPubkey, t]);
+
+  // Update author suggestions when input changes
+  useEffect(() => {
+    if (authorInput.length > 0) {
+      const profiles = getAllCachedProfiles();
+      const searchLower = authorInput.toLowerCase();
+      const matches = profiles
+        .filter(p => {
+          const name = p.profile.display_name || p.profile.name || '';
+          return name.toLowerCase().includes(searchLower) ||
+            p.pubkey.includes(authorInput) ||
+            formatNpub(p.pubkey).includes(authorInput);
+        })
+        .slice(0, 10)
+        .map(p => ({
+          pubkey: p.pubkey,
+          name: p.profile.display_name || p.profile.name || formatNpub(p.pubkey),
+          picture: p.profile.picture,
+        }));
+      setAuthorSuggestions(matches);
+      setShowSuggestions(matches.length > 0);
+    } else {
+      setAuthorSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }, [authorInput]);
+
   const fullPath = currentPath.length > 0 ? currentPath.join('/') : '';
+
   // Get saved graphs - directories are derived from graph paths
-  const items = useMemo(() => {
+  const localItems = useMemo(() => {
     return source === 'local' ? getGraphsInDirectory(fullPath) : [];
   }, [source, fullPath, refreshKey]);
+
+  // Get Nostr items for current directory
+  const nostrItems = useMemo(() => {
+    if (source !== 'nostr') return [];
+    return getNostrItemsInDirectory(nostrGraphs, fullPath, userPubkey);
+  }, [source, nostrGraphs, fullPath, userPubkey]);
+
+  const items = source === 'local' ? localItems : [];
 
   const handleNavigate = useCallback((name: string) => {
     setCurrentPath(prev => [...prev, name]);
     setSelectedGraph(null);
+    setSelectedNostrGraph(null);
   }, []);
 
   const handleNavigateUp = useCallback(() => {
     setCurrentPath(prev => prev.slice(0, -1));
     setSelectedGraph(null);
+    setSelectedNostrGraph(null);
   }, []);
 
   const handleBreadcrumbClick = useCallback((index: number) => {
     setCurrentPath(prev => prev.slice(0, index));
     setSelectedGraph(null);
+    setSelectedNostrGraph(null);
   }, []);
 
   const handleSelectGraph = useCallback((path: string) => {
     setSelectedGraph(path);
   }, []);
 
-  const handleDeleteGraph = useCallback((e: React.MouseEvent, path: string, name: string) => {
+  const handleSelectNostrGraph = useCallback((item: NostrGraphItem) => {
+    setSelectedNostrGraph(item);
+  }, []);
+
+  const handleDeleteGraph = useCallback(async (e: React.MouseEvent, path: string, name: string) => {
     e.stopPropagation();
     if (confirm(t('dialogs.load.confirmDeleteGraph', { name }))) {
       deleteGraphAtPath(path);
@@ -65,6 +184,21 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
       setRefreshKey(prev => prev + 1);
     }
   }, [t]);
+
+  const handleDeleteNostrGraph = useCallback(async (e: React.MouseEvent, item: NostrGraphItem) => {
+    e.stopPropagation();
+    if (confirm(t('dialogs.load.confirmDeleteGraph', { name: item.name }))) {
+      try {
+        await deleteGraphFromNostr(item.path);
+        // Reload graphs
+        const graphs = await loadGraphsFromNostr(nostrFilter, nostrFilter === 'by-author' ? authorPubkey! : undefined);
+        setNostrGraphs(graphs);
+        setSelectedNostrGraph(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : t('dialogs.load.errorUnknown'));
+      }
+    }
+  }, [t, nostrFilter, authorPubkey]);
 
   const handleDeleteFolder = useCallback((e: React.MouseEvent, path: string, name: string) => {
     e.stopPropagation();
@@ -83,6 +217,28 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
 
   const handleChooseFile = useCallback(() => {
     fileInputRef.current?.click();
+  }, []);
+
+  const handleAuthorSelect = useCallback((pubkey: string) => {
+    setAuthorPubkey(pubkey);
+    const profile = getProfileFromCache(pubkey);
+    setAuthorInput(profile?.display_name || profile?.name || formatNpub(pubkey));
+    setShowSuggestions(false);
+  }, []);
+
+  const handleAuthorInputChange = useCallback((value: string) => {
+    setAuthorInput(value);
+    // Try to parse as pubkey
+    if (isHex64(value)) {
+      setAuthorPubkey(value);
+    } else {
+      const decoded = decodeBech32ToHex(value);
+      if (decoded && (decoded.type === 'npub' || decoded.type === 'nprofile')) {
+        setAuthorPubkey(decoded.hex);
+      } else {
+        setAuthorPubkey(null);
+      }
+    }
   }, []);
 
   const handleLoad = useCallback(async () => {
@@ -105,10 +261,12 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
         }
         await onLoad(source, selectedGraph);
       } else if (source === 'nostr') {
-        // TODO: Implement Nostr load
-        setError('Nostr load not yet implemented');
-        setLoading(false);
-        return;
+        if (!selectedNostrGraph) {
+          setError(t('dialogs.load.errorNoSelection'));
+          setLoading(false);
+          return;
+        }
+        await onLoad(source, selectedNostrGraph.path, { pubkey: selectedNostrGraph.pubkey });
       }
       onClose();
     } catch (e) {
@@ -116,7 +274,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
     } finally {
       setLoading(false);
     }
-  }, [source, selectedGraph, selectedFile, onLoad, onClose, t]);
+  }, [source, selectedGraph, selectedNostrGraph, selectedFile, onLoad, onClose, t]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -138,6 +296,9 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
     }
     setMouseDownOnOverlay(false);
   }, [mouseDownOnOverlay, onClose]);
+
+  // Check if load button should be enabled for Nostr
+  const isNostrLoadEnabled = source === 'nostr' && selectedNostrGraph !== null;
 
   if (!isOpen) return null;
 
@@ -161,7 +322,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
             </button>
             <button
               className={`dialog-tab ${source === 'nostr' ? 'active' : ''}`}
-              onClick={(e) => { e.stopPropagation(); setSource('nostr'); setCurrentPath([]); setSelectedGraph(null); }}
+              onClick={(e) => { e.stopPropagation(); setSource('nostr'); setCurrentPath([]); setSelectedNostrGraph(null); }}
             >
               Nostr Relay
             </button>
@@ -180,19 +341,169 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
 
           {source === 'nostr' && (
             <>
-              {/* Pubkey input */}
+              {/* Visibility filter */}
               <div className="dialog-input-group">
-                <label>{t('dialogs.load.pubkeyLabel')}</label>
-                <input
-                  type="text"
-                  value={pubkeyInput}
-                  onChange={e => setPubkeyInput(e.target.value)}
-                  placeholder={t('dialogs.load.pubkeyPlaceholder')}
-                />
+                <label>{t('dialogs.load.filterLabel')}</label>
+                <div className="dialog-radio-group">
+                  <label>
+                    <input
+                      type="radio"
+                      name="nostrFilter"
+                      checked={nostrFilter === 'public'}
+                      onChange={() => setNostrFilter('public')}
+                    />
+                    Public
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="nostrFilter"
+                      checked={nostrFilter === 'mine'}
+                      onChange={() => setNostrFilter('mine')}
+                    />
+                    Mine
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="nostrFilter"
+                      checked={nostrFilter === 'by-author'}
+                      onChange={() => setNostrFilter('by-author')}
+                    />
+                    By author
+                  </label>
+                </div>
               </div>
 
-              {/* Nostr not implemented message */}
-              <div className="browser-empty">Nostr relay loading is not yet implemented</div>
+              {/* Author input (shown when "By author" selected) */}
+              {nostrFilter === 'by-author' && (
+                <div className="dialog-input-group">
+                  <label>{t('dialogs.load.authorLabel')}</label>
+                  <div className="author-autocomplete">
+                    <input
+                      type="text"
+                      value={authorInput}
+                      onChange={e => handleAuthorInputChange(e.target.value)}
+                      onFocus={() => authorSuggestions.length > 0 && setShowSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                      placeholder={t('dialogs.load.authorPlaceholder')}
+                    />
+                    {showSuggestions && authorSuggestions.length > 0 && (
+                      <div className="author-suggestions">
+                        {authorSuggestions.map(s => (
+                          <div
+                            key={s.pubkey}
+                            className="author-suggestion"
+                            onClick={() => handleAuthorSelect(s.pubkey)}
+                          >
+                            {s.picture ? (
+                              <img src={s.picture} alt="" className="author-picture" />
+                            ) : (
+                              <span className="author-picture-placeholder">👤</span>
+                            )}
+                            <span className="author-name">{s.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* User's npub display */}
+              {userPubkey && nostrFilter === 'mine' && (
+                <div className="dialog-user-info">
+                  {t('dialogs.load.yourPubkey')}: <span className="user-npub">{formatNpub(userPubkey)}</span>
+                </div>
+              )}
+
+              {/* Breadcrumb navigation */}
+              <div className="dialog-breadcrumb">
+                <span
+                  className="breadcrumb-item clickable"
+                  onClick={() => handleBreadcrumbClick(0)}
+                >
+                  root
+                </span>
+                {currentPath.map((dir, index) => (
+                  <span key={index}>
+                    <span className="breadcrumb-separator">/</span>
+                    <span
+                      className="breadcrumb-item clickable"
+                      onClick={() => handleBreadcrumbClick(index + 1)}
+                    >
+                      {dir}
+                    </span>
+                  </span>
+                ))}
+              </div>
+
+              {/* Nostr directory browser */}
+              <div className="dialog-browser">
+                {nostrLoading ? (
+                  <div className="browser-empty">{t('dialogs.load.loadingGraphs')}</div>
+                ) : (
+                  <>
+                    {currentPath.length > 0 && (
+                      <div className="browser-item directory" onClick={handleNavigateUp}>
+                        <span className="item-icon">📁</span>
+                        <span className="item-name">..</span>
+                      </div>
+                    )}
+                    {nostrItems.filter(item => item.isDirectory).map(item => (
+                      <div
+                        key={item.path}
+                        className="browser-item directory"
+                        onClick={() => handleNavigate(item.name)}
+                      >
+                        <span className="item-icon">📁</span>
+                        <span className="item-name">{item.name}</span>
+                      </div>
+                    ))}
+                    {nostrItems.filter(item => !item.isDirectory).map(item => {
+                      const profile = getProfileFromCache(item.pubkey);
+                      const isOwn = item.pubkey === userPubkey;
+                      return (
+                        <div
+                          key={item.path}
+                          className={`browser-item graph ${selectedNostrGraph?.path === item.path ? 'selected' : ''}`}
+                          onClick={() => handleSelectNostrGraph(item)}
+                        >
+                          <span className="item-icon">📄</span>
+                          <span className="item-name">{item.name}</span>
+                          <span className="item-date">
+                            {item.createdAt > 0 ? new Date(item.createdAt * 1000).toLocaleString() : ''}
+                          </span>
+                          {/* Author info */}
+                          <span className="item-author-info">
+                            {profile?.picture ? (
+                              <img src={profile.picture} alt="" className="item-author-picture" />
+                            ) : (
+                              <span className="item-author-picture-placeholder">👤</span>
+                            )}
+                            <span className="item-author-name">
+                              {profile?.display_name || profile?.name || formatNpub(item.pubkey)}
+                            </span>
+                          </span>
+                          {/* Delete button (only for own graphs) */}
+                          {isOwn && (
+                            <button
+                              className="item-delete"
+                              onClick={(e) => handleDeleteNostrGraph(e, item)}
+                              title={t('dialogs.load.deleteGraph')}
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {nostrItems.length === 0 && !nostrLoading && (
+                      <div className="browser-empty">{t('dialogs.load.emptyDirectory')}</div>
+                    )}
+                  </>
+                )}
+              </div>
             </>
           )}
 
@@ -300,7 +611,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
           <button
             className="dialog-button primary"
             onClick={handleLoad}
-            disabled={loading || (source === 'file' ? !selectedFile : (source === 'local' ? !selectedGraph : true))}
+            disabled={loading || (source === 'file' ? !selectedFile : (source === 'local' ? !selectedGraph : !isNostrLoadEnabled))}
           >
             {loading ? t('dialogs.load.loading') : t('dialogs.load.load')}
           </button>
