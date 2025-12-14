@@ -658,7 +658,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
           )}
 
           {/* Error message */}
-          {isNip07Error && <Nip07ErrorMessage messageKey="dialogs.load.errorNoNip07" />}
+          {isNip07Error && <Nip07ErrorMessage />}
           {error && !isNip07Error && <div className="dialog-error">{error}</div>}
         </div>
 

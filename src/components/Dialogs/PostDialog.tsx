@@ -214,7 +214,7 @@ export function PostDialog({ isOpen, onClose }: PostDialogProps) {
             )}
 
             {/* Error message */}
-            {isNip07Error && <Nip07ErrorMessage messageKey="dialogs.post.errorNoNip07" />}
+            {isNip07Error && <Nip07ErrorMessage />}
             {error && !isNip07Error && <div className="dialog-error">{error}</div>}
           </div>
 

@@ -3,12 +3,8 @@ import { useTranslation } from 'react-i18next';
 const NOS2X_URL = 'https://chromewebstore.google.com/detail/nos2x/kpgefcfmnafjgpblomihpgmejjdanjjp';
 const ALBY_URL = 'https://chromewebstore.google.com/detail/alby-bitcoin-wallet-for-l/iokeahhehimjnekafflcihljlcjccdbe';
 
-interface Nip07ErrorMessageProps {
-  messageKey: string;
-}
-
-export function Nip07ErrorMessage({ messageKey }: Nip07ErrorMessageProps) {
-  const { t, i18n } = useTranslation();
+export function Nip07ErrorMessage() {
+  const { i18n } = useTranslation();
   const isJapanese = i18n.language.startsWith('ja');
 
   return (

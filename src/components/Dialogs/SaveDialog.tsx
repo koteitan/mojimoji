@@ -454,7 +454,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
           )}
 
           {/* Error message */}
-          {isNip07Error && <Nip07ErrorMessage messageKey="dialogs.save.errorNoNip07" />}
+          {isNip07Error && <Nip07ErrorMessage />}
           {error && !isNip07Error && <div className="dialog-error">{error}</div>}
         </div>
 
