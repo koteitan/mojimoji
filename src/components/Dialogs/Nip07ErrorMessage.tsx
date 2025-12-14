@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 const NOS2X_URL = 'https://chromewebstore.google.com/detail/nos2x/kpgefcfmnafjgpblomihpgmejjdanjjp';
-const ALBY_URL = 'https://getalby.com/';
+const ALBY_URL = 'https://chromewebstore.google.com/detail/alby-bitcoin-wallet-for-l/iokeahhehimjnekafflcihljlcjccdbe';
 
 interface Nip07ErrorMessageProps {
   messageKey: string;
