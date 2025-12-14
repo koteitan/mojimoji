@@ -23,7 +23,7 @@ import {
   type GraphData,
 } from '../../utils/localStorage';
 import { saveGraphToNostr, loadGraphByPath } from '../../nostr/graphStorage';
-import type { TimelineEvent, EventSignal } from '../../nostr/types';
+import { extractContentWarning, type TimelineEvent, type EventSignal } from '../../nostr/types';
 import type { Observable, Subscription } from 'rxjs';
 import { APP_VERSION } from '../../App';
 import './GraphEditor.css';
@@ -522,8 +522,10 @@ export function GraphEditor({
             }
             // Try to get cached profile
             const cachedProfile = getCachedProfile(signal.event.pubkey);
+            // Extract content warning (NIP-36)
+            const contentWarning = extractContentWarning(signal.event);
             // Add event and sort by created_at (newest first)
-            const newEvents = [...events, { event: signal.event, profile: cachedProfile }].sort(
+            const newEvents = [...events, { event: signal.event, profile: cachedProfile, contentWarning }].sort(
               (a, b) => b.event.created_at - a.event.created_at
             );
             // Limit to 100 events

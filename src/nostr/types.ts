@@ -147,6 +147,29 @@ export interface Profile {
 export interface TimelineEvent {
   event: NostrEvent;
   profile?: Profile;
+  contentWarning?: string | null; // NIP-36: content warning reason (null = has warning but no reason)
+}
+
+// Extract content warning from event tags (NIP-36)
+// Returns: string (reason), null (warning with no reason), undefined (no warning)
+export function extractContentWarning(event: NostrEvent): string | null | undefined {
+  const cwTag = event.tags.find(tag => tag[0] === 'content-warning');
+  if (!cwTag) return undefined;
+  return cwTag[1] || null; // Return reason or null if no reason provided
+}
+
+// Extract image URLs from text content
+// Supports: jpg, jpeg, gif, png (case insensitive)
+const IMAGE_URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`\[\]]+\.(jpg|jpeg|gif|png)(\?[^\s<>"{}|\\^`\[\]]*)?/gi;
+
+export function extractImageUrls(content: string): string[] {
+  const matches = content.match(IMAGE_URL_REGEX);
+  return matches ? [...new Set(matches)] : []; // Remove duplicates
+}
+
+// Check if URL is a valid HTTPS image URL
+export function isValidImageUrl(url: string): boolean {
+  return url.startsWith('https://') && IMAGE_URL_REGEX.test(url);
 }
 
 // Signal type for event flow through the graph

@@ -47,7 +47,11 @@
     }
   },
   "timeline": {
-    "defaultName": "Timeline"
+    "defaultName": "Timeline",
+    "contentWarning": "Content Warning",
+    "contentWarningWithReason": "Content Warning: {{reason}}",
+    "showContent": "Show Content",
+    "hideContent": "Hide"
   },
   "dialogs": {
     "cancel": "Cancel",

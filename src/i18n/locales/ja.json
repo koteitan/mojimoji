@@ -47,7 +47,11 @@
     }
   },
   "timeline": {
-    "defaultName": "タイムライン"
+    "defaultName": "タイムライン",
+    "contentWarning": "閲覧注意",
+    "contentWarningWithReason": "閲覧注意: {{reason}}",
+    "showContent": "表示する",
+    "hideContent": "隠す"
   },
   "dialogs": {
     "cancel": "キャンセル",

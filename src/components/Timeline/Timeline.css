@@ -105,3 +105,119 @@
 .timeline-events::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+/* Content Warning (NIP-36) */
+.timeline-item-cw {
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 12px;
+  text-align: center;
+}
+
+.timeline-item-cw-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.timeline-item-cw-icon {
+  font-size: 18px;
+}
+
+.timeline-item-cw-text {
+  color: #f59e0b;
+  font-size: 13px;
+}
+
+.timeline-item-cw-button {
+  background: #444;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  padding: 6px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.timeline-item-cw-button:hover {
+  background: #555;
+}
+
+.timeline-item-hide-link {
+  display: block;
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 12px;
+  cursor: pointer;
+  margin-top: 8px;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.timeline-item-hide-link:hover {
+  color: #aaa;
+}
+
+/* Text content */
+.timeline-item-text {
+  margin-bottom: 8px;
+}
+
+.timeline-item-text:last-child {
+  margin-bottom: 0;
+}
+
+/* Images in timeline */
+.timeline-item-images {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.timeline-item-image-container {
+  position: relative;
+  min-height: 50px;
+}
+
+.timeline-item-image-loading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100px;
+  background: linear-gradient(90deg, #2a2a2a 25%, #333 50%, #2a2a2a 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.timeline-item-image {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: opacity 0.3s;
+}
+
+.timeline-item-image.loading {
+  opacity: 0;
+}
+
+.timeline-item-image:hover {
+  opacity: 0.9;
+}
