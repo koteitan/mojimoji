@@ -3,6 +3,7 @@
 - to make a modular-type timeline in nostr.
 ## UI
 - See also: [save.md](save.md) for Save/Load dialog specifications
+- See also: [post.md](post.md) for Post dialog specifications
 - See also: [timeline.md](timeline.md) for Timeline specifications and future plans
 
 User Inrterface is as follows.
@@ -37,6 +38,8 @@ User Inrterface is as follows.
     - Delete button: delete selected node(s).
     - Save button: open Save dialog.
     - Load button: open Load dialog.
+    - | (separator)
+    - Post button: open Post dialog (see [post.md](post.md)).
   - bottom-right: footer info
     - version info: "vX.X.X (build timestamp)"
       - build timestamp format:
@@ -249,8 +252,9 @@ User Inrterface is as follows.
   - d: delete selected nodes/connections
   - Ctrl+S: open Save dialog
   - Ctrl+O: open Load dialog
+  - Ctrl+P: open Post dialog
   - shortcuts are disabled when focus is on input/textarea/select elements
-  - shortcuts (except Ctrl+S/Ctrl+O) are disabled when Ctrl/Alt/Meta key is pressed
+  - shortcuts (except Ctrl+S/Ctrl+O/Ctrl+P) are disabled when Ctrl/Alt/Meta key is pressed
 
 ### on load
 - load:
@@ -307,6 +311,10 @@ User Inrterface is as follows.
 - Load button or Ctrl+O: open Load dialog
 - See [save.md](save.md) for detailed Save/Load dialog specifications
 
+### post
+- Post button or Ctrl+P: open Post dialog
+- See [post.md](post.md) for detailed Post dialog specifications
+
 ### debug tools
 - Browser console debug functions:
   - dumpgraph(): output graph structure (nodes and connections)
@@ -361,6 +369,12 @@ User Inrterface is as follows.
   │   │   │   ├── Timeline.tsx
   │   │   │   ├── TimelineItem.tsx
   │   │   │   └── Timeline.css
+  │   │   ├── Dialogs/
+  │   │   │   ├── Dialog.css
+  │   │   │   ├── SaveDialog.tsx
+  │   │   │   ├── LoadDialog.tsx
+  │   │   │   ├── PostDialog.tsx
+  │   │   │   └── RelayDialog.tsx
   │   │   └── Graph/
   │   │       ├── GraphEditor.tsx
   │   │       ├── GraphEditor.css
