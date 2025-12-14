@@ -40,11 +40,11 @@ function App() {
 
   return (
     <div className="app">
-      <div className="timeline-pane">
-        <div className="title-bar">
-          {APP_NAME}
-        </div>
-        <div className="timeline-content">
+      <div className="title-bar">
+        {APP_NAME}
+      </div>
+      <div className="main-content">
+        <div className="timeline-columns">
           {timelines.length === 0 ? (
             <div className="timeline-empty-state">
               <p>No timelines yet</p>
@@ -60,13 +60,13 @@ function App() {
             ))
           )}
         </div>
-      </div>
-      <div className="graph-pane">
-        <GraphEditor
-          onTimelineCreate={handleTimelineCreate}
-          onTimelineRemove={handleTimelineRemove}
-          onEventsUpdate={handleEventsUpdate}
-        />
+        <div className="graph-pane">
+          <GraphEditor
+            onTimelineCreate={handleTimelineCreate}
+            onTimelineRemove={handleTimelineRemove}
+            onEventsUpdate={handleEventsUpdate}
+          />
+        </div>
       </div>
     </div>
   );

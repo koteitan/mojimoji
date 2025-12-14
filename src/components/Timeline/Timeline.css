@@ -221,3 +221,15 @@
 .timeline-item-image:hover {
   opacity: 0.9;
 }
+
+/* Mobile layout: each timeline is a snap column */
+@media (max-width: 768px) {
+  .timeline {
+    width: 85vw;
+    min-width: 85vw;
+    flex-shrink: 0;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+    height: 100%;
+  }
+}

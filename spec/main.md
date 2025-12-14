@@ -5,6 +5,7 @@
 - See also: [save.md](save.md) for Save/Load dialog specifications
 - See also: [post.md](post.md) for Post dialog specifications
 - See also: [timeline.md](timeline.md) for Timeline specifications and future plans
+- See also: [mobile-layout.md](mobile-layout.md) for Mobile horizontal scroll layout specifications
 
 User Inrterface is as follows.
 - left(bottom for mobile) pane: Timeline list of nostr events:

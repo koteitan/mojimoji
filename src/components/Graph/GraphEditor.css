@@ -7,7 +7,7 @@
 .graph-editor-container {
   width: 100%;
   height: 100%;
-  touch-action: none;
+  touch-action: none;  /* Desktop: disable browser touch handling for graph pan/zoom */
   user-select: none;
   --dot-size: 2px;
   --dot-spacing: 80px;
@@ -247,4 +247,32 @@ svg {
 
 .github-link svg {
   display: block;
+}
+
+/* Touch overlay - hidden by default */
+.graph-touch-overlay {
+  display: none;
+}
+
+/* Mobile: allow 1-finger horizontal scroll for column switching */
+@media (max-width: 768px) {
+  .graph-touch-overlay {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    touch-action: pan-x;  /* Allow horizontal scroll for 1-finger */
+    background: transparent;
+  }
+
+  .graph-editor {
+    touch-action: pan-x;
+  }
+
+  .graph-editor-container {
+    touch-action: none;  /* Disable touch on container, overlay handles it */
+  }
 }

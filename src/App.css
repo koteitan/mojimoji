@@ -1,21 +1,14 @@
 .app {
   display: flex;
+  flex-direction: column;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
   background: #0a0a0a;
 }
 
-.timeline-pane {
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-  height: 100%;
-  background: #1a1a1a;
-  border-right: 2px solid #333;
-}
-
 .title-bar {
+  flex-shrink: 0;
   padding: 8px 12px;
   background: #0a0a0a;
   border-bottom: 1px solid #333;
@@ -32,9 +25,20 @@
   margin-left: 4px;
 }
 
-.timeline-content {
+.main-content {
   display: flex;
+  flex-direction: row;
   flex: 1;
+  overflow: hidden;
+}
+
+.timeline-columns {
+  display: flex;
+  flex-direction: row;
+  flex-shrink: 0;
+  height: 100%;
+  background: #1a1a1a;
+  border-right: 2px solid #333;
   overflow-x: auto;
   overflow-y: hidden;
 }
@@ -66,25 +70,40 @@
   overflow: hidden;
 }
 
-/* Mobile layout: bottom pane for timelines */
+/* Mobile layout: horizontal scroll with snap */
 @media (max-width: 768px) {
-  .app {
-    flex-direction: column-reverse;
+  .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    overflow-x: scroll;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
   }
 
-  .timeline-pane {
-    height: 40vh;
-    width: 100%;
+  .timeline-columns {
+    display: contents; /* Children participate directly in main-content flex */
     border-right: none;
-    border-top: 2px solid #333;
-  }
-
-  .graph-pane {
-    height: 60vh;
   }
 
   .timeline-empty-state {
-    width: 100%;
+    width: 85vw;
+    flex-shrink: 0;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+    height: 100%;
+    background: #1a1a1a;
+  }
+
+  .graph-pane {
+    flex: none;
+    width: 85vw;
+    height: 100%;
+    flex-shrink: 0;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+    touch-action: pan-x;
   }
 }
-

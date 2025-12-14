@@ -1117,6 +1117,18 @@ export function GraphEditor({
           document.activeElement.blur();
         }
 
+        // On touch devices, don't start 1-finger pan - let it scroll the parent container
+        // 2-finger pan is handled separately in touch handlers
+        if (e.pointerType === 'touch') {
+          // Still unselect nodes when tapping on background
+          if (!isNode && !isConnection && !isSocket) {
+            if (selectorRef.current) {
+              selectorRef.current.unselectAll();
+            }
+          }
+          return;
+        }
+
         // Don't start panning if clicking on a node, connection, or socket
         if (!isNode && !isConnection && !isSocket) {
           isDragging = true;
@@ -1160,11 +1172,12 @@ export function GraphEditor({
       container.addEventListener('pointermove', handlePointerMove);
       container.addEventListener('pointerup', handlePointerUp);
 
-      // Add pinch zoom handler for touch devices
+      // Add pinch zoom and 2-finger pan handler for touch devices
       let initialPinchDistance = 0;
       let initialZoom = 1;
-      let pinchCenterX = 0;
-      let pinchCenterY = 0;
+      let lastTouchCenterX = 0;
+      let lastTouchCenterY = 0;
+      let isTwoFingerTouch = false;
 
       const getDistance = (touches: TouchList) => {
         const dx = touches[0].clientX - touches[1].clientX;
@@ -1172,38 +1185,68 @@ export function GraphEditor({
         return Math.sqrt(dx * dx + dy * dy);
       };
 
+      const getTouchCenter = (touches: TouchList) => {
+        return {
+          x: (touches[0].clientX + touches[1].clientX) / 2,
+          y: (touches[0].clientY + touches[1].clientY) / 2,
+        };
+      };
+
       const handleTouchStart = (e: TouchEvent) => {
-        if (e.touches.length === 2) {
-          e.preventDefault();
-          initialPinchDistance = getDistance(e.touches);
-          initialZoom = area.area.transform.k;
-          const rect = container.getBoundingClientRect();
-          pinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
-          pinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+        // Only handle 2-finger touch, let 1-finger through for parent scroll
+        if (e.touches.length !== 2) {
+          isTwoFingerTouch = false;
+          return;
         }
+        isTwoFingerTouch = true;
+        initialPinchDistance = getDistance(e.touches);
+        initialZoom = area.area.transform.k;
+        const center = getTouchCenter(e.touches);
+        lastTouchCenterX = center.x;
+        lastTouchCenterY = center.y;
       };
 
       const handleTouchMove = (e: TouchEvent) => {
-        if (e.touches.length === 2 && initialPinchDistance > 0) {
-          e.preventDefault();
-          const currentDistance = getDistance(e.touches);
-          const scale = currentDistance / initialPinchDistance;
-          const newZoom = Math.max(0.1, Math.min(2.0, initialZoom * scale));
-
-          const { x, y, k } = area.area.transform;
-          // Calculate new position to keep pinch center fixed
-          const newX = pinchCenterX - (pinchCenterX - x) * (newZoom / k);
-          const newY = pinchCenterY - (pinchCenterY - y) * (newZoom / k);
-
-          area.area.zoom(newZoom, 0, 0);
-          area.area.translate(newX, newY);
-          updateBackground();
+        // Only handle 2-finger touch, let 1-finger through for parent scroll
+        if (e.touches.length !== 2 || !isTwoFingerTouch) {
+          return;
         }
+
+        const currentDistance = getDistance(e.touches);
+        const center = getTouchCenter(e.touches);
+        const rect = container.getBoundingClientRect();
+
+        // Calculate pan delta from center movement
+        const panDx = center.x - lastTouchCenterX;
+        const panDy = center.y - lastTouchCenterY;
+        lastTouchCenterX = center.x;
+        lastTouchCenterY = center.y;
+
+        // Calculate zoom from pinch
+        const scale = currentDistance / initialPinchDistance;
+        const newZoom = Math.max(0.1, Math.min(2.0, initialZoom * scale));
+
+        const { x, y, k } = area.area.transform;
+
+        // Apply pan first
+        let newX = x + panDx;
+        let newY = y + panDy;
+
+        // Then apply zoom around the current pinch center
+        const currentPinchCenterX = center.x - rect.left;
+        const currentPinchCenterY = center.y - rect.top;
+        newX = currentPinchCenterX - (currentPinchCenterX - newX) * (newZoom / k);
+        newY = currentPinchCenterY - (currentPinchCenterY - newY) * (newZoom / k);
+
+        area.area.zoom(newZoom, 0, 0);
+        area.area.translate(newX, newY);
+        updateBackground();
       };
 
       const handleTouchEnd = (e: TouchEvent) => {
         if (e.touches.length < 2) {
           initialPinchDistance = 0;
+          isTwoFingerTouch = false;
         }
       };
 
@@ -1212,9 +1255,9 @@ export function GraphEditor({
         move: handleTouchMove,
         end: handleTouchEnd,
       };
-      container.addEventListener('touchstart', handleTouchStart, { passive: false });
-      container.addEventListener('touchmove', handleTouchMove, { passive: false });
-      container.addEventListener('touchend', handleTouchEnd);
+      container.addEventListener('touchstart', handleTouchStart, { passive: true });
+      container.addEventListener('touchmove', handleTouchMove, { passive: true });
+      container.addEventListener('touchend', handleTouchEnd, { passive: true });
 
       // Enable selection and node dragging
       const selector = AreaExtensions.selector();
@@ -1707,8 +1750,94 @@ export function GraphEditor({
     };
   }, [addNode, centerView, deleteSelected]);
 
+  // Handle touch overlay for mobile - allows 1-finger scroll while capturing 2-finger for graph
+  const touchOverlayRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const overlay = touchOverlayRef.current;
+    const area = areaRef.current;
+    if (!overlay || !area) return;
+
+    let isTwoFingerTouch = false;
+    let initialPinchDistance = 0;
+    let initialZoom = 1;
+    let lastTouchCenterX = 0;
+    let lastTouchCenterY = 0;
+
+    const getDistance = (touches: TouchList) => {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    const getTouchCenter = (touches: TouchList) => ({
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2,
+    });
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        isTwoFingerTouch = true;
+        initialPinchDistance = getDistance(e.touches);
+        initialZoom = area.area.transform.k;
+        const center = getTouchCenter(e.touches);
+        lastTouchCenterX = center.x;
+        lastTouchCenterY = center.y;
+      } else {
+        isTwoFingerTouch = false;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && isTwoFingerTouch) {
+        e.preventDefault();
+        const currentDistance = getDistance(e.touches);
+        const center = getTouchCenter(e.touches);
+        const rect = overlay.getBoundingClientRect();
+
+        const panDx = center.x - lastTouchCenterX;
+        const panDy = center.y - lastTouchCenterY;
+        lastTouchCenterX = center.x;
+        lastTouchCenterY = center.y;
+
+        const scale = currentDistance / initialPinchDistance;
+        const newZoom = Math.max(0.1, Math.min(2.0, initialZoom * scale));
+
+        const { x, y, k } = area.area.transform;
+        let newX = x + panDx;
+        let newY = y + panDy;
+
+        const currentPinchCenterX = center.x - rect.left;
+        const currentPinchCenterY = center.y - rect.top;
+        newX = currentPinchCenterX - (currentPinchCenterX - newX) * (newZoom / k);
+        newY = currentPinchCenterY - (currentPinchCenterY - newY) * (newZoom / k);
+
+        area.area.zoom(newZoom, 0, 0);
+        area.area.translate(newX, newY);
+      }
+    };
+
+    const handleTouchEnd = () => {
+      isTwoFingerTouch = false;
+      initialPinchDistance = 0;
+    };
+
+    overlay.addEventListener('touchstart', handleTouchStart, { passive: false });
+    overlay.addEventListener('touchmove', handleTouchMove, { passive: false });
+    overlay.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      overlay.removeEventListener('touchstart', handleTouchStart);
+      overlay.removeEventListener('touchmove', handleTouchMove);
+      overlay.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, []);
+
   return (
     <div className="graph-editor">
+      {/* Touch overlay for mobile - captures 2-finger gestures, lets 1-finger through */}
+      <div ref={touchOverlayRef} className="graph-touch-overlay" />
       <div className="graph-toolbar">
         <button onClick={() => addNode('Relay')}>{t('toolbar.relay')}</button>
         <div className="filter-dropdown">
