@@ -19,6 +19,10 @@ export class TimelineNode extends ClassicPreset.Node {
   // Subscription
   private subscription: { unsubscribe: () => void } | null = null;
 
+  // Debug counters
+  private eventCount = 0;
+  private lastEventTime: number | null = null;
+
   // Callback for when event signals arrive
   private onSignal: ((signal: EventSignal) => void) | null = null;
 
@@ -77,14 +81,23 @@ export class TimelineNode extends ClassicPreset.Node {
 
     if (!this.input$ || !this.onSignal) return;
 
+    // Reset debug counters
+    this.eventCount = 0;
+    this.lastEventTime = null;
+
     this.subscription = this.input$.subscribe({
       next: (signal) => {
+        this.eventCount++;
+        this.lastEventTime = Date.now();
         if (this.onSignal) {
           this.onSignal(signal);
         }
       },
       error: (err) => {
-        console.error('TimelineNode subscription error:', err);
+        console.error(`[TimelineNode ${this.id.slice(0, 8)}] Subscription error:`, err);
+      },
+      complete: () => {
+        console.warn(`[TimelineNode ${this.id.slice(0, 8)}] Subscription completed unexpectedly`);
       },
     });
   }
@@ -95,5 +108,40 @@ export class TimelineNode extends ClassicPreset.Node {
       this.subscription.unsubscribe();
       this.subscription = null;
     }
+  }
+
+  // Check if subscribed
+  isSubscribed(): boolean {
+    return this.subscription !== null;
+  }
+
+  // Get debug info
+  getDebugInfo(): {
+    nodeId: string;
+    subscribed: boolean;
+    hasInput: boolean;
+    hasCallback: boolean;
+    eventCount: number;
+    lastEventAgo: string | null;
+  } {
+    let lastEventAgo: string | null = null;
+    if (this.lastEventTime) {
+      const seconds = Math.floor((Date.now() - this.lastEventTime) / 1000);
+      if (seconds < 60) {
+        lastEventAgo = `${seconds}s ago`;
+      } else if (seconds < 3600) {
+        lastEventAgo = `${Math.floor(seconds / 60)}m ago`;
+      } else {
+        lastEventAgo = `${Math.floor(seconds / 3600)}h ago`;
+      }
+    }
+    return {
+      nodeId: this.id.slice(0, 8),
+      subscribed: this.subscription !== null,
+      hasInput: this.input$ !== null,
+      hasCallback: this.onSignal !== null,
+      eventCount: this.eventCount,
+      lastEventAgo,
+    };
   }
 }

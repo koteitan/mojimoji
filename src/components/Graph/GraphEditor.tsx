@@ -193,8 +193,22 @@ export function GraphEditor({
         const status = isActive ? 'ON' : 'OFF';
         const profileStatus = isProfileActive ? 'ON' : 'OFF';
 
-        lines.push(`[${status}] ${node.id} | ${relays.join(', ')} | ${JSON.stringify(filters)}`);
+        const debugInfo = relayNode.getDebugInfo();
+        lines.push(`[Relay ${status}] ${node.id} | ${relays.join(', ')} | ${JSON.stringify(filters)}`);
         lines.push(`  └─ [profile: ${profileStatus}] pending: ${pendingProfiles}`);
+        lines.push(`  └─ [events] count: ${debugInfo.eventCount}, last: ${debugInfo.lastEventAgo || 'never'}, eose: ${debugInfo.eoseReceived ? 'yes' : 'no'}`);
+        if (debugInfo.relayStatus) {
+          for (const [url, state] of Object.entries(debugInfo.relayStatus)) {
+            lines.push(`  └─ [relay: ${url}] state: ${state}`);
+          }
+        }
+      } else if (type === 'Timeline') {
+        const timelineNode = node as TimelineNode;
+        const debugInfo = timelineNode.getDebugInfo();
+        const status = debugInfo.subscribed ? 'ON' : 'OFF';
+        lines.push(`[Timeline ${status}] ${node.id} | name: ${timelineNode.getTimelineName()}`);
+        lines.push(`  └─ [input: ${debugInfo.hasInput ? 'yes' : 'no'}] [callback: ${debugInfo.hasCallback ? 'yes' : 'no'}]`);
+        lines.push(`  └─ [events] count: ${debugInfo.eventCount}, last: ${debugInfo.lastEventAgo || 'never'}`);
       }
     }
 
@@ -215,6 +229,34 @@ export function GraphEditor({
     console.log(lines.join('\n'));
   }, []);
 
+  // Toggle timeline monitoring
+  const monTimeline = useCallback(() => {
+    if (RelayNode.isMonitoring()) {
+      RelayNode.stopMonitoring();
+    } else {
+      RelayNode.startMonitoring();
+    }
+  }, []);
+
+  // Reconnect all relay nodes (for debugging stuck connections)
+  const reconnect = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) {
+      console.log('Editor not initialized');
+      return;
+    }
+    const nodes = editor.getNodes();
+    let count = 0;
+    for (const node of nodes) {
+      if (getNodeType(node) === 'Relay') {
+        const relayNode = node as RelayNode;
+        relayNode.restartSubscription();
+        count++;
+      }
+    }
+    console.log(`🔄 Reconnected ${count} relay node(s)`);
+  }, []);
+
   // Expose debug functions to window
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -223,6 +265,10 @@ export function GraphEditor({
     (window as any).dumpsub = dumpSub;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).infocache = infoCache;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).montimeline = monTimeline;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).reconnect = reconnect;
     return () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).dumpgraph;
@@ -230,8 +276,12 @@ export function GraphEditor({
       delete (window as any).dumpsub;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).infocache;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).montimeline;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).reconnect;
     };
-  }, [dumpGraph, dumpSub, infoCache]);
+  }, [dumpGraph, dumpSub, infoCache, monTimeline, reconnect]);
 
   // Find all downstream timeline IDs from a given node
   const findDownstreamTimelines = useCallback((startNodeId: string): Set<string> => {

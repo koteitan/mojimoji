@@ -236,12 +236,25 @@ export class RelayNode extends ClassicPreset.Node {
   private rxReq: ForwardReq | null = null;
   private subscription: { unsubscribe: () => void } | null = null;
 
-  // Profile updates (kind:0 events handled in main subscription)
+  // Profile updates - separate rxReq to avoid overwriting main subscription
   private profileSubject = new Subject<{ pubkey: string; profile: Profile }>();
+  private profileRxReq: ForwardReq | null = null;
   private profileSubscription: { unsubscribe: () => void } | null = null;
   private pendingProfiles = new Set<string>(); // Track pubkeys we've already requested
   private profileBatchQueue: string[] = []; // Queue for batching profile requests
   private profileBatchTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Debug: event counters
+  private eventCount = 0;
+  private lastEventTime: number | null = null;
+  private eoseReceived = false; // Track if EOSE has been received
+
+  // Debug: monitoring flag (static so it applies to all instances)
+  private static monitoring = false;
+
+  // Connection state and EOSE monitoring subscriptions
+  private messageSubscription: { unsubscribe: () => void } | null = null;
+  private connectionStateSubscription: { unsubscribe: () => void } | null = null;
 
   // Shared observable that can be subscribed to by multiple downstream nodes
   public output$: Observable<EventSignal> = this.eventSubject.asObservable().pipe(share());
@@ -399,18 +412,46 @@ export class RelayNode extends ClassicPreset.Node {
 
     if (this.relayUrls.length === 0) return;
 
+    // Reset event counters
+    this.eventCount = 0;
+    this.lastEventTime = null;
+    this.eoseReceived = false;
+
     this.rxNostr = createRxNostr({ verifier });
     this.rxNostr.setDefaultRelays(this.relayUrls);
 
-    this.rxReq = createRxForwardReq();
+    // Use node ID as subscription ID to avoid conflicts when multiple nodes use the same relay
+    this.rxReq = createRxForwardReq(`relay-${this.id}`);
 
-    // Helper to flush profile batch queue
+    // Monitor all messages to detect EOSE and CLOSED
+    this.messageSubscription = this.rxNostr.createAllMessageObservable().subscribe({
+      next: (packet) => {
+        if (packet.type === 'EOSE') {
+          this.eoseReceived = true;
+          console.log(`[RelayNode ${this.id.slice(0, 8)}] EOSE received from ${packet.from}`);
+        } else if (packet.type === 'CLOSED') {
+          console.warn(`[RelayNode ${this.id.slice(0, 8)}] CLOSED received from ${packet.from}: ${(packet as { notice?: string }).notice || 'no reason'}`);
+        }
+      },
+    });
+
+    // Monitor connection state changes
+    this.connectionStateSubscription = this.rxNostr.createConnectionStateObservable().subscribe({
+      next: (packet) => {
+        console.log(`[RelayNode ${this.id.slice(0, 8)}] Connection state: ${packet.from} -> ${packet.state}`);
+      },
+    });
+
+    // Create separate rxReq for profile requests to avoid overwriting main subscription
+    this.profileRxReq = createRxForwardReq(`profile-${this.id}`);
+
+    // Helper to flush profile batch queue - uses separate profileRxReq
     const flushProfileBatch = () => {
       if (this.profileBatchQueue.length === 0) return;
       const authors = [...this.profileBatchQueue];
       this.profileBatchQueue = [];
       if (DEBUG) console.log('Batch requesting profiles for:', authors.length, 'authors');
-      this.rxReq?.emit({ kinds: [0], authors, limit: authors.length });
+      this.profileRxReq?.emit({ kinds: [0], authors, limit: authors.length });
     };
 
     // Helper to queue profile request with batching
@@ -435,44 +476,69 @@ export class RelayNode extends ClassicPreset.Node {
       }
     };
 
-    // Main event subscription (handles both regular events and profile events)
+    // Main event subscription (handles regular events only)
     this.subscription = this.rxNostr.use(this.rxReq).subscribe({
       next: (packet) => {
         const event = packet.event as NostrEvent;
 
-        // Handle profile events (kind:0)
-        if (event.kind === 0) {
-          if (DEBUG) console.log('Profile event received:', event.kind, event.pubkey.slice(0, 8));
-          try {
-            const profile = JSON.parse(event.content) as Profile;
-            profileCache.set(event.pubkey, profile);
-            saveProfileCache(); // Persist to localStorage
-            if (DEBUG) console.log('Profile cached:', event.pubkey.slice(0, 8), profile.name || profile.display_name);
-            this.profileSubject.next({ pubkey: event.pubkey, profile });
-          } catch (e) {
-            if (DEBUG) console.error('Profile parse error:', e);
-          }
-          return; // Don't emit profile events to the main output
+        // Emit regular events with 'add' signal
+        this.eventCount++;
+        this.lastEventTime = Date.now();
+
+        // Monitor: log event with JST timestamp
+        if (RelayNode.monitoring) {
+          const jst = new Date(event.created_at * 1000).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+          const profile = profileCache.get(event.pubkey);
+          const name = profile?.name || profile?.display_name || event.pubkey.slice(0, 8);
+          const content = event.content.slice(0, 50).replace(/\n/g, ' ');
+          console.log(`[${jst}] ${name}: ${content}${event.content.length > 50 ? '...' : ''}`);
         }
 
-        // Emit regular events with 'add' signal
         this.eventSubject.next({ event, signal: 'add' });
 
         // Queue profile request (batched)
         queueProfileRequest(event.pubkey);
       },
       error: (err) => {
-        if (DEBUG) console.error('RelayNode subscription error:', err);
+        console.error(`[RelayNode ${this.id.slice(0, 8)}] Subscription error:`, err);
+      },
+      complete: () => {
+        console.warn(`[RelayNode ${this.id.slice(0, 8)}] Subscription completed unexpectedly`);
       },
     });
 
-    // Profile subscription is now merged with main subscription
-    this.profileSubscription = { unsubscribe: () => {} }; // Dummy for cleanup
+    // Separate profile subscription using profileRxReq
+    this.profileSubscription = this.rxNostr.use(this.profileRxReq).subscribe({
+      next: (packet) => {
+        const event = packet.event as NostrEvent;
+        if (event.kind !== 0) return; // Only handle profile events
+
+        if (DEBUG) console.log('Profile event received:', event.kind, event.pubkey.slice(0, 8));
+        try {
+          const profile = JSON.parse(event.content) as Profile;
+          profileCache.set(event.pubkey, profile);
+          this.pendingProfiles.delete(event.pubkey); // Remove from pending
+          saveProfileCache(); // Persist to localStorage
+          if (DEBUG) console.log('Profile cached:', event.pubkey.slice(0, 8), profile.name || profile.display_name);
+          this.profileSubject.next({ pubkey: event.pubkey, profile });
+        } catch (e) {
+          if (DEBUG) console.error('Profile parse error:', e);
+        }
+      },
+      error: (err) => {
+        console.error(`[RelayNode ${this.id.slice(0, 8)}] Profile subscription error:`, err);
+      },
+      complete: () => {
+        console.warn(`[RelayNode ${this.id.slice(0, 8)}] Profile subscription completed unexpectedly`);
+      },
+    });
 
     // Emit filters to start receiving events (multiple filters = OR logic)
+    // NOTE: emit() must be called once with all filters, not in a loop
+    // In forward strategy, each emit() overwrites the previous subscription
     const filters = this.getFilters();
-    for (const filter of filters) {
-      this.rxReq.emit(filter as { kinds?: number[]; limit?: number });
+    if (filters.length > 0) {
+      this.rxReq.emit(filters as { kinds?: number[]; limit?: number }[]);
     }
   }
 
@@ -486,11 +552,20 @@ export class RelayNode extends ClassicPreset.Node {
       this.profileSubscription.unsubscribe();
       this.profileSubscription = null;
     }
+    if (this.messageSubscription) {
+      this.messageSubscription.unsubscribe();
+      this.messageSubscription = null;
+    }
+    if (this.connectionStateSubscription) {
+      this.connectionStateSubscription.unsubscribe();
+      this.connectionStateSubscription = null;
+    }
     if (this.rxNostr) {
       this.rxNostr.dispose();
       this.rxNostr = null;
     }
     this.rxReq = null;
+    this.profileRxReq = null;
     this.pendingProfiles.clear();
     this.profileBatchQueue = [];
     if (this.profileBatchTimer) {
@@ -504,6 +579,12 @@ export class RelayNode extends ClassicPreset.Node {
     return this.subscription !== null;
   }
 
+  // Force restart subscription (for debugging stuck connections)
+  restartSubscription(): void {
+    console.log(`[RelayNode ${this.id.slice(0, 8)}] Restarting subscription...`);
+    this.startSubscription();
+  }
+
   // Check if profile subscription is active
   isProfileSubscribed(): boolean {
     return this.profileSubscription !== null;
@@ -512,5 +593,65 @@ export class RelayNode extends ClassicPreset.Node {
   // Get pending profile count
   getPendingProfileCount(): number {
     return this.pendingProfiles.size;
+  }
+
+  // Get debug info for this node
+  getDebugInfo(): {
+    nodeId: string;
+    subscribed: boolean;
+    relayStatus: Record<string, string> | null;
+    pendingProfiles: number;
+    eventCount: number;
+    lastEventAgo: string | null;
+    eoseReceived: boolean;
+  } {
+    let relayStatus: Record<string, string> | null = null;
+    if (this.rxNostr) {
+      try {
+        const status = this.rxNostr.getAllRelayStatus();
+        relayStatus = {};
+        for (const [url, state] of Object.entries(status)) {
+          // RelayStatus has a 'connection' property that is the ConnectionState string
+          relayStatus[url] = state.connection;
+        }
+      } catch {
+        // Ignore errors
+      }
+    }
+    let lastEventAgo: string | null = null;
+    if (this.lastEventTime) {
+      const seconds = Math.floor((Date.now() - this.lastEventTime) / 1000);
+      if (seconds < 60) {
+        lastEventAgo = `${seconds}s ago`;
+      } else if (seconds < 3600) {
+        lastEventAgo = `${Math.floor(seconds / 60)}m ago`;
+      } else {
+        lastEventAgo = `${Math.floor(seconds / 3600)}h ago`;
+      }
+    }
+    return {
+      nodeId: this.id.slice(0, 8),
+      subscribed: this.subscription !== null,
+      relayStatus,
+      pendingProfiles: this.pendingProfiles.size,
+      eventCount: this.eventCount,
+      lastEventAgo,
+      eoseReceived: this.eoseReceived,
+    };
+  }
+
+  // Toggle monitoring mode
+  static startMonitoring(): void {
+    RelayNode.monitoring = true;
+    console.log('📡 Timeline monitoring started. Events will be logged in real-time.');
+  }
+
+  static stopMonitoring(): void {
+    RelayNode.monitoring = false;
+    console.log('📡 Timeline monitoring stopped.');
+  }
+
+  static isMonitoring(): boolean {
+    return RelayNode.monitoring;
   }
 }
