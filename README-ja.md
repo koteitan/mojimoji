@@ -89,9 +89,10 @@ Nostrのモジュラー型フィルタプレビューワーです。モジュラ
 
 | ドキュメント | 説明 |
 |--------------|------|
-| [spec.md](spec.md) | メイン仕様書（UI、動作、i18n、実装） |
-| [save.md](save.md) | 保存/読込ダイアログ仕様 |
-| [save-ja.md](save-ja.md) | 保存/読込ダイアログ仕様（日本語） |
+| [spec/main.md](spec/main.md) | メイン仕様書（UI、動作、i18n、実装） |
+| [spec/save.md](spec/save.md) | 保存/読込ダイアログ仕様 |
+| [spec/save-ja.md](spec/save-ja.md) | 保存/読込ダイアログ仕様（日本語） |
+| [spec/timeline.md](spec/timeline.md) | タイムライン仕様と将来計画（NIP-36、画像表示） |
 | [clients.md](clients.md) | Nostrクライアント比較 |
 | [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) | サードパーティライブラリライセンス |
 | [README.md](README.md) | README（英語） |

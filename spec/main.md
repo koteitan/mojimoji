@@ -3,7 +3,9 @@
 - to make a modular-type timeline in nostr.
 ## UI
 - See also: [save.md](save.md) for Save/Load dialog specifications
-User Inrterface is as follows. 
+- See also: [timeline.md](timeline.md) for Timeline specifications and future plans
+
+User Inrterface is as follows.
 - left(bottom for mobile) pane: Timeline list of nostr events:
   - top line: title bar
     - format: "(.>_<)-(.>_<)-mojimoji: Nostr Modular Client"

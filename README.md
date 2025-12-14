@@ -89,9 +89,10 @@ A modular filter previewer for Nostr. modular + moderation = mojimoji
 
 | Document | Description |
 |----------|-------------|
-| [spec.md](spec.md) | Main specifications (UI, Behavior, i18n, Implementation) |
-| [save.md](save.md) | Save/Load dialog specifications |
-| [save-ja.md](save-ja.md) | Save/Load dialog specifications (Japanese) |
+| [spec/main.md](spec/main.md) | Main specifications (UI, Behavior, i18n, Implementation) |
+| [spec/save.md](spec/save.md) | Save/Load dialog specifications |
+| [spec/save-ja.md](spec/save-ja.md) | Save/Load dialog specifications (Japanese) |
+| [spec/timeline.md](spec/timeline.md) | Timeline specifications and future plans (NIP-36, images) |
 | [clients.md](clients.md) | Nostr clients comparison |
 | [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) | Third-party library licenses |
 | [README-ja.md](README-ja.md) | README (Japanese) |
