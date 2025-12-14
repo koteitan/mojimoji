@@ -254,8 +254,9 @@ svg {
   display: none;
 }
 
-/* Mobile: allow 1-finger horizontal scroll for column switching */
+/* Mobile styles */
 @media (max-width: 768px) {
+  /* Touch overlay for 1-finger scroll */
   .graph-touch-overlay {
     display: block;
     position: absolute;
@@ -274,5 +275,23 @@ svg {
 
   .graph-editor-container {
     touch-action: none;  /* Disable touch on container, overlay handles it */
+  }
+
+  /* Toolbar: 2-line layout */
+  .graph-toolbar {
+    flex-wrap: wrap;
+    max-width: calc(100% - 20px);
+    gap: 4px;
+    z-index: 1001;  /* Above touch overlay (1000) */
+  }
+
+  .graph-toolbar button {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  /* Hide separators on mobile */
+  .toolbar-separator {
+    display: none;
   }
 }
