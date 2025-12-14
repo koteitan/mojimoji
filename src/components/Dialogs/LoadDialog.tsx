@@ -13,6 +13,7 @@ import {
   type NostrGraphItem
 } from '../../nostr/graphStorage';
 import { formatNpub, decodeBech32ToHex, isHex64 } from '../../nostr/types';
+import { Nip07ErrorMessage } from './Nip07ErrorMessage';
 import './Dialog.css';
 
 type LoadSource = 'local' | 'nostr' | 'file';
@@ -32,6 +33,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
   const [selectedNostrGraph, setSelectedNostrGraph] = useState<NostrGraphItem | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isNip07Error, setIsNip07Error] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -93,7 +95,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
         try {
           if (nostrFilter === 'mine') {
             if (!isNip07Available()) {
-              setError(t('dialogs.load.errorNoNip07'));
+              setIsNip07Error(true);
               setNostrGraphs([]);
               return;
             }
@@ -362,19 +364,19 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
           <div className="dialog-tabs">
             <button
               className={`dialog-tab ${source === 'local' ? 'active' : ''}`}
-              onClick={(e) => { e.stopPropagation(); setSource('local'); setCurrentPath([]); setSelectedGraph(null); }}
+              onClick={(e) => { e.stopPropagation(); setSource('local'); setCurrentPath([]); setSelectedGraph(null); setIsNip07Error(false); setError(null); }}
             >
               Browser
             </button>
             <button
               className={`dialog-tab ${source === 'nostr' ? 'active' : ''}`}
-              onClick={(e) => { e.stopPropagation(); setSource('nostr'); setCurrentPath([]); setSelectedNostrGraph(null); }}
+              onClick={(e) => { e.stopPropagation(); setSource('nostr'); setCurrentPath([]); setSelectedNostrGraph(null); setIsNip07Error(false); setError(null); }}
             >
               Nostr Relay
             </button>
             <button
               className={`dialog-tab ${source === 'file' ? 'active' : ''}`}
-              onClick={(e) => { e.stopPropagation(); setSource('file'); setSelectedFile(null); }}
+              onClick={(e) => { e.stopPropagation(); setSource('file'); setSelectedFile(null); setIsNip07Error(false); setError(null); }}
             >
               File
             </button>
@@ -656,7 +658,8 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
           )}
 
           {/* Error message */}
-          {error && <div className="dialog-error">{error}</div>}
+          {isNip07Error && <Nip07ErrorMessage messageKey="dialogs.load.errorNoNip07" />}
+          {error && !isNip07Error && <div className="dialog-error">{error}</div>}
         </div>
 
         <div className="dialog-footer">

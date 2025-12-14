@@ -4,6 +4,7 @@ import { getGraphsInDirectory, deleteGraphAtPath, deleteGraphsInDirectory } from
 import { isNip07Available, getPubkey } from '../../nostr/nip07';
 import { loadGraphsFromNostr, getNostrItemsInDirectory, deleteGraphFromNostr, getProfileFromCache, fetchUserRelays, fetchAndCacheProfiles, type NostrGraphItem } from '../../nostr/graphStorage';
 import { formatNpub } from '../../nostr/types';
+import { Nip07ErrorMessage } from './Nip07ErrorMessage';
 import './Dialog.css';
 
 type SaveDestination = 'local' | 'nostr' | 'file';
@@ -24,6 +25,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
   const [relayUrls, setRelayUrls] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isNip07Error, setIsNip07Error] = useState(false);
   // Session-only directories (not persisted to localStorage)
   const [localDirectories, setLocalDirectories] = useState<string[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -46,7 +48,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
     if (isOpen && destination === 'nostr') {
       const loadNostrData = async () => {
         if (!isNip07Available()) {
-          setError(t('dialogs.save.errorNoNip07'));
+          setIsNip07Error(true);
           return;
         }
         try {
@@ -252,19 +254,19 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
           <div className="dialog-tabs">
             <button
               className={`dialog-tab ${destination === 'local' ? 'active' : ''}`}
-              onClick={(e) => { e.stopPropagation(); setDestination('local'); setCurrentPath([]); }}
+              onClick={(e) => { e.stopPropagation(); setDestination('local'); setCurrentPath([]); setIsNip07Error(false); setError(null); }}
             >
               Browser
             </button>
             <button
               className={`dialog-tab ${destination === 'nostr' ? 'active' : ''}`}
-              onClick={(e) => { e.stopPropagation(); setDestination('nostr'); setCurrentPath([]); }}
+              onClick={(e) => { e.stopPropagation(); setDestination('nostr'); setCurrentPath([]); setIsNip07Error(false); setError(null); }}
             >
               Nostr Relay
             </button>
             <button
               className={`dialog-tab ${destination === 'file' ? 'active' : ''}`}
-              onClick={(e) => { e.stopPropagation(); setDestination('file'); }}
+              onClick={(e) => { e.stopPropagation(); setDestination('file'); setIsNip07Error(false); setError(null); }}
             >
               File
             </button>
@@ -452,7 +454,8 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
           )}
 
           {/* Error message */}
-          {error && <div className="dialog-error">{error}</div>}
+          {isNip07Error && <Nip07ErrorMessage messageKey="dialogs.save.errorNoNip07" />}
+          {error && !isNip07Error && <div className="dialog-error">{error}</div>}
         </div>
 
         <div className="dialog-footer">

@@ -7,6 +7,7 @@ import type { UnsignedEvent } from '../../nostr/nip07';
 import { fetchUserRelays, getProfileFromCache } from '../../nostr/graphStorage';
 import { formatNpub } from '../../nostr/types';
 import { RelaySettingsDialog } from './RelaySettingsDialog';
+import { Nip07ErrorMessage } from './Nip07ErrorMessage';
 import './Dialog.css';
 
 interface PostDialogProps {
@@ -19,6 +20,7 @@ export function PostDialog({ isOpen, onClose }: PostDialogProps) {
   const [content, setContent] = useState('');
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isNip07Error, setIsNip07Error] = useState(false);
   const [userPubkey, setUserPubkey] = useState<string | null>(null);
   const [relayUrls, setRelayUrls] = useState<string[]>([]);
   const [kind10002Relays, setKind10002Relays] = useState<string[]>([]);
@@ -30,7 +32,7 @@ export function PostDialog({ isOpen, onClose }: PostDialogProps) {
     if (isOpen) {
       const loadUserData = async () => {
         if (!isNip07Available()) {
-          setError(t('dialogs.post.errorNoNip07'));
+          setIsNip07Error(true);
           return;
         }
         try {
@@ -55,6 +57,7 @@ export function PostDialog({ isOpen, onClose }: PostDialogProps) {
       setContent('');
       setPosting(false);
       setError(null);
+      setIsNip07Error(false);
       setUserPubkey(null);
       setRelayUrls([]);
       setKind10002Relays([]);
@@ -73,7 +76,7 @@ export function PostDialog({ isOpen, onClose }: PostDialogProps) {
     }
 
     if (!userPubkey) {
-      setError(t('dialogs.post.errorNoNip07'));
+      setIsNip07Error(true);
       return;
     }
 
@@ -211,7 +214,8 @@ export function PostDialog({ isOpen, onClose }: PostDialogProps) {
             )}
 
             {/* Error message */}
-            {error && <div className="dialog-error">{error}</div>}
+            {isNip07Error && <Nip07ErrorMessage messageKey="dialogs.post.errorNoNip07" />}
+            {error && !isNip07Error && <div className="dialog-error">{error}</div>}
           </div>
 
           <div className="dialog-footer">

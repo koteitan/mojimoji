@@ -335,6 +335,15 @@
   margin-top: 8px;
 }
 
+.dialog-error a {
+  color: #8cf;
+  text-decoration: underline;
+}
+
+.dialog-error a:hover {
+  color: #adf;
+}
+
 /* Dialog footer */
 .dialog-footer {
   display: flex;
