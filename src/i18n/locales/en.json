@@ -10,7 +10,8 @@
     "center": "Center",
     "delete": "Delete",
     "save": "Save",
-    "load": "Load"
+    "load": "Load",
+    "post": "Post"
   },
   "nodes": {
     "relay": {
@@ -103,6 +104,24 @@
       "confirmDeleteFolder": "Delete folder \"{{name}}\" and all graphs inside?",
       "relayUrlsLabel": "Load from relays (default: kind:10002)",
       "relayUrlsPlaceholder": "wss://relay.example.com\n(one per line, uses kind:10002 relays if empty)"
+    },
+    "post": {
+      "title": "Post Note",
+      "yourPubkey": "Your pubkey",
+      "relay": "Relay",
+      "post": "Post",
+      "posting": "Posting...",
+      "errorNoNip07": "NIP-07 extension not available. Please install a Nostr signer extension like nos2x or Alby.",
+      "errorNoContent": "Please enter content",
+      "errorNoRelays": "No relays available. Please configure relays.",
+      "errorSigningRejected": "Signing was rejected",
+      "errorUnknown": "Failed to publish note"
+    },
+    "relay": {
+      "title": "Relay Settings",
+      "relayUrlsLabel": "Post to relays",
+      "kind10002": "kind:10002",
+      "ok": "OK"
     }
   }
 }

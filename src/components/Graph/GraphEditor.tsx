@@ -11,7 +11,7 @@ import { RelayNode, OperatorNode, SearchNode, LanguageNode, NostrFilterNode, Tim
 import { CustomNode } from './CustomNode';
 import { CustomConnection } from './CustomConnection';
 import { CustomSocket } from './CustomSocket';
-import { SaveDialog, LoadDialog } from '../Dialogs';
+import { SaveDialog, LoadDialog, PostDialog } from '../Dialogs';
 import {
   saveGraph,
   loadGraph,
@@ -100,9 +100,10 @@ export function GraphEditor({
   // State for filter dropdown
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
 
-  // State for save/load dialogs
+  // State for save/load/post dialogs
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
+  const [postDialogOpen, setPostDialogOpen] = useState(false);
 
   // Get the current graph data as GraphData object
   const getCurrentGraphData = useCallback((): GraphData | null => {
@@ -1558,7 +1559,7 @@ export function GraphEditor({
 
       const key = e.key.toLowerCase();
 
-      // Handle Ctrl+S for save and Ctrl+O for load
+      // Handle Ctrl+S for save, Ctrl+O for load, Ctrl+P for post
       if ((e.ctrlKey || e.metaKey) && !e.altKey) {
         if (key === 's') {
           e.preventDefault();
@@ -1568,6 +1569,11 @@ export function GraphEditor({
         if (key === 'o') {
           e.preventDefault();
           setLoadDialogOpen(true);
+          return;
+        }
+        if (key === 'p') {
+          e.preventDefault();
+          setPostDialogOpen(true);
           return;
         }
       }
@@ -1674,6 +1680,8 @@ export function GraphEditor({
         <div className="toolbar-separator" />
         <button onClick={() => setSaveDialogOpen(true)}>{t('toolbar.save')}</button>
         <button onClick={() => setLoadDialogOpen(true)}>{t('toolbar.load')}</button>
+        <div className="toolbar-separator" />
+        <button onClick={() => setPostDialogOpen(true)}>{t('toolbar.post')}</button>
       </div>
       <div ref={containerRef} className="graph-editor-container" />
       <div className="footer-info">
@@ -1703,6 +1711,12 @@ export function GraphEditor({
         isOpen={loadDialogOpen}
         onClose={() => setLoadDialogOpen(false)}
         onLoad={handleLoad}
+      />
+
+      {/* Post Dialog */}
+      <PostDialog
+        isOpen={postDialogOpen}
+        onClose={() => setPostDialogOpen(false)}
       />
     </div>
   );

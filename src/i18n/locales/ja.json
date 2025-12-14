@@ -10,7 +10,8 @@
     "center": "center",
     "delete": "del",
     "save": "保存",
-    "load": "読込"
+    "load": "読込",
+    "post": "投稿"
   },
   "nodes": {
     "relay": {
@@ -103,6 +104,24 @@
       "confirmDeleteFolder": "フォルダ「{{name}}」と中のすべてのグラフを削除しますか？",
       "relayUrlsLabel": "読み込み元リレー（デフォルト：kind:10002）",
       "relayUrlsPlaceholder": "wss://relay.example.com\n（1行に1つ、空の場合はkind:10002のリレーを使用）"
+    },
+    "post": {
+      "title": "ノートを投稿",
+      "yourPubkey": "あなたの公開鍵",
+      "relay": "リレー",
+      "post": "投稿",
+      "posting": "投稿中...",
+      "errorNoNip07": "NIP-07拡張機能が見つかりません。nos2xやAlbyなどのNostr署名拡張機能をインストールしてください。",
+      "errorNoContent": "内容を入力してください",
+      "errorNoRelays": "リレーがありません。リレーを設定してください。",
+      "errorSigningRejected": "署名が拒否されました",
+      "errorUnknown": "ノートの投稿に失敗しました"
+    },
+    "relay": {
+      "title": "リレー設定",
+      "relayUrlsLabel": "投稿先リレー",
+      "kind10002": "kind:10002",
+      "ok": "OK"
     }
   }
 }
