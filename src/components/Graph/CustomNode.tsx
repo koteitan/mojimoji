@@ -405,12 +405,24 @@ export function CustomNode(props: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sortedControls = sortByIndex(controls.map(([key, control]: [string, any]) => ({ key, control, index: control?.index })));
 
+  // Handle tap/click on node to select it (for mobile touch support)
+  const handleNodeInteraction = (e: React.MouseEvent | React.TouchEvent) => {
+    // Don't select if clicking on input elements
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.tagName === 'BUTTON') {
+      return;
+    }
+    emit({ type: 'nodepicked', data: { id } });
+  };
+
   return (
     <div
       className={`custom-node ${selected ? 'selected' : ''}`}
       style={{ width: width ?? 180, height: height ?? 'auto' }}
       data-testid="node"
       data-node-id={id}
+      onClick={handleNodeInteraction}
+      onTouchEnd={handleNodeInteraction}
     >
       {/* Input sockets at top */}
       <div className="custom-node-inputs">

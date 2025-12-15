@@ -85,6 +85,11 @@ export function GraphEditor({
     move: (e: TouchEvent) => void;
     end: (e: TouchEvent) => void;
   } | null>(null);
+  const nodeTouchHandlersRef = useRef<{
+    start: (e: TouchEvent) => void;
+    move: () => void;
+    end: (e: TouchEvent) => void;
+  } | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const selectorRef = useRef<any>(null);
   const isInitializedRef = useRef(false);
@@ -1074,6 +1079,41 @@ export function GraphEditor({
       // Set initial background
       updateBackground();
 
+      // Override Rete.js inline touchAction for mobile
+      const isMobile = window.matchMedia('(max-width: 768px)').matches;
+      if (isMobile) {
+        // Force touchAction override and watch for changes
+        const forceTouchAction = (element: HTMLElement) => {
+          if (element.style.touchAction !== 'manipulation') {
+            element.style.touchAction = 'manipulation';
+          }
+        };
+
+        forceTouchAction(container);
+
+        // Watch for Rete.js setting touchAction back to none
+        const observer = new MutationObserver((mutations) => {
+          for (const mutation of mutations) {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+              const target = mutation.target as HTMLElement;
+              if (target.style.touchAction === 'none') {
+                target.style.touchAction = 'manipulation';
+              }
+            }
+          }
+        });
+
+        observer.observe(container, { attributes: true, attributeFilter: ['style'], subtree: true });
+
+        // Also set on any child divs that might be content holders
+        const childDivs = container.querySelectorAll('div');
+        childDivs.forEach((div) => {
+          if (div instanceof HTMLElement) {
+            forceTouchAction(div);
+          }
+        });
+      }
+
       // Add wheel zoom handler
       const handleWheel = (e: WheelEvent) => {
         e.preventDefault();
@@ -1101,6 +1141,11 @@ export function GraphEditor({
       let lastY = 0;
 
       const handlePointerDown = (e: PointerEvent) => {
+        // On touch devices, don't interfere - let Rete.js and browser handle everything
+        if (e.pointerType === 'touch') {
+          return;
+        }
+
         // Only pan if clicking on the container background (not on nodes)
         const target = e.target as HTMLElement;
         const isNode = target.closest('.node') || target.closest('.custom-node');
@@ -1115,18 +1160,6 @@ export function GraphEditor({
         // Blur any focused input when clicking on background or non-input elements
         if (!isInput && document.activeElement instanceof HTMLElement) {
           document.activeElement.blur();
-        }
-
-        // On touch devices, don't start 1-finger pan - let it scroll the parent container
-        // 2-finger pan is handled separately in touch handlers
-        if (e.pointerType === 'touch') {
-          // Still unselect nodes when tapping on background
-          if (!isNode && !isConnection && !isSocket) {
-            if (selectorRef.current) {
-              selectorRef.current.unselectAll();
-            }
-          }
-          return;
         }
 
         // Don't start panning if clicking on a node, connection, or socket
@@ -1258,6 +1291,75 @@ export function GraphEditor({
       container.addEventListener('touchstart', handleTouchStart, { passive: true });
       container.addEventListener('touchmove', handleTouchMove, { passive: true });
       container.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+      // Handle tap on nodes for mobile selection
+      let touchStartTarget: HTMLElement | null = null;
+      let touchMoved = false;
+
+      const handleNodeTouchStart = (e: TouchEvent) => {
+        if (e.touches.length === 1) {
+          touchStartTarget = e.target as HTMLElement;
+          touchMoved = false;
+        }
+      };
+
+      const handleNodeTouchMove = () => {
+        touchMoved = true;
+      };
+
+      const handleNodeTouchEnd = (e: TouchEvent) => {
+        if (touchMoved || !touchStartTarget) {
+          touchStartTarget = null;
+          return;
+        }
+
+        const target = touchStartTarget;
+        touchStartTarget = null;
+
+        // Check if tap was on a node (not on input/button elements)
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' ||
+            target.tagName === 'SELECT' || target.tagName === 'BUTTON') {
+          // Focus the input element
+          (target as HTMLElement).focus();
+          return;
+        }
+
+        // Check if tap was on a node
+        const nodeElement = target.closest('.custom-node');
+        if (nodeElement) {
+          const nodeId = nodeElement.getAttribute('data-node-id');
+          if (nodeId && selectorRef.current) {
+            // Select the node
+            const node = editor.getNode(nodeId);
+            if (node) {
+              selectorRef.current.unselectAll();
+              selectorRef.current.add({ id: nodeId, label: 'node' }, true);
+              // Emit picked event to update visual selection
+              area.emit({ type: 'nodepicked', data: { id: nodeId } });
+            }
+          }
+          e.preventDefault();
+          return;
+        }
+
+        // Check if tap was on a socket
+        const inputSocket = target.closest('.custom-node-input');
+        const outputSocket = target.closest('.custom-node-output');
+        if (inputSocket || outputSocket) {
+          // Socket handling is done elsewhere
+          return;
+        }
+      };
+
+      nodeTouchHandlersRef.current = {
+        start: handleNodeTouchStart,
+        move: handleNodeTouchMove,
+        end: handleNodeTouchEnd,
+      };
+      // Use capture phase to intercept events before Rete.js handlers
+      container.addEventListener('touchstart', handleNodeTouchStart, { passive: true, capture: true });
+      container.addEventListener('touchmove', handleNodeTouchMove, { passive: true, capture: true });
+      container.addEventListener('touchend', handleNodeTouchEnd, { passive: false, capture: true });
 
       // Enable selection and node dragging
       const selector = AreaExtensions.selector();
@@ -1636,6 +1738,12 @@ export function GraphEditor({
         containerRef.current.removeEventListener('touchmove', touchHandlersRef.current.move);
         containerRef.current.removeEventListener('touchend', touchHandlersRef.current.end);
       }
+      // Remove node touch listeners (must match capture phase)
+      if (nodeTouchHandlersRef.current && containerRef.current) {
+        containerRef.current.removeEventListener('touchstart', nodeTouchHandlersRef.current.start, { capture: true });
+        containerRef.current.removeEventListener('touchmove', nodeTouchHandlersRef.current.move, { capture: true });
+        containerRef.current.removeEventListener('touchend', nodeTouchHandlersRef.current.end, { capture: true });
+      }
       if (areaRef.current) {
         areaRef.current.destroy();
       }
@@ -1750,94 +1858,8 @@ export function GraphEditor({
     };
   }, [addNode, centerView, deleteSelected]);
 
-  // Handle touch overlay for mobile - allows 1-finger scroll while capturing 2-finger for graph
-  const touchOverlayRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const overlay = touchOverlayRef.current;
-    const area = areaRef.current;
-    if (!overlay || !area) return;
-
-    let isTwoFingerTouch = false;
-    let initialPinchDistance = 0;
-    let initialZoom = 1;
-    let lastTouchCenterX = 0;
-    let lastTouchCenterY = 0;
-
-    const getDistance = (touches: TouchList) => {
-      const dx = touches[0].clientX - touches[1].clientX;
-      const dy = touches[0].clientY - touches[1].clientY;
-      return Math.sqrt(dx * dx + dy * dy);
-    };
-
-    const getTouchCenter = (touches: TouchList) => ({
-      x: (touches[0].clientX + touches[1].clientX) / 2,
-      y: (touches[0].clientY + touches[1].clientY) / 2,
-    });
-
-    const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-        isTwoFingerTouch = true;
-        initialPinchDistance = getDistance(e.touches);
-        initialZoom = area.area.transform.k;
-        const center = getTouchCenter(e.touches);
-        lastTouchCenterX = center.x;
-        lastTouchCenterY = center.y;
-      } else {
-        isTwoFingerTouch = false;
-      }
-    };
-
-    const handleTouchMove = (e: TouchEvent) => {
-      if (e.touches.length === 2 && isTwoFingerTouch) {
-        e.preventDefault();
-        const currentDistance = getDistance(e.touches);
-        const center = getTouchCenter(e.touches);
-        const rect = overlay.getBoundingClientRect();
-
-        const panDx = center.x - lastTouchCenterX;
-        const panDy = center.y - lastTouchCenterY;
-        lastTouchCenterX = center.x;
-        lastTouchCenterY = center.y;
-
-        const scale = currentDistance / initialPinchDistance;
-        const newZoom = Math.max(0.1, Math.min(2.0, initialZoom * scale));
-
-        const { x, y, k } = area.area.transform;
-        let newX = x + panDx;
-        let newY = y + panDy;
-
-        const currentPinchCenterX = center.x - rect.left;
-        const currentPinchCenterY = center.y - rect.top;
-        newX = currentPinchCenterX - (currentPinchCenterX - newX) * (newZoom / k);
-        newY = currentPinchCenterY - (currentPinchCenterY - newY) * (newZoom / k);
-
-        area.area.zoom(newZoom, 0, 0);
-        area.area.translate(newX, newY);
-      }
-    };
-
-    const handleTouchEnd = () => {
-      isTwoFingerTouch = false;
-      initialPinchDistance = 0;
-    };
-
-    overlay.addEventListener('touchstart', handleTouchStart, { passive: false });
-    overlay.addEventListener('touchmove', handleTouchMove, { passive: false });
-    overlay.addEventListener('touchend', handleTouchEnd);
-
-    return () => {
-      overlay.removeEventListener('touchstart', handleTouchStart);
-      overlay.removeEventListener('touchmove', handleTouchMove);
-      overlay.removeEventListener('touchend', handleTouchEnd);
-    };
-  }, []);
-
   return (
     <div className="graph-editor">
-      {/* Touch overlay for mobile - captures 2-finger gestures, lets 1-finger through */}
-      <div ref={touchOverlayRef} className="graph-touch-overlay" />
       <div className="graph-toolbar">
         <button onClick={() => addNode('Relay')}>{t('toolbar.relay')}</button>
         <div className="filter-dropdown">

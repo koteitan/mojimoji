@@ -271,3 +271,25 @@
   border-color: #666;
   color: #fff;
 }
+
+/* Mobile touch support */
+@media (max-width: 768px) {
+  .custom-node {
+    touch-action: manipulation !important;
+    pointer-events: auto !important;
+  }
+
+  .custom-node-input,
+  .custom-node-output {
+    touch-action: manipulation !important;
+    pointer-events: auto !important;
+  }
+
+  .custom-node input,
+  .custom-node textarea,
+  .custom-node select,
+  .custom-node button {
+    touch-action: manipulation !important;
+    pointer-events: auto !important;
+  }
+}

@@ -249,32 +249,16 @@ svg {
   display: block;
 }
 
-/* Touch overlay - hidden by default */
-.graph-touch-overlay {
-  display: none;
-}
-
 /* Mobile styles */
 @media (max-width: 768px) {
-  /* Touch overlay for 1-finger scroll */
-  .graph-touch-overlay {
-    display: block;
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 1000;
-    touch-action: pan-x;  /* Allow horizontal scroll for 1-finger */
-    background: transparent;
-  }
-
-  .graph-editor {
-    touch-action: pan-x;
-  }
-
+  .graph-editor,
   .graph-editor-container {
-    touch-action: none;  /* Disable touch on container, overlay handles it */
+    touch-action: manipulation;  /* Allow pan, pinch, and tap */
+  }
+
+  /* Enable touch events on SVG (desktop has pointer-events: none to prevent connection paths from blocking) */
+  svg {
+    pointer-events: auto !important;
   }
 
   /* Toolbar: 2-line layout */
@@ -282,7 +266,6 @@ svg {
     flex-wrap: wrap;
     max-width: calc(100% - 20px);
     gap: 4px;
-    z-index: 1001;  /* Above touch overlay (1000) */
   }
 
   .graph-toolbar button {
