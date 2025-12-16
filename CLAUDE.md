@@ -25,10 +25,19 @@ or
     - use git diff when you make a commit message suggestion.
   - commit message suggestion is written in commit-msg.txt.
 
-# test and deployment rules
-- don't run test and deployment by yourself.
-- I run test and deployment by scripts in scripts/ directory.
-- Ask me to run test and deployment when you finish the implementation.
+# development cycle
+- loop:
+  - edit
+  - build
+  - script/local-test.sh (by user)
+  - test (by user)
+  - git add (don't git add -A/don't git add and commit at once)
+  - git commit
+- version bump (src/App.tsx)
+- script/deploy.sh
+- git add and commit
+- git push (by user)
+- deploy-submodule (by user)
 
 # Project
 - This is the project to make a modular-type timeline in nostr.
