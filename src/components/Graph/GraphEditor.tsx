@@ -22,8 +22,8 @@ import {
   GRAPH_DATA_VERSION,
   type GraphData,
 } from '../../utils/localStorage';
-import { saveGraphToNostr, loadGraphByPath } from '../../nostr/graphStorage';
-import { extractContentWarning, type TimelineEvent, type EventSignal } from '../../nostr/types';
+import { saveGraphToNostr, loadGraphByPath, loadGraphByEventId } from '../../nostr/graphStorage';
+import { extractContentWarning, decodeBech32ToHex, isHex64, type TimelineEvent, type EventSignal } from '../../nostr/types';
 import type { Observable, Subscription } from 'rxjs';
 import { APP_VERSION } from '../../App';
 import './GraphEditor.css';
@@ -755,11 +755,12 @@ export function GraphEditor({
   }, [onTimelineCreate, onTimelineRemove, saveCurrentGraph]);
 
   // Handle save dialog save action
+  // Returns event ID for Nostr saves (for sharing)
   const handleSave = useCallback(async (
     destination: 'local' | 'nostr' | 'file',
     path: string,
     options?: { visibility?: 'public' | 'private'; relayUrls?: string[] }
-  ) => {
+  ): Promise<string | void> => {
     const graphData = getCurrentGraphData();
     if (!graphData) return;
 
@@ -768,10 +769,11 @@ export function GraphEditor({
     } else if (destination === 'file') {
       exportGraphToFile(graphData, path);
     } else if (destination === 'nostr') {
-      await saveGraphToNostr(path, graphData, {
+      const eventId = await saveGraphToNostr(path, graphData, {
         visibility: options?.visibility || 'private',
         relayUrls: options?.relayUrls,
       });
+      return eventId;
     }
   }, [getCurrentGraphData]);
 
@@ -1563,8 +1565,28 @@ export function GraphEditor({
         return context;
       });
 
-      // Load saved graph
-      const savedGraph = loadGraph();
+      // Check for permalink query parameter first
+      const urlParams = new URLSearchParams(window.location.search);
+      const rawPermalinkParam = urlParams.get('e');
+
+      // Parse permalink parameter - supports both nevent (bech32) and hex formats
+      let permalinkEventId: string | null = null;
+      if (rawPermalinkParam) {
+        if (isHex64(rawPermalinkParam)) {
+          // Direct hex event ID
+          permalinkEventId = rawPermalinkParam;
+        } else if (rawPermalinkParam.startsWith('nevent1')) {
+          // bech32 nevent format
+          const decoded = decodeBech32ToHex(rawPermalinkParam);
+          if (decoded && decoded.type === 'nevent') {
+            permalinkEventId = decoded.hex;
+          }
+        }
+      }
+      const hasPermalink = permalinkEventId !== null;
+
+      // Load saved graph (skip if we have a permalink - will load from Nostr later)
+      const savedGraph = hasPermalink ? null : loadGraph();
       if (savedGraph) {
         isLoadingRef.current = true;
         const nodeMap = new Map<string, NodeTypes>();
@@ -1716,6 +1738,156 @@ export function GraphEditor({
           const { x, y } = area.area.transform;
           area.area.translate(x, y + 30);
         }, 150);
+      }
+
+      // If we have a permalink, load from Nostr after editor is initialized
+      if (hasPermalink && permalinkEventId) {
+        setTimeout(async () => {
+          try {
+            console.log('Loading graph from permalink:', permalinkEventId);
+            const graphData = await loadGraphByEventId(permalinkEventId);
+            if (graphData) {
+              // Use loadGraphData to properly load the graph
+              const editor = editorRef.current;
+              const area = areaRef.current;
+              if (!editor || !area) return;
+
+              isLoadingRef.current = true;
+
+              // Clear all existing nodes and connections
+              const existingNodes = editor.getNodes();
+              for (const node of existingNodes) {
+                if (getNodeType(node) === 'Timeline') {
+                  onTimelineRemove(node.id);
+                }
+                const connections = editor.getConnections().filter(
+                  (c: { source: string; target: string }) => c.source === node.id || c.target === node.id
+                );
+                for (const conn of connections) {
+                  await editor.removeConnection(conn.id);
+                }
+                await editor.removeNode(node.id);
+              }
+
+              eventsRef.current.clear();
+              excludedEventsRef.current.clear();
+
+              const nodeMap = new Map<string, NodeTypes>();
+              const timelineNodes: Array<{ node: TimelineNode; id: string }> = [];
+
+              // Create nodes
+              for (const nodeData of graphData.nodes as Array<{
+                id: string;
+                type: string;
+                position: { x: number; y: number };
+                data: unknown;
+              }>) {
+                let node: NodeTypes;
+
+                switch (nodeData.type) {
+                  case 'Relay':
+                  case 'Source':
+                    node = new RelayNode();
+                    if (nodeData.data) {
+                      (node as RelayNode).deserialize(nodeData.data as { relayUrls: string[]; filterJson: string });
+                    }
+                    break;
+                  case 'Operator':
+                    node = new OperatorNode();
+                    if (nodeData.data) {
+                      (node as OperatorNode).deserialize(nodeData.data as { operator: 'AND' | 'OR' | 'A-B' });
+                    }
+                    break;
+                  case 'Search':
+                    node = new SearchNode();
+                    if (nodeData.data) {
+                      (node as SearchNode).deserialize(nodeData.data as { keyword: string; useRegex: boolean });
+                    }
+                    break;
+                  case 'Language':
+                    node = new LanguageNode();
+                    if (nodeData.data) {
+                      (node as LanguageNode).deserialize(nodeData.data as { language: string });
+                    }
+                    break;
+                  case 'NostrFilter':
+                    node = new NostrFilterNode();
+                    if (nodeData.data) {
+                      (node as NostrFilterNode).deserialize(nodeData.data as { filterElements: { field: string; value: string }[]; exclude: boolean });
+                    }
+                    break;
+                  case 'Timeline':
+                  case 'Display':
+                    node = new TimelineNode();
+                    if (nodeData.data) {
+                      (node as TimelineNode).deserialize(nodeData.data as { timelineName: string });
+                    }
+                    timelineNodes.push({ node: node as TimelineNode, id: nodeData.id });
+                    break;
+                  default:
+                    continue;
+                }
+
+                (node as unknown as { id: string }).id = nodeData.id;
+                await editor.addNode(node);
+                await area.translate(node.id, nodeData.position);
+                nodeMap.set(nodeData.id, node);
+              }
+
+              for (const { node, id } of timelineNodes) {
+                onTimelineCreate(id, node.getTimelineName());
+              }
+
+              for (const connData of graphData.connections as Array<{
+                id: string;
+                source: string;
+                sourceOutput: string;
+                target: string;
+                targetInput: string;
+              }>) {
+                const sourceNode = nodeMap.get(connData.source);
+                const targetNode = nodeMap.get(connData.target);
+
+                if (sourceNode && targetNode) {
+                  const conn = new ClassicPreset.Connection(
+                    sourceNode,
+                    connData.sourceOutput as never,
+                    targetNode,
+                    connData.targetInput as never
+                  );
+                  await editor.addConnection(conn);
+                }
+              }
+
+              isLoadingRef.current = false;
+
+              setTimeout(() => rebuildPipelineRef.current?.(), 100);
+
+              setTimeout(async () => {
+                if (graphData.viewTransform) {
+                  area.area.zoom(graphData.viewTransform.k, 0, 0);
+                  area.area.translate(graphData.viewTransform.x, graphData.viewTransform.y);
+                } else {
+                  await AreaExtensions.zoomAt(area, editor.getNodes());
+                  const { x, y } = area.area.transform;
+                  area.area.translate(x, y + 30);
+                }
+              }, 150);
+
+              // Save to auto-save slot
+              saveCurrentGraph();
+
+              // Clear the query parameter after successful load
+              window.history.replaceState({}, '', window.location.pathname);
+            } else {
+              console.error('Graph not found for event ID:', permalinkEventId);
+              window.history.replaceState({}, '', window.location.pathname);
+            }
+          } catch (err) {
+            console.error('Failed to load graph from permalink:', err);
+            window.history.replaceState({}, '', window.location.pathname);
+          }
+        }, 500);
       }
     };
 

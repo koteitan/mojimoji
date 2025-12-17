@@ -146,8 +146,12 @@ For manual saving, we will add:
   - Ctrl+S -> Save Dialog
   - Ctrl+O -> Load Dialog
 - Save Dialog
-  - Click "Save" -> save and close -> Graph Editor View
+  - Click "Save" -> save and close -> Graph Editor View (Browser/File tabs)
+  - Click "Save" -> save -> Share Dialog (Nostr Relay tab)
   - Click "Cancel" / Press Escape -> Graph Editor View
+- Share Dialog (after saving to Nostr Relay)
+  - Click "Copy" -> copy permalink to clipboard
+  - Click "OK" / Press Escape -> Graph Editor View
 - Load Dialog
   - Select graph, Click "Load" -> load and close -> Graph Editor View
   - Click "Cancel" / Press Escape -> Graph Editor View
@@ -188,6 +192,20 @@ For manual saving, we will add:
     - [New Folder] button (Browser/Nostr tabs only, creates session-only folder)
     - [Save] button (primary)
 
+- Share Dialog (modal overlay, appears after saving to Nostr Relay)
+  - Header:
+    - Title "Share Graph"
+    - [×] close button
+  - Content:
+    - "Permalink:" label
+    - Read-only text input showing the permalink URL
+      - format: `https://koteitan.github.io/mojimoji/?e=[nevent]`
+      - nevent: NIP-19 bech32-encoded event identifier
+    - Success message: "Graph saved successfully!"
+  - Footer:
+    - [Copy] button - copies permalink URL to clipboard
+    - [OK] button (primary) - closes dialog
+
 - Load Dialog (modal overlay)
   - Header:
     - Title "Load Graph"
@@ -223,6 +241,10 @@ For manual saving, we will add:
     - Error message (if any)
   - Footer:
     - [Cancel] button
+    - [Copy URL] button (Nostr Relay tab only)
+      - enabled only when a graph is selected
+      - copies permalink URL to clipboard: `https://koteitan.github.io/mojimoji/?e=[nevent]`
+      - disabled when no graph is selected
     - [Load] button (primary)
 
 ### Directory Structure
@@ -280,6 +302,31 @@ For manual saving, we will add:
 ### UI Behavior
 - Browser: Delete button shown for all items (all graphs are user's own)
 - Nostr Relay: Delete button shown only for user's own graphs (author === user's pubkey)
+
+## Permalink Loading
+
+### URL Format
+- Permalink format: `https://koteitan.github.io/mojimoji/?e=[nevent]`
+- nevent: NIP-19 bech32-encoded event identifier (starts with `nevent1...`)
+- Legacy support: hex event ID (64-character hex string) is also supported for backward compatibility
+
+### Loading Behavior
+- On app startup, check for `e` query parameter in URL
+- If present:
+  1. Fetch the event from well-known relays using filter: `{ kinds: [30078], ids: [event-id] }`
+  2. Parse graph data from event.content
+  3. Load the graph into the editor
+  4. Clear the query parameter from URL (using history.replaceState) to prevent re-loading on refresh
+- If event not found or fetch fails:
+  - Show error message
+  - Fall back to localStorage or default graph
+
+### Well-known Relays for Permalink Loading
+- Use a set of popular relays to maximize availability:
+  - wss://relay.damus.io
+  - wss://nos.lol
+  - wss://relay.nostr.band
+  - wss://yabu.me
 
 ## NIP references
 - NIP-01: Basic protocol

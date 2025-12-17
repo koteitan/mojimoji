@@ -14,6 +14,7 @@ import {
 } from '../../nostr/graphStorage';
 import { formatNpub, decodeBech32ToHex, isHex64 } from '../../nostr/types';
 import { Nip07ErrorMessage } from './Nip07ErrorMessage';
+import { generatePermalink } from './ShareDialog';
 import './Dialog.css';
 
 type LoadSource = 'local' | 'nostr' | 'file';
@@ -50,6 +51,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
   const [authorSuggestions, setAuthorSuggestions] = useState<Array<{ pubkey: string; name: string; picture?: string }>>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [relayUrls, setRelayUrls] = useState('');
+  const [urlCopied, setUrlCopied] = useState(false);
 
   // Refresh data when dialog opens
   useEffect(() => {
@@ -347,6 +349,20 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
 
   // Check if load button should be enabled for Nostr
   const isNostrLoadEnabled = source === 'nostr' && selectedNostrGraph !== null;
+
+  // Handle copy URL button click
+  const handleCopyUrl = useCallback(async () => {
+    if (!selectedNostrGraph?.event?.id) return;
+
+    try {
+      const permalink = generatePermalink(selectedNostrGraph.event.id);
+      await navigator.clipboard.writeText(permalink);
+      setUrlCopied(true);
+      setTimeout(() => setUrlCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy URL to clipboard:', err);
+    }
+  }, [selectedNostrGraph]);
 
   if (!isOpen) return null;
 
@@ -666,6 +682,15 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
           <button className="dialog-button" onClick={onClose}>
             {t('dialogs.cancel')}
           </button>
+          {source === 'nostr' && (
+            <button
+              className="dialog-button"
+              onClick={handleCopyUrl}
+              disabled={!selectedNostrGraph?.event?.id}
+            >
+              {urlCopied ? t('dialogs.load.urlCopied') : t('dialogs.load.copyUrl')}
+            </button>
+          )}
           <button
             className="dialog-button primary"
             onClick={handleLoad}

@@ -103,7 +103,9 @@
       "confirmDeleteGraph": "Delete \"{{name}}\"?",
       "confirmDeleteFolder": "Delete folder \"{{name}}\" and all graphs inside?",
       "relayUrlsLabel": "Load from relays (default: kind:10002)",
-      "relayUrlsPlaceholder": "wss://relay.example.com\n(one per line, uses kind:10002 relays if empty)"
+      "relayUrlsPlaceholder": "wss://relay.example.com\n(one per line, uses kind:10002 relays if empty)",
+      "copyUrl": "Copy URL",
+      "urlCopied": "URL Copied!"
     },
     "post": {
       "title": "Post Note",
@@ -121,6 +123,14 @@
       "title": "Relay Settings",
       "relayUrlsLabel": "Post to relays",
       "kind10002": "kind:10002",
+      "ok": "OK"
+    },
+    "share": {
+      "title": "Share Graph",
+      "successMessage": "Graph saved successfully!",
+      "permalinkLabel": "Permalink",
+      "copy": "Copy",
+      "copied": "Copied!",
       "ok": "OK"
     }
   }

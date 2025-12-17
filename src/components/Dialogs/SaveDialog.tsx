@@ -5,6 +5,7 @@ import { isNip07Available, getPubkey } from '../../nostr/nip07';
 import { loadGraphsFromNostr, getNostrItemsInDirectory, deleteGraphFromNostr, getProfileFromCache, fetchUserRelays, fetchAndCacheProfiles, type NostrGraphItem } from '../../nostr/graphStorage';
 import { formatNpub } from '../../nostr/types';
 import { Nip07ErrorMessage } from './Nip07ErrorMessage';
+import { ShareDialog } from './ShareDialog';
 import './Dialog.css';
 
 type SaveDestination = 'local' | 'nostr' | 'file';
@@ -13,7 +14,7 @@ type NostrVisibility = 'public' | 'private';
 interface SaveDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (destination: SaveDestination, path: string, options?: { visibility?: NostrVisibility; relayUrls?: string[] }) => Promise<void>;
+  onSave: (destination: SaveDestination, path: string, options?: { visibility?: NostrVisibility; relayUrls?: string[] }) => Promise<string | void>;
 }
 
 export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
@@ -35,6 +36,9 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
   const [nostrGraphs, setNostrGraphs] = useState<NostrGraphItem[]>([]);
   const [nostrLoading, setNostrLoading] = useState(false);
   const [userPubkey, setUserPubkey] = useState<string | null>(null);
+  // Share dialog state (for Nostr saves)
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [savedEventId, setSavedEventId] = useState<string | null>(null);
 
   // Refresh data when dialog opens
   useEffect(() => {
@@ -208,14 +212,28 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
         relayUrls: relayUrls.split('\n').filter(url => url.trim()),
       } : undefined;
 
-      await onSave(destination, savePath, options);
-      onClose();
+      const result = await onSave(destination, savePath, options);
+
+      // For Nostr saves, show share dialog with event ID
+      if (destination === 'nostr' && typeof result === 'string') {
+        setSavedEventId(result);
+        setShareDialogOpen(true);
+        // Don't close the save dialog yet - let share dialog handle closing
+      } else {
+        onClose();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : t('dialogs.save.errorUnknown'));
     } finally {
       setSaving(false);
     }
   }, [graphName, fullPath, destination, visibility, relayUrls, onSave, onClose, t]);
+
+  const handleShareDialogClose = useCallback(() => {
+    setShareDialogOpen(false);
+    setSavedEventId(null);
+    onClose();
+  }, [onClose]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -239,6 +257,17 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
   }, [mouseDownOnOverlay, onClose]);
 
   if (!isOpen) return null;
+
+  // Show share dialog if we just saved to Nostr
+  if (shareDialogOpen && savedEventId) {
+    return (
+      <ShareDialog
+        isOpen={true}
+        onClose={handleShareDialogClose}
+        eventId={savedEventId}
+      />
+    );
+  }
 
   return (
     <div className="dialog-overlay" onMouseDown={handleOverlayMouseDown} onClick={handleOverlayClick} onKeyDown={handleKeyDown}>

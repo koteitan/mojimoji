@@ -103,7 +103,9 @@
       "confirmDeleteGraph": "「{{name}}」を削除しますか？",
       "confirmDeleteFolder": "フォルダ「{{name}}」と中のすべてのグラフを削除しますか？",
       "relayUrlsLabel": "読み込み元リレー（デフォルト：kind:10002）",
-      "relayUrlsPlaceholder": "wss://relay.example.com\n（1行に1つ、空の場合はkind:10002のリレーを使用）"
+      "relayUrlsPlaceholder": "wss://relay.example.com\n（1行に1つ、空の場合はkind:10002のリレーを使用）",
+      "copyUrl": "URLをコピー",
+      "urlCopied": "コピーしました！"
     },
     "post": {
       "title": "ノートを投稿",
@@ -121,6 +123,14 @@
       "title": "リレー設定",
       "relayUrlsLabel": "投稿先リレー",
       "kind10002": "kind:10002",
+      "ok": "OK"
+    },
+    "share": {
+      "title": "グラフを共有",
+      "successMessage": "グラフを保存しました！",
+      "permalinkLabel": "パーマリンク",
+      "copy": "コピー",
+      "copied": "コピーしました！",
       "ok": "OK"
     }
   }

@@ -258,16 +258,24 @@ User Inrterface is as follows.
   - shortcuts (except Ctrl+S/Ctrl+O/Ctrl+P) are disabled when Ctrl/Alt/Meta key is pressed
 
 ### on load
-- load:
-  - when the localStorage is empty:
-    - create a default graph:
-      - one Relay node: default settings, position (100, 100)
-      - one Timeline node: timeline name: "Timeline", position (120, 650)
-      - arrangement: vertical (Relay on top, Timeline below)
-      - one edge: connect the Relay node output to the Timeline node input.
-  - when there is localStorage:
-    - automatically load localStorage when the app is started.
-  - centering: fit all nodes in view (same as Center button)
+- load priority:
+  1. Permalink query parameter (`?e=[event-id]`)
+     - if URL has `e` query parameter:
+       - fetch kind:30078 event from well-known relays
+       - load graph from event.content
+       - clear query parameter from URL after loading
+       - see [save.md](save.md#permalink-loading) for details
+  2. localStorage
+     - if localStorage has saved graph:
+       - automatically load localStorage when the app is started.
+  3. Default graph
+     - when no permalink and localStorage is empty:
+       - create a default graph:
+         - one Relay node: default settings, position (100, 100)
+         - one Timeline node: timeline name: "Timeline", position (120, 650)
+         - arrangement: vertical (Relay on top, Timeline below)
+         - one edge: connect the Relay node output to the Timeline node input.
+- centering: fit all nodes in view (same as Center button)
 
 ### control input behavior
 - text inputs (TextInput, TextArea):

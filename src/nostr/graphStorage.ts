@@ -100,6 +100,7 @@ export async function fetchUserRelays(pubkey: string): Promise<string[]> {
 }
 
 // Save graph to Nostr relay
+// Returns the event ID of the saved event
 export async function saveGraphToNostr(
   path: string,
   graphData: GraphData,
@@ -107,7 +108,7 @@ export async function saveGraphToNostr(
     visibility: 'public' | 'private';
     relayUrls?: string[];
   }
-): Promise<void> {
+): Promise<string> {
   if (!isNip07Available()) {
     throw new Error('NIP-07 extension not available. Please install a Nostr signer extension like nos2x or Alby.');
   }
@@ -154,6 +155,9 @@ export async function saveGraphToNostr(
 
   // Wait a bit for the event to be sent
   await new Promise(resolve => setTimeout(resolve, 1000));
+
+  // Return the event ID
+  return signedEvent.id;
 }
 
 // Load graphs from Nostr relay
@@ -316,6 +320,66 @@ export async function loadGraphByPath(
         resolve(null);
       }
     }, 5000);
+  });
+}
+
+// Well-known relays for permalink loading (need broader coverage)
+const PERMALINK_RELAYS = [
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://relay.nostr.band',
+  'wss://yabu.me',
+];
+
+// Load a graph by event ID (for permalink loading)
+export async function loadGraphByEventId(
+  eventId: string
+): Promise<GraphData | null> {
+  return new Promise((resolve) => {
+    const client = getRxNostr();
+    client.setDefaultRelays(PERMALINK_RELAYS);
+
+    const rxReq = createRxForwardReq();
+    let resolved = false;
+
+    const subscription = client.use(rxReq).subscribe({
+      next: (packet) => {
+        const event = packet.event as NostrEvent;
+        if (event.id === eventId && event.kind === KIND_APP_DATA) {
+          if (!resolved) {
+            resolved = true;
+            subscription.unsubscribe();
+            try {
+              const graphData = JSON.parse(event.content) as GraphData;
+              resolve(graphData);
+            } catch {
+              resolve(null);
+            }
+          }
+        }
+      },
+      error: () => {
+        if (!resolved) {
+          resolved = true;
+          resolve(null);
+        }
+      },
+    });
+
+    rxReq.emit({
+      kinds: [KIND_APP_DATA],
+      ids: [eventId],
+      limit: 1,
+    });
+
+    // Timeout after 10 seconds
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        subscription.unsubscribe();
+        resolve(null);
+      }
+    }, 10000);
   });
 }
 

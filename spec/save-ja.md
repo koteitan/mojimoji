@@ -146,8 +146,12 @@ mojimoji が使用する localStorage キー:
   - Ctrl+S -> 保存ダイアログ
   - Ctrl+O -> 読込ダイアログ
 - 保存ダイアログ
-  - 「Save」クリック -> 保存して閉じる -> グラフエディタ画面
+  - 「Save」クリック -> 保存して閉じる -> グラフエディタ画面（Browser/File タブ）
+  - 「Save」クリック -> 保存 -> 共有ダイアログ（Nostr Relay タブ）
   - 「Cancel」クリック / Escape キー -> グラフエディタ画面
+- 共有ダイアログ（Nostr リレーへの保存後）
+  - 「Copy」クリック -> パーマリンクをクリップボードにコピー
+  - 「OK」クリック / Escape キー -> グラフエディタ画面
 - 読込ダイアログ
   - グラフを選択し「Load」クリック -> 読み込んで閉じる -> グラフエディタ画面
   - 「Cancel」クリック / Escape キー -> グラフエディタ画面
@@ -188,6 +192,20 @@ mojimoji が使用する localStorage キー:
     - [New Folder] ボタン（Browser/Nostr タブのみ、セッション限定フォルダを作成）
     - [Save] ボタン（プライマリ）
 
+- 共有ダイアログ（モーダルオーバーレイ、Nostr リレーへの保存後に表示）
+  - ヘッダー:
+    - タイトル「Share Graph」
+    - [×] 閉じるボタン
+  - コンテンツ:
+    - 「Permalink:」ラベル
+    - 読み取り専用テキスト入力（パーマリンク URL を表示）
+      - 形式: `https://koteitan.github.io/mojimoji/?e=[nevent]`
+      - nevent: NIP-19 bech32 エンコードされたイベント識別子
+    - 成功メッセージ: 「Graph saved successfully!」
+  - フッター:
+    - [Copy] ボタン - パーマリンク URL をクリップボードにコピー
+    - [OK] ボタン（プライマリ）- ダイアログを閉じる
+
 - 読込ダイアログ（モーダルオーバーレイ）
   - ヘッダー:
     - タイトル「Load Graph」
@@ -226,6 +244,10 @@ mojimoji が使用する localStorage キー:
     - エラーメッセージ（発生時）
   - フッター:
     - [Cancel] ボタン
+    - [Copy URL] ボタン（Nostr Relay タブのみ）
+      - グラフが選択されている場合のみ有効
+      - パーマリンク URL をクリップボードにコピー: `https://koteitan.github.io/mojimoji/?e=[nevent]`
+      - グラフ未選択時は無効
     - [Load] ボタン（プライマリ）
 
 ### ディレクトリ構造
@@ -283,6 +305,31 @@ mojimoji が使用する localStorage キー:
 ### UI の動作
 - ブラウザ: すべてのアイテムに削除ボタン表示（すべて自分のグラフのため）
 - Nostr リレー: 自分のグラフのみ削除ボタン表示（author === user's pubkey）
+
+## パーマリンク読込
+
+### URL 形式
+- パーマリンク形式: `https://koteitan.github.io/mojimoji/?e=[nevent]`
+- nevent: NIP-19 bech32 エンコードされたイベント識別子（`nevent1...` で始まる）
+- 後方互換性: hex イベント ID（64 文字の hex 文字列）もサポート
+
+### 読込動作
+- アプリ起動時に URL の `e` クエリパラメータをチェック
+- パラメータが存在する場合:
+  1. フィルタ `{ kinds: [30078], ids: [event-id] }` で well-known リレーからイベントを取得
+  2. event.content からグラフデータをパース
+  3. グラフをエディタに読み込む
+  4. リフレッシュ時の再読込を防ぐため、URL からクエリパラメータをクリア（history.replaceState を使用）
+- イベントが見つからない、または取得に失敗した場合:
+  - エラーメッセージを表示
+  - localStorage またはデフォルトグラフにフォールバック
+
+### パーマリンク読込用の Well-known リレー
+- 可用性を最大化するため、人気のリレーを使用:
+  - wss://relay.damus.io
+  - wss://nos.lol
+  - wss://relay.nostr.band
+  - wss://yabu.me
 
 ## NIP 参照
 - NIP-01: 基本プロトコル

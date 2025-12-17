@@ -15,6 +15,26 @@ export function pubkeyToNpub(pubkey: string): string {
   }
 }
 
+// Convert hex event id to nevent format (NIP-19)
+// Uses TLV format: type 0 (special) = event id
+export function eventIdToNevent(eventId: string): string {
+  try {
+    // Convert hex to bytes
+    const eventIdBytes = [];
+    for (let i = 0; i < eventId.length; i += 2) {
+      eventIdBytes.push(parseInt(eventId.slice(i, i + 2), 16));
+    }
+
+    // Build TLV: type 0 (special) | length 32 | event id bytes
+    const tlvData = [0, 32, ...eventIdBytes];
+
+    const words = bech32.toWords(new Uint8Array(tlvData));
+    return bech32.encode('nevent', words, 1000); // nevent can be long
+  } catch {
+    return eventId; // Fallback to hex
+  }
+}
+
 // Decode bech32 NIP-19 identifier to hex
 // Supports: npub, note, nprofile, nevent
 export function decodeBech32ToHex(str: string): { type: string; hex: string } | null {
