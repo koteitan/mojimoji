@@ -316,7 +316,7 @@ For manual saving, we will add:
   1. Fetch the event from well-known relays using filter: `{ kinds: [30078], ids: [event-id] }`
   2. Parse graph data from event.content
   3. Load the graph into the editor
-  4. Clear the query parameter from URL (using history.replaceState) to prevent re-loading on refresh
+  4. Keep the query parameter in URL (permalink URL is preserved)
 - If event not found or fetch fails:
   - Show error message
   - Fall back to localStorage or default graph

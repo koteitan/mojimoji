@@ -319,7 +319,7 @@ mojimoji が使用する localStorage キー:
   1. フィルタ `{ kinds: [30078], ids: [event-id] }` で well-known リレーからイベントを取得
   2. event.content からグラフデータをパース
   3. グラフをエディタに読み込む
-  4. リフレッシュ時の再読込を防ぐため、URL からクエリパラメータをクリア（history.replaceState を使用）
+  4. クエリパラメータは URL に保持（パーマリンク URL が維持される）
 - イベントが見つからない、または取得に失敗した場合:
   - エラーメッセージを表示
   - localStorage またはデフォルトグラフにフォールバック

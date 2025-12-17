@@ -1876,16 +1876,11 @@ export function GraphEditor({
 
               // Save to auto-save slot
               saveCurrentGraph();
-
-              // Clear the query parameter after successful load
-              window.history.replaceState({}, '', window.location.pathname);
             } else {
               console.error('Graph not found for event ID:', permalinkEventId);
-              window.history.replaceState({}, '', window.location.pathname);
             }
           } catch (err) {
             console.error('Failed to load graph from permalink:', err);
-            window.history.replaceState({}, '', window.location.pathname);
           }
         }, 500);
       }
