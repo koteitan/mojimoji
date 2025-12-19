@@ -12,6 +12,7 @@ step.md
 node_modules
 dist
 dist-ssr
+assets
 *.local
 
 # Editor directories and files

@@ -134,20 +134,16 @@ bash scripts/local-test.sh
 
 ### GitHub Pagesへのデプロイ
 
-```bash
-# GitHub Pages用にビルド
-npm run deploy
+GitHub Actionsで自動デプロイされます。`main`ブランチにpushするだけ：
 
-# コミットしてプッシュ
-git add -A
-git commit -m "Deploy vX.X.X"
+```bash
 git push
 ```
 
-デプロイスクリプトの動作：
-1. ビルド用に`src/index.html`をルートにコピー
+GitHub Actionsが自動的に：
+1. 依存関係をインストール
 2. 正しいベースパス（`/mojimoji/`）でアプリをビルド
-3. ビルドファイルをルートディレクトリにコピー（index.htmlはビルド版で上書き）
+3. GitHub Pagesにデプロイ
 
 ### プロジェクト構造
 
