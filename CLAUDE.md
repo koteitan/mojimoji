@@ -6,6 +6,7 @@
 # git rules
 - git add/commit/push only if I ask you to do so.
 - don't git restore/checkout/revert/add -A.
+- don't git add and commit at once.
 - commit messages is in the following format:
 ```
 [short description]
@@ -33,8 +34,9 @@ or
   - test (by user)
   - git add (don't git add -A/don't git add and commit at once)
   - git commit
-- version bump (src/App.tsx)
-- git push (by user) -> GitHub Actions automatically builds and deploys
+- version bump (src/App.tsx), git add, git commit 
+- git push (by user)
+- deploy (GitHub Actions)
 
 # Project
 - This is the project to make a modular-type timeline in nostr.

@@ -123,15 +123,6 @@ npm run build
 npm run tsc
 ```
 
-### Local Testing
-
-```bash
-# Start dev server with external access (for testing on other devices)
-bash scripts/local-test.sh
-```
-
-This uses `dev/vite.config.ts` with `dev/` as root, so it doesn't conflict with GitHub Pages `index.html`.
-
 ### Deploy to GitHub Pages
 
 Deployment is automated via GitHub Actions. Just push to `main` branch:

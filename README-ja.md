@@ -123,15 +123,6 @@ npm run build
 npm run tsc
 ```
 
-### ローカルテスト
-
-```bash
-# 外部アクセス可能な開発サーバーを起動（他のデバイスでのテスト用）
-bash scripts/local-test.sh
-```
-
-`dev/vite.config.ts`を使用し、`dev/`をルートとするため、GitHub Pages用の`index.html`と競合しません。
-
 ### GitHub Pagesへのデプロイ
 
 GitHub Actionsで自動デプロイされます。`main`ブランチにpushするだけ：
