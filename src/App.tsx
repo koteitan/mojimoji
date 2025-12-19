@@ -5,7 +5,7 @@ import type { TimelineEvent } from './nostr/types';
 import './App.css';
 
 // Version: Update this on each deployment
-export const APP_VERSION = '0.9.1-data-class-0.1.0';
+export const APP_VERSION = '0.9.2-data-class-0.1.0';
 
 const APP_NAME = '(.>_<)-(.>_<)-mojimoji: Nostr Modular Client';
 

@@ -123,31 +123,18 @@ npm run build
 npm run tsc
 ```
 
-### Local Testing
-
-```bash
-# Start dev server with external access (for testing on other devices)
-bash scripts/local-test.sh
-```
-
-This uses `dev/vite.config.ts` with `dev/` as root, so it doesn't conflict with GitHub Pages `index.html`.
-
 ### Deploy to GitHub Pages
 
-```bash
-# Build for GitHub Pages
-npm run deploy
+Deployment is automated via GitHub Actions. Just push to `main` branch:
 
-# Commit and push
-git add -A
-git commit -m "Deploy vX.X.X"
+```bash
 git push
 ```
 
-The deploy script:
-1. Copies `src/index.html` to root for build
-2. Builds the app with correct base path (`/mojimoji/`)
-3. Copies built files to root directory (overwrites index.html with built version)
+GitHub Actions will automatically:
+1. Install dependencies
+2. Build the app with correct base path (`/mojimoji/`)
+3. Deploy to GitHub Pages
 
 ### Project Structure
 

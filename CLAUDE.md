@@ -6,6 +6,7 @@
 # git rules
 - git add/commit/push only if I ask you to do so.
 - don't git restore/checkout/revert/add -A.
+- don't git add and commit at once.
 - commit messages is in the following format:
 ```
 [short description]
@@ -28,16 +29,14 @@ or
 # development cycle
 - loop:
   - edit
-  - build
-  - script/local-test.sh (by user)
+  - npm run build (to verify)
+  - scripts/local-test.sh (by user)
   - test (by user)
   - git add (don't git add -A/don't git add and commit at once)
   - git commit
-- version bump (src/App.tsx)
-- script/deploy.sh
-- git add and commit
+- version bump (src/App.tsx), git add, git commit 
 - git push (by user)
-- deploy-submodule (by user)
+- deploy (GitHub Actions)
 
 # Project
 - This is the project to make a modular-type timeline in nostr.
