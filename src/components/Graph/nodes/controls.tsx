@@ -38,16 +38,19 @@ export class FilterControl extends ClassicPreset.Control {
   filters: Filters;
   label: string;
   onChange: (filters: Filters) => void;
+  hideValues: boolean; // Hide value input (for modular relay where values come from sockets)
 
   constructor(
     filters: Filters,
     label: string,
-    onChange: (filters: Filters) => void
+    onChange: (filters: Filters) => void,
+    hideValues: boolean = false
   ) {
     super();
     this.filters = filters;
     this.label = label;
     this.onChange = onChange;
+    this.hideValues = hideValues;
   }
 }
 
@@ -102,18 +105,21 @@ export class SelectControl extends ClassicPreset.Control {
   label: string;
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
+  disabled: boolean;
 
   constructor(
     value: string,
     label: string,
     options: { value: string; label: string }[],
-    onChange: (value: string) => void
+    onChange: (value: string) => void,
+    disabled: boolean = false
   ) {
     super();
     this.value = value;
     this.label = label;
     this.options = options;
     this.onChange = onChange;
+    this.disabled = disabled;
   }
 }
 
@@ -131,6 +137,27 @@ export class CheckboxControl extends ClassicPreset.Control {
     super();
     this.checked = checked;
     this.label = label;
+    this.onChange = onChange;
+  }
+}
+
+// Checkbox group control for multiple selections
+export class CheckboxGroupControl extends ClassicPreset.Control {
+  selected: string[];
+  label: string;
+  options: { value: string; label: string }[];
+  onChange: (selected: string[]) => void;
+
+  constructor(
+    selected: string[],
+    label: string,
+    options: { value: string; label: string }[],
+    onChange: (selected: string[]) => void
+  ) {
+    super();
+    this.selected = selected;
+    this.label = label;
+    this.options = options;
     this.onChange = onChange;
   }
 }

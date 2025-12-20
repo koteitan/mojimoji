@@ -215,6 +215,12 @@
   font-size: 12px !important;
 }
 
+.filter-field-select-wide {
+  flex: 1;
+  padding: 4px 6px !important;
+  font-size: 12px !important;
+}
+
 .filter-value-input {
   flex: 1;
   padding: 4px 6px !important;
@@ -270,6 +276,30 @@
   background: #444;
   border-color: #666;
   color: #fff;
+}
+
+/* Checkbox group styles */
+.checkbox-group-control .checkbox-group-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.checkbox-group-control .checkbox-group-option {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #ccc;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.checkbox-group-control .checkbox-group-option input[type="checkbox"] {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  cursor: pointer;
 }
 
 /* Mobile touch support */

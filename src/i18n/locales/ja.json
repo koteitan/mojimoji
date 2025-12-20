@@ -1,11 +1,18 @@
 {
   "toolbar": {
     "relay": "+リレー",
+    "simpleRelay": "シンプル",
+    "modularRelay": "モジュラー",
     "filter": "+フィルタ",
     "operator": "+演算",
     "search": "+検索",
     "language": "+言語",
     "nostrFilter": "+Nostr",
+    "extraction": "+抽出",
+    "if": "+If",
+    "input": "+入力",
+    "constant": "+定数",
+    "nip07": "+NIP-07",
     "timeline": "+TL",
     "center": "center",
     "delete": "del",
@@ -26,7 +33,8 @@
       "title": "演算",
       "and": "AND",
       "or": "OR",
-      "diff": "A-B"
+      "diff": "A-B",
+      "dataType": "データタイプ"
     },
     "search": {
       "title": "検索",
@@ -44,7 +52,60 @@
     },
     "timeline": {
       "title": "タイムライン",
-      "name": "タイムライン名"
+      "name": "タイムライン名",
+      "dataType": "入力タイプ"
+    },
+    "multiRelay": {
+      "title": "マルチリレー",
+      "inputs": "入力",
+      "source": "ソース",
+      "sourceAuto": "auto (NIP-07→kind:10002)",
+      "sourceManual": "manual",
+      "relays": "リレーURL（1行に1つ）",
+      "filter": "フィルター"
+    },
+    "extraction": {
+      "title": "抽出",
+      "field": "フィールド",
+      "fieldEventId": "イベントID",
+      "fieldAuthor": "作者 (pubkey)",
+      "fieldCreatedAt": "作成日時",
+      "fieldTagE": "#e (参照イベント)",
+      "fieldTagP": "#p (参照pubkey)",
+      "fieldTagR": "#r (リレー)",
+      "relayType": "リレータイプ",
+      "relayTypeAll": "すべて",
+      "relayTypeRead": "読み取り可",
+      "relayTypeWrite": "書き込み可",
+      "relayTypeReadWrite": "読み書き可"
+    },
+    "constant": {
+      "title": "定数",
+      "type": "タイプ",
+      "typeInteger": "整数",
+      "typeDatetime": "日時",
+      "typeEventId": "イベントID",
+      "typePubkey": "公開鍵",
+      "typeRelay": "リレー",
+      "typeFlag": "フラグ",
+      "typeRelayStatus": "リレー状態",
+      "value": "値",
+      "flagOn": "オン (1)",
+      "flagOff": "オフ (0)"
+    },
+    "nip07": {
+      "title": "NIP-07",
+      "description": "NIP-07拡張から公開鍵を取得"
+    },
+    "if": {
+      "title": "If",
+      "comparison": "比較",
+      "equal": "等しい (=)",
+      "notEqual": "等しくない (≠)",
+      "greaterThan": "より大きい (>)",
+      "lessThan": "より小さい (<)",
+      "greaterThanOrEqual": "以上 (≥)",
+      "lessThanOrEqual": "以下 (≤)"
     }
   },
   "timeline": {

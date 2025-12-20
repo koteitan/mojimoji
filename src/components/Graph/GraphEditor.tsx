@@ -7,7 +7,26 @@ import { ConnectionPathPlugin } from 'rete-connection-path-plugin';
 import { ReactPlugin, Presets } from 'rete-react-plugin';
 import { createRoot } from 'react-dom/client';
 
-import { RelayNode, OperatorNode, SearchNode, LanguageNode, NostrFilterNode, TimelineNode, getCachedProfile, getProfileCacheInfo } from './nodes';
+import {
+  RelayNode,
+  OperatorNode,
+  SearchNode,
+  LanguageNode,
+  NostrFilterNode,
+  TimelineNode,
+  ConstantNode,
+  Nip07Node,
+  ExtractionNode,
+  MultiTypeRelayNode,
+  IfNode,
+  getCachedProfile,
+  getProfileCacheInfo,
+} from './nodes';
+import type { ConstantType } from './nodes';
+import type { ExtractionField, RelayFilterType } from './nodes';
+import type { TimelineDataType } from './nodes';
+import type { ComparisonOperator } from './nodes';
+import type { Filters } from './nodes/controls';
 import { CustomNode } from './CustomNode';
 import { CustomConnection } from './CustomConnection';
 import { CustomSocket } from './CustomSocket';
@@ -46,7 +65,7 @@ const formatBuildTimestamp = (): string => {
 
 const BUILD_TIMESTAMP = formatBuildTimestamp();
 
-type NodeTypes = RelayNode | OperatorNode | SearchNode | LanguageNode | NostrFilterNode | TimelineNode;
+type NodeTypes = RelayNode | OperatorNode | SearchNode | LanguageNode | NostrFilterNode | TimelineNode | ConstantNode | Nip07Node | ExtractionNode | MultiTypeRelayNode | IfNode;
 
 // Helper to get the internal node type
 const getNodeType = (node: NodeTypes): string => {
@@ -102,8 +121,10 @@ export function GraphEditor({
   const selectedConnectionIdRef = useRef<string | null>(null);
   const pendingConnectionRef = useRef<{ nodeId: string; socketKey: string; side: 'input' | 'output' } | null>(null);
 
-  // State for filter dropdown
+  // State for dropdown menus
+  const [relayDropdownOpen, setRelayDropdownOpen] = useState(false);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
+  const [inputDropdownOpen, setInputDropdownOpen] = useState(false);
 
   // State for save/load/post dialogs
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
@@ -354,6 +375,22 @@ export function GraphEditor({
       window.removeEventListener('graph-control-change', handleControlChange);
     };
   }, [saveCurrentGraph, findDownstreamTimelines]);
+
+  // Listen for socket changes to update the node visually
+  useEffect(() => {
+    const handleSocketsChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ nodeId: string }>;
+      const nodeId = customEvent.detail?.nodeId;
+      const area = areaRef.current;
+      if (area && nodeId) {
+        area.update('node', nodeId);
+      }
+    };
+    window.addEventListener('graph-sockets-change', handleSocketsChange);
+    return () => {
+      window.removeEventListener('graph-sockets-change', handleSocketsChange);
+    };
+  }, []);
 
   // Get the output Observable from a node by traversing connections
   const getNodeOutput = useCallback((nodeId: string): Observable<EventSignal> | null => {
@@ -688,10 +725,40 @@ export function GraphEditor({
         case 'Display': // backward compatibility
           node = new TimelineNode();
           if (nodeData.data) {
-            (node as TimelineNode).deserialize(nodeData.data as { timelineName: string });
+            (node as TimelineNode).deserialize(nodeData.data as { timelineName: string; dataType?: TimelineDataType });
           }
           // Delay onTimelineCreate until after ID is overridden
           timelineNodes.push({ node: node as TimelineNode, id: nodeData.id });
+          break;
+        case 'Constant':
+          node = new ConstantNode();
+          if (nodeData.data) {
+            (node as ConstantNode).deserialize(nodeData.data as { constantType: ConstantType; rawValue: string });
+          }
+          break;
+        case 'Nip07':
+          node = new Nip07Node();
+          if (nodeData.data) {
+            (node as Nip07Node).deserialize(nodeData.data as Record<string, unknown>);
+          }
+          break;
+        case 'Extraction':
+          node = new ExtractionNode();
+          if (nodeData.data) {
+            (node as ExtractionNode).deserialize(nodeData.data as { extractionField: ExtractionField; relayFilterType: RelayFilterType });
+          }
+          break;
+        case 'MultiTypeRelay':
+          node = new MultiTypeRelayNode();
+          if (nodeData.data) {
+            (node as MultiTypeRelayNode).deserialize(nodeData.data as { relaySource?: 'auto' | 'manual'; relayUrls: string[]; filters?: Filters });
+          }
+          break;
+        case 'If':
+          node = new IfNode();
+          if (nodeData.data) {
+            (node as IfNode).deserialize(nodeData.data as { comparisonType: 'integer' | 'datetime'; operator: ComparisonOperator });
+          }
           break;
         default:
           continue;
@@ -803,7 +870,7 @@ export function GraphEditor({
     }
   }, [loadGraphData]);
 
-  const addNode = useCallback(async (type: 'Relay' | 'Operator' | 'Search' | 'Language' | 'NostrFilter' | 'Timeline') => {
+  const addNode = useCallback(async (type: 'Relay' | 'Operator' | 'Search' | 'Language' | 'NostrFilter' | 'Timeline' | 'Constant' | 'Nip07' | 'Extraction' | 'MultiTypeRelay' | 'If') => {
     const editor = editorRef.current;
     const area = areaRef.current;
     if (!editor || !area) return;
@@ -829,6 +896,21 @@ export function GraphEditor({
       case 'Timeline':
         node = new TimelineNode();
         onTimelineCreate(node.id, (node as TimelineNode).getTimelineName());
+        break;
+      case 'Constant':
+        node = new ConstantNode();
+        break;
+      case 'Nip07':
+        node = new Nip07Node();
+        break;
+      case 'Extraction':
+        node = new ExtractionNode();
+        break;
+      case 'MultiTypeRelay':
+        node = new MultiTypeRelayNode();
+        break;
+      case 'If':
+        node = new IfNode();
         break;
       default:
         return;
@@ -2028,7 +2110,17 @@ export function GraphEditor({
   return (
     <div className="graph-editor">
       <div className="graph-toolbar">
-        <button onClick={() => addNode('Relay')}>{t('toolbar.relay')}</button>
+        <div className="filter-dropdown">
+          <button onClick={() => setRelayDropdownOpen(!relayDropdownOpen)}>
+            {t('toolbar.relay')} ▼
+          </button>
+          {relayDropdownOpen && (
+            <div className="filter-dropdown-menu">
+              <button onClick={() => { addNode('Relay'); setRelayDropdownOpen(false); }}>{t('toolbar.simpleRelay', 'Simple')}</button>
+              <button onClick={() => { addNode('MultiTypeRelay'); setRelayDropdownOpen(false); }}>{t('toolbar.modularRelay', 'Modular')}</button>
+            </div>
+          )}
+        </div>
         <div className="filter-dropdown">
           <button onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}>
             {t('toolbar.filter')} ▼
@@ -2039,6 +2131,19 @@ export function GraphEditor({
               <button onClick={() => { addNode('Search'); setFilterDropdownOpen(false); }}>{t('toolbar.search')}</button>
               <button onClick={() => { addNode('Language'); setFilterDropdownOpen(false); }}>{t('toolbar.language')}</button>
               <button onClick={() => { addNode('NostrFilter'); setFilterDropdownOpen(false); }}>{t('toolbar.nostrFilter')}</button>
+              <button onClick={() => { addNode('Extraction'); setFilterDropdownOpen(false); }}>{t('toolbar.extraction', 'Extraction')}</button>
+              <button onClick={() => { addNode('If'); setFilterDropdownOpen(false); }}>{t('toolbar.if', 'If')}</button>
+            </div>
+          )}
+        </div>
+        <div className="filter-dropdown">
+          <button onClick={() => setInputDropdownOpen(!inputDropdownOpen)}>
+            {t('toolbar.input', 'Input')} ▼
+          </button>
+          {inputDropdownOpen && (
+            <div className="filter-dropdown-menu">
+              <button onClick={() => { addNode('Constant'); setInputDropdownOpen(false); }}>{t('toolbar.constant', 'Constant')}</button>
+              <button onClick={() => { addNode('Nip07'); setInputDropdownOpen(false); }}>{t('toolbar.nip07', 'NIP-07')}</button>
             </div>
           )}
         </div>

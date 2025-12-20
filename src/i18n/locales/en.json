@@ -1,11 +1,18 @@
 {
   "toolbar": {
     "relay": "+Relay",
+    "simpleRelay": "Simple",
+    "modularRelay": "Modular",
     "filter": "+Filter",
     "operator": "+Operator",
     "search": "+Search",
     "language": "+Lang",
     "nostrFilter": "+Nostr",
+    "extraction": "+Extract",
+    "if": "+If",
+    "input": "+Input",
+    "constant": "+Const",
+    "nip07": "+NIP-07",
     "timeline": "+Timeline",
     "center": "Center",
     "delete": "Delete",
@@ -26,7 +33,8 @@
       "title": "Operator",
       "and": "AND",
       "or": "OR",
-      "diff": "A-B"
+      "diff": "A-B",
+      "dataType": "Data Type"
     },
     "search": {
       "title": "Search",
@@ -44,7 +52,60 @@
     },
     "timeline": {
       "title": "Timeline",
-      "name": "Timeline Name"
+      "name": "Timeline Name",
+      "dataType": "Input Type"
+    },
+    "multiRelay": {
+      "title": "Multi Relay",
+      "inputs": "Inputs",
+      "source": "Source",
+      "sourceAuto": "auto (NIP-07→kind:10002)",
+      "sourceManual": "Manual",
+      "relays": "Relay URLs (one per line)",
+      "filter": "Filters"
+    },
+    "extraction": {
+      "title": "Extraction",
+      "field": "Field",
+      "fieldEventId": "Event ID",
+      "fieldAuthor": "Author (pubkey)",
+      "fieldCreatedAt": "Created At",
+      "fieldTagE": "#e (referenced event)",
+      "fieldTagP": "#p (referenced pubkey)",
+      "fieldTagR": "#r (relay)",
+      "relayType": "Relay Type",
+      "relayTypeAll": "All",
+      "relayTypeRead": "With read",
+      "relayTypeWrite": "With write",
+      "relayTypeReadWrite": "With read and write"
+    },
+    "constant": {
+      "title": "Constant",
+      "type": "Type",
+      "typeInteger": "Integer",
+      "typeDatetime": "Datetime",
+      "typeEventId": "Event ID",
+      "typePubkey": "Pubkey",
+      "typeRelay": "Relay",
+      "typeFlag": "Flag",
+      "typeRelayStatus": "Relay Status",
+      "value": "Value",
+      "flagOn": "On (1)",
+      "flagOff": "Off (0)"
+    },
+    "nip07": {
+      "title": "NIP-07",
+      "description": "Get pubkey from NIP-07 extension"
+    },
+    "if": {
+      "title": "If",
+      "comparison": "Comparison",
+      "equal": "Equal (=)",
+      "notEqual": "Not Equal (≠)",
+      "greaterThan": "Greater Than (>)",
+      "lessThan": "Less Than (<)",
+      "greaterThanOrEqual": "Greater or Equal (≥)",
+      "lessThanOrEqual": "Less or Equal (≤)"
     }
   },
   "timeline": {
