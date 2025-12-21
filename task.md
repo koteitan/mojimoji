@@ -30,6 +30,11 @@
       - #p (#p in attribute): type: pubkey
     - output terminals: event
     - attributes: same as relay node
+    - behavior:
+      - when the input is 1 on trigger, subscribe to the specified relay with the merged filter of the input terminals and the attribute values.
+      
+
+
   - extraction node:
     - note: this node extracts the specified attribute from the input event.
     - input terminals: event
@@ -67,6 +72,15 @@
         - less than
         - greater than or equal
         - less than or equal
+    - behavior:
+      - the default output when there is no connection or there is no value input is false (0).
+      - when the input data is updated on either A or B, the output shall calculated with the latest values of A and B.
+  - count node
+    - input terminals: input
+    - output terminals: integer
+    - behavior:
+      - counts the number of input data received.
+
 - updated nodes:
   - update the following nodes to use the new socket types.
   - operation node:
@@ -169,11 +183,11 @@
   - [x] event kind 0: show as profile summary (pubkey, name, about, picture)
   - [x] event kind 1: same as previous (icon, name, display_name, content, datetime)
   - [x] event kind others: show as event id string (bech32 or hex)
-  - [ ] event id: show as bech32
-  - [ ] pubkey: show icon, name, display_name
-  - [ ] datetime: show as ISO 8601 string
-  - [ ] relay: show as URL string, split by <br>
-  - [ ] integer, flag, relay status: show as string
+  - [x] event id: show as bech32
+  - [x] pubkey: show icon, name, display_name
+  - [x] datetime: show as ISO 8601 string
+  - [x] relay: show as URL string, split by <br>
+  - [x] integer, flag, relay status: show as string
 
 ### 10. Register new nodes in node index (src/components/Graph/nodes/index.ts)
 - [x] Export ConstantNode
@@ -185,7 +199,7 @@
 ### 11. Update GraphEditor.tsx
 - [x] Add new nodes to node factory
 - [x] Add new nodes to toolbar
-- [ ] Add socket compatibility validation (prevent connecting incompatible types)
+- [x] Add socket compatibility validation (prevent connecting incompatible types)
 - [x] Handle new socket type connections
 
 ### 12. Update graph serialization/deserialization
@@ -197,8 +211,8 @@
 - [x] Add node titles and control labels in Japanese (src/i18n/locales/ja.json)
 
 ### 14. Update specifications (spec.md, save.md, save-ja.md)
-- [ ] Document new socket types
-- [ ] Document new nodes
+- [x] Document new socket types
+- [x] Document new nodes
 - [ ] Update save format documentation if needed
 
 ### 15. Testing

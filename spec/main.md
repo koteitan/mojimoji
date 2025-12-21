@@ -73,7 +73,7 @@ User Inrterface is as follows.
           - relay source: dropdown select
             - auto (NIP-07→kind:10002): fetch relay URLs from user's kind:10002 event via NIP-07 browser extension
             - manual: use the relay URL textarea below
-            - default: manual
+            - default: auto
             - fallback: manual (if no relay source is set in saved data)
           - relay URL list: multiple line text area (one URL per line)
             - used when relay source is manual, or when auto fails to fetch relays
@@ -189,23 +189,105 @@ User Inrterface is as follows.
             - when exclude is on: invert the result (pass events that do NOT match)
       - Timeline node:
         - input terminal:
-          - input (event signal)
+          - input (type based on data type selection)
         - attributes:
+          - data type: dropdown {event, event id, pubkey, relay, flag, integer, datetime, relay status}
           - timeline name: string
         - behavior:
-          - receives event signals with 'add' or 'remove' type
-          - 'add' signal: adds event to timeline (if not duplicate)
-          - 'remove' signal: removes event from timeline (if present)
-          - out-of-order handling: if 'remove' arrives before 'add', the event ID is tracked in an excluded set, and subsequent 'add' for that event is ignored
+          - receives signals with 'add' or 'remove' type
+          - 'add' signal: adds item to timeline (if not duplicate)
+          - 'remove' signal: removes item from timeline (if present)
+          - out-of-order handling: if 'remove' arrives before 'add', the item ID is tracked in an excluded set
+          - type-specific rendering:
+            - event kind 0: profile summary (pubkey, name, about, picture)
+            - event kind 1: icon, name, display_name, content, datetime
+            - event kind others: event id string (bech32)
+            - event id: bech32 string
+            - pubkey: icon, name, display_name
+            - datetime: ISO 8601 string
+            - relay: URL strings (one per line)
+            - integer, flag, relay status: string representation
+      - data-class nodes:
+        - constant node:
+          - output terminal:
+            - output (type based on selection)
+          - attributes:
+            - type: dropdown select {integer, datetime, event id, pubkey, relay, flag, relay status}
+            - value: input field (format depends on type)
+              - integer: number input
+              - datetime: date/time input
+              - event id/pubkey: text input (hex or bech32)
+              - relay: textarea (one URL per line)
+              - flag: checkbox
+              - relay status: dropdown {idle, connecting, sub-stored, EOSE, sub-realtime, closed, error}
+          - behavior:
+            - outputs constant value based on type selection
+        - NIP-07 node:
+          - output terminal:
+            - output (pubkey)
+          - behavior:
+            - fetches pubkey from NIP-07 browser extension
+            - handles unavailable extension case
+        - extraction node:
+          - input terminal:
+            - input (event)
+          - output terminal:
+            - output (type based on selection)
+          - attributes:
+            - field: dropdown select {event id, author, created_at, #e, #p, #r}
+            - relay filter: dropdown {all, with read, with write, with read and write} (only for #r)
+          - behavior:
+            - extracts specified field from input events
+            - for #e/#p/#r: extracts from event tags
+        - multi type relay node (modular relay):
+          - input terminals:
+            - trigger (trigger type)
+            - relay (relay type)
+            - dynamic sockets based on filter elements (kinds, limit, since, until, ids, authors, #e, #p)
+          - output terminal:
+            - output (event)
+          - attributes:
+            - filter: structured filter UI (values come from input sockets)
+          - behavior:
+            - when trigger input receives 1, subscribe to relays with merged filter
+            - when trigger input receives 0, stop subscription
+            - filter values come from input sockets, not text input
+        - if node:
+          - input terminals:
+            - A (integer or datetime)
+            - B (integer or datetime, same type as A)
+          - output terminal:
+            - output (flag)
+          - attributes:
+            - type: dropdown {integer, datetime}
+            - operator: dropdown {=, ≠, <, ≤, >, ≥}
+          - behavior:
+            - default output is false (0) when no connection or no input
+            - calculates comparison when A or B is updated
+        - count node:
+          - input terminal:
+            - input (event)
+          - output terminal:
+            - output (integer)
+          - behavior:
+            - counts the number of input data received
+            - outputs current count on each input
     - edges:
       - edges are the connectors between nodes.
         - input: an output terminal of a node.
         - output: an input terminal of a node.
       - the edges has types:
         - event signals (nostr events with add/remove signal)
-        - relays
-        - npubs
+        - event id
+        - pubkey
+        - relay
+        - flag
+        - integer
+        - datetime
+        - relay status
+        - trigger
       - the edges are colored differently by types.
+      - only compatible socket types can be connected.
     - sockets (terminals):
       - shape: rounded thin rectangle (40px width x 12px height, 6px border-radius)
       - color: blue (#646cff) default, green (#4ade80) when selected
@@ -399,7 +481,14 @@ User Inrterface is as follows.
   │   │           ├── OperatorNode.ts
   │   │           ├── SearchNode.ts
   │   │           ├── LanguageNode.ts
-  │   │           └── TimelineNode.ts
+  │   │           ├── NostrFilterNode.ts
+  │   │           ├── TimelineNode.ts
+  │   │           ├── ConstantNode.ts
+  │   │           ├── Nip07Node.ts
+  │   │           ├── ExtractionNode.ts
+  │   │           ├── MultiTypeRelayNode.ts
+  │   │           ├── IfNode.ts
+  │   │           └── CountNode.ts
   │   ├── i18n/
   │   │   ├── index.ts
   │   │   └── locales/

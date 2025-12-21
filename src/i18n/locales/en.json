@@ -10,6 +10,7 @@
     "nostrFilter": "+Nostr",
     "extraction": "+Extract",
     "if": "+If",
+    "count": "+Count",
     "input": "+Input",
     "constant": "+Const",
     "nip07": "+NIP-07",
@@ -106,6 +107,9 @@
       "lessThan": "Less Than (<)",
       "greaterThanOrEqual": "Greater or Equal (≥)",
       "lessThanOrEqual": "Less or Equal (≤)"
+    },
+    "count": {
+      "title": "Count"
     }
   },
   "timeline": {

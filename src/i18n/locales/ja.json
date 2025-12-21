@@ -10,6 +10,7 @@
     "nostrFilter": "+Nostr",
     "extraction": "+抽出",
     "if": "+If",
+    "count": "+カウント",
     "input": "+入力",
     "constant": "+定数",
     "nip07": "+NIP-07",
@@ -106,6 +107,9 @@
       "lessThan": "より小さい (<)",
       "greaterThanOrEqual": "以上 (≥)",
       "lessThanOrEqual": "以下 (≤)"
+    },
+    "count": {
+      "title": "カウント"
     }
   },
   "timeline": {

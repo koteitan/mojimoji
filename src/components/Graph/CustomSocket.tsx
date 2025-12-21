@@ -24,7 +24,6 @@ export function CustomSocket({ data }: Props) {
   return (
     <div
       className="custom-socket"
-      title={data.name}
       style={{
         width: '40px',
         height: '12px',

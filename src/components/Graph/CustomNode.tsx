@@ -488,6 +488,7 @@ export function CustomNode(props: Props) {
               className="custom-node-input"
               key={key}
               data-testid={`input-${key}`}
+              title={input.label || key}
             >
               <RefSocket
                 name="input-socket"
@@ -522,6 +523,7 @@ export function CustomNode(props: Props) {
               className="custom-node-output"
               key={key}
               data-testid={`output-${key}`}
+              title={output.label || key}
             >
               <RefSocket
                 name="output-socket"

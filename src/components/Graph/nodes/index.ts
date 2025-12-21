@@ -18,6 +18,8 @@ export type { ExtractionField, RelayFilterType, ExtractionSignal } from './Extra
 export { MultiTypeRelayNode } from './MultiTypeRelayNode';
 export { IfNode } from './IfNode';
 export type { ComparisonOperator, FlagSignal } from './IfNode';
+export { CountNode } from './CountNode';
+export type { IntegerSignal } from './CountNode';
 
 // Socket types
 export {

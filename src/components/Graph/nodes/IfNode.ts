@@ -51,6 +51,9 @@ export class IfNode extends ClassicPreset.Node {
     this.addInput('inputB', new ClassicPreset.Input(integerSocket, 'B'));
     this.addOutput('output', new ClassicPreset.Output(flagSocket, 'Result'));
 
+    // Emit default false value
+    this.outputSubject.next({ flag: false });
+
     // Type selector
     this.addControl(
       'type',

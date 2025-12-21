@@ -10,39 +10,24 @@ import {
   datetimeSocket,
   eventIdSocket,
   pubkeySocket,
+  triggerSocket,
+  relaySocket,
 } from './types';
-import { TextAreaControl, SelectControl, FilterControl } from './controls';
+import { FilterControl } from './controls';
 import type { Filters } from './controls';
 import type { NostrEvent, Profile, EventSignal } from '../../../nostr/types';
 import { decodeBech32ToHex, isHex64 } from '../../../nostr/types';
-import { isNip07Available, getPubkey } from '../../../nostr/nip07';
-import { fetchUserRelays } from '../../../nostr/graphStorage';
 import { getCachedProfile, findPubkeysByName } from './RelayNode';
-
-const DEBUG = false;
 
 // Type for the result of createRxForwardReq with emit method
 type ForwardReq = ReturnType<typeof createRxForwardReq>;
 
-// Get default relay URL based on locale
-const getDefaultRelayUrl = (): string => {
-  const lang = i18next.language || navigator.language || 'en';
-  if (lang.startsWith('ja')) {
-    return 'wss://yabu.me';
-  }
-  return 'wss://relay.damus.io';
-};
-
-// Default filters: kinds=[1], limit=200
+// Default filters: empty (single element for UI)
 const getDefaultFilters = (): Filters => [
   [
-    { field: 'kinds', value: '1' },
-    { field: 'limit', value: '200' },
+    { field: 'kinds', value: '' },
   ],
 ];
-
-// Relay source type
-export type RelaySourceType = 'auto' | 'manual';
 
 // Get socket type for a filter field
 function getSocketForField(field: string): ClassicPreset.Socket {
@@ -82,9 +67,6 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
   width = 300;
   height: number | undefined = undefined;
 
-  private relaySource: RelaySourceType = 'manual';
-  private relayUrls: string[] = [getDefaultRelayUrl()];
-  private autoRelayUrls: string[] = [];
   private filters: Filters = getDefaultFilters();
 
   // Track current input sockets (key -> field type)
@@ -92,6 +74,13 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
 
   // Input values from sockets (key -> values)
   private socketValues: Map<string, unknown[]> = new Map();
+
+  // Relay input values
+  private relayUrls: string[] = [];
+  private relayInputSubscription: { unsubscribe: () => void } | null = null;
+
+  // Trigger input
+  private triggerSubscription: { unsubscribe: () => void } | null = null;
 
   // RxJS Observable for output events
   private eventSubject = new Subject<EventSignal>();
@@ -122,45 +111,14 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
   constructor() {
     super(i18next.t('nodes.multiTypeRelay.title', 'Multi Relay'));
 
+    // Trigger input socket
+    this.addInput('trigger', new ClassicPreset.Input(triggerSocket, 'Trigger'));
+
+    // Relay input socket
+    this.addInput('relay', new ClassicPreset.Input(relaySocket, 'Relay'));
+
     // Output socket
     this.addOutput('output', new ClassicPreset.Output(eventSocket, 'Events'));
-
-    // Relay source control
-    this.addControl(
-      'relaySource',
-      new SelectControl(
-        this.relaySource,
-        i18next.t('nodes.relay.source', 'Source'),
-        [
-          { value: 'auto', label: i18next.t('nodes.relay.sourceAuto', 'Auto (NIP-07)') },
-          { value: 'manual', label: i18next.t('nodes.relay.sourceManual', 'Manual') },
-        ],
-        (value) => {
-          this.relaySource = value as RelaySourceType;
-          const relaysControl = this.controls['relays'] as TextAreaControl;
-          if (relaysControl) {
-            relaysControl.disabled = value === 'auto';
-          }
-          if (value === 'auto') {
-            this.loadAutoRelays();
-          }
-        }
-      )
-    );
-
-    // Relay URLs control
-    this.addControl(
-      'relays',
-      new TextAreaControl(
-        this.relayUrls.join('\n'),
-        i18next.t('nodes.relay.relays', 'Relays'),
-        'wss://relay.example.com',
-        (value) => {
-          this.relayUrls = value.split('\n').filter(url => url.trim());
-        },
-        this.relaySource === 'auto'
-      )
-    );
 
     // Filter control - sockets are generated based on filter elements
     // hideValues=true because values come from input sockets
@@ -229,29 +187,34 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
     return makeSocketKey(filterIndex, elementIndex);
   }
 
-  // Load relay URLs from kind:10002 via NIP-07
-  private async loadAutoRelays(): Promise<void> {
-    if (!isNip07Available()) {
-      if (DEBUG) console.log('NIP-07 not available');
+  getRelayUrls(): string[] {
+    return this.relayUrls;
+  }
+
+  // Set relay input from connected node
+  setRelayInput(input: Observable<{ relays: string[] }> | null): void {
+    // Cleanup existing subscription
+    if (this.relayInputSubscription) {
+      this.relayInputSubscription.unsubscribe();
+      this.relayInputSubscription = null;
+    }
+
+    this.relayUrls = [];
+
+    if (!input) {
       return;
     }
 
-    try {
-      const pubkey = await getPubkey();
-      const relays = await fetchUserRelays(pubkey);
-      if (relays.length > 0) {
-        this.autoRelayUrls = relays;
-      }
-    } catch (error) {
-      if (DEBUG) console.error('Failed to load auto relays:', error);
-    }
-  }
-
-  getRelayUrls(): string[] {
-    if (this.relaySource === 'auto' && this.autoRelayUrls.length > 0) {
-      return this.autoRelayUrls;
-    }
-    return this.relayUrls;
+    this.relayInputSubscription = input.subscribe({
+      next: (signal) => {
+        // Accumulate relay URLs from input
+        for (const url of signal.relays) {
+          if (!this.relayUrls.includes(url)) {
+            this.relayUrls.push(url);
+          }
+        }
+      },
+    });
   }
 
   // Build filters combining attribute values and input socket values
@@ -347,6 +310,31 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
     }
 
     return [trimmed];
+  }
+
+  // Set trigger input
+  setTriggerInput(input: Observable<{ value: number }> | null): void {
+    // Cleanup existing trigger subscription
+    if (this.triggerSubscription) {
+      this.triggerSubscription.unsubscribe();
+      this.triggerSubscription = null;
+    }
+
+    if (!input) {
+      return;
+    }
+
+    this.triggerSubscription = input.subscribe({
+      next: (signal) => {
+        if (signal.value === 1) {
+          // Trigger value is 1: start subscription
+          this.startSubscription();
+        } else if (signal.value === 0) {
+          // Trigger value is 0: stop subscription
+          this.stopSubscription();
+        }
+      },
+    });
   }
 
   // Set input for a socket by key
@@ -526,38 +514,32 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
     }
   }
 
+  // Stop all subscriptions including trigger and relay input
+  stopAllSubscriptions(): void {
+    this.stopSubscription();
+    if (this.triggerSubscription) {
+      this.triggerSubscription.unsubscribe();
+      this.triggerSubscription = null;
+    }
+    if (this.relayInputSubscription) {
+      this.relayInputSubscription.unsubscribe();
+      this.relayInputSubscription = null;
+    }
+  }
+
   isSubscribed(): boolean {
     return this.subscription !== null;
   }
 
   serialize() {
     return {
-      relaySource: this.relaySource,
-      relayUrls: this.relayUrls,
       filters: this.filters,
     };
   }
 
-  deserialize(data: { relaySource?: RelaySourceType; relayUrls: string[]; filters?: Filters }) {
-    this.relaySource = data.relaySource || 'manual';
-    this.relayUrls = data.relayUrls;
+  deserialize(data: { filters?: Filters }) {
     if (data.filters) {
       this.filters = data.filters;
-    }
-
-    const relaySourceControl = this.controls['relaySource'] as SelectControl;
-    if (relaySourceControl) {
-      relaySourceControl.value = this.relaySource;
-    }
-
-    const relaysControl = this.controls['relays'] as TextAreaControl;
-    if (relaysControl) {
-      relaysControl.value = this.relayUrls.join('\n');
-      relaysControl.disabled = this.relaySource === 'auto';
-    }
-
-    if (this.relaySource === 'auto') {
-      this.loadAutoRelays();
     }
 
     const filterControl = this.controls['filter'] as FilterControl;

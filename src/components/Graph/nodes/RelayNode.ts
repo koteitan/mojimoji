@@ -225,7 +225,7 @@ export class RelayNode extends ClassicPreset.Node {
   width = 280;
   height: number | undefined = undefined; // auto-calculated based on content
 
-  private relaySource: RelaySourceType = 'manual';
+  private relaySource: RelaySourceType = 'auto';
   private relayUrls: string[] = [getDefaultRelayUrl()];
   private autoRelayUrls: string[] = []; // Cached relay URLs from kind:10002
   private filters: Filters = getDefaultFilters();
@@ -300,9 +300,12 @@ export class RelayNode extends ClassicPreset.Node {
         (value) => {
           this.relayUrls = value.split('\n').filter(url => url.trim());
         },
-        this.relaySource === 'auto' // disabled when auto
+        true // disabled by default (auto mode)
       )
     );
+
+    // Load auto relays on initialization
+    this.loadAutoRelays();
 
     this.addControl(
       'filter',

@@ -170,6 +170,67 @@ export interface TimelineEvent {
   contentWarning?: string | null; // NIP-36: content warning reason (null = has warning but no reason)
 }
 
+// Timeline item types for different data types
+export type TimelineItemType = 'event' | 'eventId' | 'pubkey' | 'datetime' | 'relay' | 'integer' | 'flag' | 'relayStatus';
+
+export interface TimelineItemBase {
+  id: string;
+  type: TimelineItemType;
+}
+
+export interface TimelineEventItem extends TimelineItemBase {
+  type: 'event';
+  event: NostrEvent;
+  profile?: Profile;
+  contentWarning?: string | null;
+}
+
+export interface TimelineEventIdItem extends TimelineItemBase {
+  type: 'eventId';
+  eventId: string;
+}
+
+export interface TimelinePubkeyItem extends TimelineItemBase {
+  type: 'pubkey';
+  pubkey: string;
+  profile?: Profile;
+}
+
+export interface TimelineDatetimeItem extends TimelineItemBase {
+  type: 'datetime';
+  datetime: number; // Unix timestamp
+}
+
+export interface TimelineRelayItem extends TimelineItemBase {
+  type: 'relay';
+  relays: string[];
+}
+
+export interface TimelineIntegerItem extends TimelineItemBase {
+  type: 'integer';
+  value: number;
+}
+
+export interface TimelineFlagItem extends TimelineItemBase {
+  type: 'flag';
+  flag: boolean;
+}
+
+export interface TimelineRelayStatusItem extends TimelineItemBase {
+  type: 'relayStatus';
+  status: string;
+}
+
+export type TimelineItem =
+  | TimelineEventItem
+  | TimelineEventIdItem
+  | TimelinePubkeyItem
+  | TimelineDatetimeItem
+  | TimelineRelayItem
+  | TimelineIntegerItem
+  | TimelineFlagItem
+  | TimelineRelayStatusItem;
+
 // Extract content warning from event tags (NIP-36)
 // Returns: string (reason), null (warning with no reason), undefined (no warning)
 export function extractContentWarning(event: NostrEvent): string | null | undefined {

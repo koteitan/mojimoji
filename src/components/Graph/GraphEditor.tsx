@@ -19,6 +19,7 @@ import {
   ExtractionNode,
   MultiTypeRelayNode,
   IfNode,
+  CountNode,
   getCachedProfile,
   getProfileCacheInfo,
 } from './nodes';
@@ -65,11 +66,31 @@ const formatBuildTimestamp = (): string => {
 
 const BUILD_TIMESTAMP = formatBuildTimestamp();
 
-type NodeTypes = RelayNode | OperatorNode | SearchNode | LanguageNode | NostrFilterNode | TimelineNode | ConstantNode | Nip07Node | ExtractionNode | MultiTypeRelayNode | IfNode;
+type NodeTypes = RelayNode | OperatorNode | SearchNode | LanguageNode | NostrFilterNode | TimelineNode | ConstantNode | Nip07Node | ExtractionNode | MultiTypeRelayNode | IfNode | CountNode;
 
 // Helper to get the internal node type
 const getNodeType = (node: NodeTypes): string => {
   return (node as NodeTypes & { nodeType: string }).nodeType;
+};
+
+// Helper to check socket compatibility
+// Returns true if the two sockets are compatible (same type)
+const areSocketsCompatible = (
+  sourceNode: NodeTypes,
+  sourceOutput: string,
+  targetNode: NodeTypes,
+  targetInput: string
+): boolean => {
+  // Get output socket from source node
+  const output = sourceNode.outputs[sourceOutput];
+  if (!output?.socket) return false;
+
+  // Get input socket from target node
+  const input = targetNode.inputs[targetInput];
+  if (!input?.socket) return false;
+
+  // Compare socket names (types)
+  return output.socket.name === input.socket.name;
 };
 
 // Use 'any' to bypass strict Rete.js type constraints
@@ -443,6 +464,8 @@ export function GraphEditor({
         (node as NostrFilterNode).stopSubscription();
       } else if (getNodeType(node) === 'Timeline') {
         (node as TimelineNode).stopSubscription();
+      } else if (getNodeType(node) === 'Count') {
+        (node as CountNode).stopSubscription();
       }
     }
 
@@ -567,6 +590,76 @@ export function GraphEditor({
         const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
 
         nostrFilterNode.setInput(input$);
+      }
+    }
+
+    // Wire up Count nodes
+    for (const node of nodes) {
+      if (getNodeType(node) === 'Count') {
+        const countNode = node as CountNode;
+
+        const inputConn = connections.find(
+          (c: { target: string }) => c.target === node.id
+        );
+        const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+
+        countNode.setInput(input$);
+      }
+    }
+
+    // Wire up MultiTypeRelay nodes
+    for (const node of nodes) {
+      if (getNodeType(node) === 'MultiTypeRelay') {
+        const multiRelayNode = node as MultiTypeRelayNode;
+
+        // Helper to get typed output from source node
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const getTypedOutput = (sourceId: string): Observable<any> | null => {
+          const sourceNode = editor.getNode(sourceId);
+          if (!sourceNode) return null;
+          const sourceType = getNodeType(sourceNode);
+
+          // Return the appropriate output based on node type
+          if (sourceType === 'Constant') {
+            return (sourceNode as ConstantNode).output$;
+          } else if (sourceType === 'Nip07') {
+            return (sourceNode as Nip07Node).output$;
+          } else if (sourceType === 'Extraction') {
+            return (sourceNode as ExtractionNode).getOutput$();
+          } else if (sourceType === 'If') {
+            return (sourceNode as IfNode).output$;
+          } else if (sourceType === 'Count') {
+            return (sourceNode as CountNode).output$;
+          }
+          return null;
+        };
+
+        // Wire up relay input
+        const relayConn = connections.find(
+          (c: { target: string; targetInput: string }) =>
+            c.target === node.id && c.targetInput === 'relay'
+        );
+        const relay$ = relayConn ? getTypedOutput(relayConn.source) : null;
+        multiRelayNode.setRelayInput(relay$);
+
+        // Wire up trigger input
+        const triggerConn = connections.find(
+          (c: { target: string; targetInput: string }) =>
+            c.target === node.id && c.targetInput === 'trigger'
+        );
+        const trigger$ = triggerConn ? getTypedOutput(triggerConn.source) : null;
+        multiRelayNode.setTriggerInput(trigger$);
+
+        // Wire up filter socket inputs
+        const socketKeys = multiRelayNode.getSocketKeys();
+        for (const socketKey of socketKeys) {
+          const socketConn = connections.find(
+            (c: { target: string; targetInput: string }) =>
+              c.target === node.id && c.targetInput === socketKey
+          );
+          const socket$ = socketConn ? getTypedOutput(socketConn.source) : null;
+          multiRelayNode.setSocketInput(socketKey, socket$);
+        }
       }
     }
 
@@ -751,13 +844,19 @@ export function GraphEditor({
         case 'MultiTypeRelay':
           node = new MultiTypeRelayNode();
           if (nodeData.data) {
-            (node as MultiTypeRelayNode).deserialize(nodeData.data as { relaySource?: 'auto' | 'manual'; relayUrls: string[]; filters?: Filters });
+            (node as MultiTypeRelayNode).deserialize(nodeData.data as { filters?: Filters });
           }
           break;
         case 'If':
           node = new IfNode();
           if (nodeData.data) {
             (node as IfNode).deserialize(nodeData.data as { comparisonType: 'integer' | 'datetime'; operator: ComparisonOperator });
+          }
+          break;
+        case 'Count':
+          node = new CountNode();
+          if (nodeData.data) {
+            (node as CountNode).deserialize(nodeData.data as { count?: number });
           }
           break;
         default:
@@ -870,7 +969,7 @@ export function GraphEditor({
     }
   }, [loadGraphData]);
 
-  const addNode = useCallback(async (type: 'Relay' | 'Operator' | 'Search' | 'Language' | 'NostrFilter' | 'Timeline' | 'Constant' | 'Nip07' | 'Extraction' | 'MultiTypeRelay' | 'If') => {
+  const addNode = useCallback(async (type: 'Relay' | 'Operator' | 'Search' | 'Language' | 'NostrFilter' | 'Timeline' | 'Constant' | 'Nip07' | 'Extraction' | 'MultiTypeRelay' | 'If' | 'Count') => {
     const editor = editorRef.current;
     const area = areaRef.current;
     if (!editor || !area) return;
@@ -911,6 +1010,9 @@ export function GraphEditor({
         break;
       case 'If':
         node = new IfNode();
+        break;
+      case 'Count':
+        node = new CountNode();
         break;
       default:
         return;
@@ -1530,9 +1632,10 @@ export function GraphEditor({
                   const targetNode = editor.getNode(nodeId);
                   const sourceOutput = pendingConnectionRef.current.socketKey;
                   const targetInput = socketKey;
-                  // Check for duplicate connection
+                  // Check for duplicate connection and socket compatibility
                   if (sourceNode && targetNode && pendingConnectionRef.current.nodeId !== nodeId &&
-                      !connectionExists(pendingConnectionRef.current.nodeId, sourceOutput, nodeId, targetInput)) {
+                      !connectionExists(pendingConnectionRef.current.nodeId, sourceOutput, nodeId, targetInput) &&
+                      areSocketsCompatible(sourceNode as NodeTypes, sourceOutput, targetNode as NodeTypes, targetInput)) {
                     const conn = new ClassicPreset.Connection(
                       sourceNode,
                       sourceOutput as never,
@@ -1547,9 +1650,10 @@ export function GraphEditor({
                   const targetNode = editor.getNode(pendingConnectionRef.current.nodeId);
                   const sourceOutput = socketKey;
                   const targetInput = pendingConnectionRef.current.socketKey;
-                  // Check for duplicate connection
+                  // Check for duplicate connection and socket compatibility
                   if (sourceNode && targetNode && pendingConnectionRef.current.nodeId !== nodeId &&
-                      !connectionExists(nodeId, sourceOutput, pendingConnectionRef.current.nodeId, targetInput)) {
+                      !connectionExists(nodeId, sourceOutput, pendingConnectionRef.current.nodeId, targetInput) &&
+                      areSocketsCompatible(sourceNode as NodeTypes, sourceOutput, targetNode as NodeTypes, targetInput)) {
                     const conn = new ClassicPreset.Connection(
                       sourceNode,
                       sourceOutput as never,
@@ -2133,6 +2237,7 @@ export function GraphEditor({
               <button onClick={() => { addNode('NostrFilter'); setFilterDropdownOpen(false); }}>{t('toolbar.nostrFilter')}</button>
               <button onClick={() => { addNode('Extraction'); setFilterDropdownOpen(false); }}>{t('toolbar.extraction', 'Extraction')}</button>
               <button onClick={() => { addNode('If'); setFilterDropdownOpen(false); }}>{t('toolbar.if', 'If')}</button>
+              <button onClick={() => { addNode('Count'); setFilterDropdownOpen(false); }}>{t('toolbar.count', 'Count')}</button>
             </div>
           )}
         </div>

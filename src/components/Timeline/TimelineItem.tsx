@@ -1,6 +1,14 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { formatNpub, extractImageUrls, eventIdToNevent, type TimelineEvent, type Profile } from '../../nostr/types';
+import {
+  formatNpub,
+  extractImageUrls,
+  eventIdToNevent,
+  pubkeyToNpub,
+  type TimelineEvent,
+  type TimelineItem as TimelineItemData,
+  type Profile,
+} from '../../nostr/types';
 import './Timeline.css';
 
 const DEFAULT_AVATAR = `${import.meta.env.BASE_URL}default-avatar.svg`;
@@ -137,7 +145,8 @@ function UnknownKindContent({ nostrEvent }: { nostrEvent: TimelineEvent['event']
   );
 }
 
-export function TimelineItem({ event }: TimelineItemProps) {
+// Event type timeline item (original)
+export function TimelineEventItemComponent({ event }: TimelineItemProps) {
   const { t } = useTranslation();
   const { event: nostrEvent, profile, contentWarning } = event;
   const isProfile = nostrEvent.kind === 0;
@@ -243,3 +252,135 @@ export function TimelineItem({ event }: TimelineItemProps) {
     </div>
   );
 }
+
+// Format datetime as ISO 8601
+function formatDateISO(timestamp: number): string {
+  return new Date(timestamp * 1000).toISOString();
+}
+
+// Generic timeline item component for non-event types
+interface TimelineGenericItemProps {
+  item: TimelineItemData;
+}
+
+export function TimelineGenericItemComponent({ item }: TimelineGenericItemProps) {
+  switch (item.type) {
+    case 'event':
+      // Event type should use TimelineEventItemComponent
+      return (
+        <TimelineEventItemComponent
+          event={{
+            event: item.event,
+            profile: item.profile,
+            contentWarning: item.contentWarning,
+          }}
+        />
+      );
+
+    case 'eventId':
+      return (
+        <div className="timeline-item timeline-item-simple">
+          <div className="timeline-item-content">
+            <div className="timeline-item-value timeline-item-eventid">
+              {eventIdToNevent(item.eventId)}
+            </div>
+          </div>
+        </div>
+      );
+
+    case 'pubkey':
+      return (
+        <div className="timeline-item">
+          <div className="timeline-item-header">
+            <img
+              className="timeline-item-icon"
+              src={item.profile?.picture || DEFAULT_AVATAR}
+              alt={item.profile?.name || 'avatar'}
+              onError={(e) => {
+                const img = e.target as HTMLImageElement;
+                if (!img.src.endsWith('default-avatar.svg')) {
+                  img.src = DEFAULT_AVATAR;
+                }
+              }}
+            />
+            <div className="timeline-item-names">
+              <span className="timeline-item-display-name">
+                {item.profile?.display_name || item.profile?.name || formatNpub(item.pubkey)}
+              </span>
+              <span className="timeline-item-name">
+                @{item.profile?.name || formatNpub(item.pubkey)}
+              </span>
+            </div>
+          </div>
+          <div className="timeline-item-content">
+            <div className="timeline-item-value timeline-item-pubkey">
+              {pubkeyToNpub(item.pubkey)}
+            </div>
+          </div>
+        </div>
+      );
+
+    case 'datetime':
+      return (
+        <div className="timeline-item timeline-item-simple">
+          <div className="timeline-item-content">
+            <div className="timeline-item-value timeline-item-datetime">
+              {formatDateISO(item.datetime)}
+            </div>
+          </div>
+        </div>
+      );
+
+    case 'relay':
+      return (
+        <div className="timeline-item timeline-item-simple">
+          <div className="timeline-item-content">
+            <div className="timeline-item-value timeline-item-relay">
+              {item.relays.map((url, index) => (
+                <div key={index} className="timeline-item-relay-url">{url}</div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+
+    case 'integer':
+      return (
+        <div className="timeline-item timeline-item-simple">
+          <div className="timeline-item-content">
+            <div className="timeline-item-value timeline-item-integer">
+              {item.value}
+            </div>
+          </div>
+        </div>
+      );
+
+    case 'flag':
+      return (
+        <div className="timeline-item timeline-item-simple">
+          <div className="timeline-item-content">
+            <div className="timeline-item-value timeline-item-flag">
+              {item.flag ? '1 (true)' : '0 (false)'}
+            </div>
+          </div>
+        </div>
+      );
+
+    case 'relayStatus':
+      return (
+        <div className="timeline-item timeline-item-simple">
+          <div className="timeline-item-content">
+            <div className="timeline-item-value timeline-item-relaystatus">
+              {item.status}
+            </div>
+          </div>
+        </div>
+      );
+
+    default:
+      return null;
+  }
+}
+
+// Export alias for backward compatibility
+export const TimelineItem = TimelineEventItemComponent;
