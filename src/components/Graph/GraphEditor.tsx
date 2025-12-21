@@ -1824,10 +1824,46 @@ export function GraphEditor({
             case 'Display': // backward compatibility
               node = new TimelineNode();
               if (nodeData.data) {
-                (node as TimelineNode).deserialize(nodeData.data as { timelineName: string });
+                (node as TimelineNode).deserialize(nodeData.data as { timelineName: string; dataType?: TimelineDataType });
               }
               // Delay onTimelineCreate until after ID is overridden
               timelineNodes.push({ node: node as TimelineNode, id: nodeData.id });
+              break;
+            case 'Constant':
+              node = new ConstantNode();
+              if (nodeData.data) {
+                (node as ConstantNode).deserialize(nodeData.data as { constantType: ConstantType; rawValue: string });
+              }
+              break;
+            case 'Nip07':
+              node = new Nip07Node();
+              if (nodeData.data) {
+                (node as Nip07Node).deserialize(nodeData.data as Record<string, unknown>);
+              }
+              break;
+            case 'Extraction':
+              node = new ExtractionNode();
+              if (nodeData.data) {
+                (node as ExtractionNode).deserialize(nodeData.data as { extractionField: ExtractionField; relayFilterType: RelayFilterType });
+              }
+              break;
+            case 'MultiTypeRelay':
+              node = new MultiTypeRelayNode();
+              if (nodeData.data) {
+                (node as MultiTypeRelayNode).deserialize(nodeData.data as { filters?: Filters });
+              }
+              break;
+            case 'If':
+              node = new IfNode();
+              if (nodeData.data) {
+                (node as IfNode).deserialize(nodeData.data as { comparisonType: 'integer' | 'datetime'; operator: ComparisonOperator });
+              }
+              break;
+            case 'Count':
+              node = new CountNode();
+              if (nodeData.data) {
+                (node as CountNode).deserialize(nodeData.data as { count?: number });
+              }
               break;
             default:
               continue;
@@ -2007,9 +2043,45 @@ export function GraphEditor({
                   case 'Display':
                     node = new TimelineNode();
                     if (nodeData.data) {
-                      (node as TimelineNode).deserialize(nodeData.data as { timelineName: string });
+                      (node as TimelineNode).deserialize(nodeData.data as { timelineName: string; dataType?: TimelineDataType });
                     }
                     timelineNodes.push({ node: node as TimelineNode, id: nodeData.id });
+                    break;
+                  case 'Constant':
+                    node = new ConstantNode();
+                    if (nodeData.data) {
+                      (node as ConstantNode).deserialize(nodeData.data as { constantType: ConstantType; rawValue: string });
+                    }
+                    break;
+                  case 'Nip07':
+                    node = new Nip07Node();
+                    if (nodeData.data) {
+                      (node as Nip07Node).deserialize(nodeData.data as Record<string, unknown>);
+                    }
+                    break;
+                  case 'Extraction':
+                    node = new ExtractionNode();
+                    if (nodeData.data) {
+                      (node as ExtractionNode).deserialize(nodeData.data as { extractionField: ExtractionField; relayFilterType: RelayFilterType });
+                    }
+                    break;
+                  case 'MultiTypeRelay':
+                    node = new MultiTypeRelayNode();
+                    if (nodeData.data) {
+                      (node as MultiTypeRelayNode).deserialize(nodeData.data as { filters?: Filters });
+                    }
+                    break;
+                  case 'If':
+                    node = new IfNode();
+                    if (nodeData.data) {
+                      (node as IfNode).deserialize(nodeData.data as { comparisonType: 'integer' | 'datetime'; operator: ComparisonOperator });
+                    }
+                    break;
+                  case 'Count':
+                    node = new CountNode();
+                    if (nodeData.data) {
+                      (node as CountNode).deserialize(nodeData.data as { count?: number });
+                    }
                     break;
                   default:
                     continue;
