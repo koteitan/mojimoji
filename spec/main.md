@@ -244,18 +244,20 @@ User Inrterface is as follows.
             - trigger (trigger type)
             - relay (relay type)
             - dynamic sockets based on filter elements (kinds, limit, since, until, ids, authors, #e, #p)
-          - output terminal:
+          - output terminals:
             - output (event)
+            - relayStatus (relay status) - emits connection state changes for each relay
           - attributes:
             - filter: structured filter UI (values come from input sockets)
           - behavior:
             - when trigger input receives 1, subscribe to relays with merged filter
             - when trigger input receives 0, stop subscription
             - filter values come from input sockets, not text input
+            - relay status output emits {relay: string, status: RelayStatusType} for each connection state change
         - if node:
           - input terminals:
-            - A (integer or datetime)
-            - B (integer or datetime, same type as A)
+            - A (type based on type selection)
+            - B (same type as A)
           - output terminal:
             - output (flag)
           - attributes:

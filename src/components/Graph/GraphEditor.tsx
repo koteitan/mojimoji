@@ -413,7 +413,8 @@ export function GraphEditor({
   }, []);
 
   // Get the output Observable from a node by traversing connections
-  const getNodeOutput = useCallback((nodeId: string): Observable<EventSignal> | null => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const getNodeOutput = useCallback((nodeId: string, sourceOutput?: string): Observable<any> | null => {
     const editor = editorRef.current;
     if (!editor) return null;
 
@@ -423,7 +424,12 @@ export function GraphEditor({
     if (getNodeType(node) === 'Relay') {
       return (node as RelayNode).output$;
     } else if (getNodeType(node) === 'MultiTypeRelay') {
-      return (node as MultiTypeRelayNode).output$;
+      const multiRelayNode = node as MultiTypeRelayNode;
+      // Return different output based on sourceOutput
+      if (sourceOutput === 'relayStatus') {
+        return multiRelayNode.relayStatus$;
+      }
+      return multiRelayNode.output$;
     } else if (getNodeType(node) === 'Operator') {
       return (node as OperatorNode).output$;
     } else if (getNodeType(node) === 'Search') {
@@ -467,6 +473,8 @@ export function GraphEditor({
         (node as TimelineNode).stopSubscription();
       } else if (getNodeType(node) === 'Count') {
         (node as CountNode).stopSubscription();
+      } else if (getNodeType(node) === 'If') {
+        (node as IfNode).stopSubscriptions();
       }
     }
 
@@ -608,6 +616,57 @@ export function GraphEditor({
       }
     }
 
+    // Wire up If nodes
+    for (const node of nodes) {
+      if (getNodeType(node) === 'If') {
+        const ifNode = node as IfNode;
+
+        // Helper to get typed output from source node for If inputs
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const getIfTypedOutput = (sourceId: string, sourceOutput?: string): Observable<any> | null => {
+          const sourceNode = editor.getNode(sourceId);
+          if (!sourceNode) return null;
+          const sourceType = getNodeType(sourceNode);
+
+          // Return the appropriate output based on node type
+          if (sourceType === 'Constant') {
+            return (sourceNode as ConstantNode).output$;
+          } else if (sourceType === 'Nip07') {
+            return (sourceNode as Nip07Node).output$;
+          } else if (sourceType === 'Extraction') {
+            return (sourceNode as ExtractionNode).getOutput$();
+          } else if (sourceType === 'If') {
+            return (sourceNode as IfNode).output$;
+          } else if (sourceType === 'Count') {
+            return (sourceNode as CountNode).output$;
+          } else if (sourceType === 'MultiTypeRelay') {
+            const multiRelayNode = sourceNode as MultiTypeRelayNode;
+            if (sourceOutput === 'relayStatus') {
+              return multiRelayNode.relayStatus$;
+            }
+            return null; // Events are not valid for If node
+          }
+          return null;
+        };
+
+        // Find inputA connection
+        const inputAConn = connections.find(
+          (c: { target: string; targetInput: string; sourceOutput?: string }) =>
+            c.target === node.id && c.targetInput === 'inputA'
+        ) as { source: string; sourceOutput?: string } | undefined;
+        const inputA$ = inputAConn ? getIfTypedOutput(inputAConn.source, inputAConn.sourceOutput) : null;
+        ifNode.setInputA(inputA$);
+
+        // Find inputB connection
+        const inputBConn = connections.find(
+          (c: { target: string; targetInput: string; sourceOutput?: string }) =>
+            c.target === node.id && c.targetInput === 'inputB'
+        ) as { source: string; sourceOutput?: string } | undefined;
+        const inputB$ = inputBConn ? getIfTypedOutput(inputBConn.source, inputBConn.sourceOutput) : null;
+        ifNode.setInputB(inputB$);
+      }
+    }
+
     // Wire up MultiTypeRelay nodes
     for (const node of nodes) {
       if (getNodeType(node) === 'MultiTypeRelay') {
@@ -672,9 +731,9 @@ export function GraphEditor({
 
         // Find input connection
         const inputConn = connections.find(
-          (c: { target: string }) => c.target === node.id
-        );
-        const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+          (c: { target: string; sourceOutput?: string }) => c.target === node.id
+        ) as { source: string; sourceOutput?: string } | undefined;
+        const input$ = inputConn ? getNodeOutput(inputConn.source, inputConn.sourceOutput) : null;
 
         // Clear events only for specified timelines, or all if no specific ones
         const shouldClear = timelinesToClearRef.current === null ||

@@ -12,7 +12,9 @@ import {
   pubkeySocket,
   flagSocket,
   relaySocket,
+  relayStatusSocket,
 } from './types';
+import type { RelayStatusType } from './types';
 import { FilterControl } from './controls';
 import type { Filters } from './controls';
 import type { NostrEvent, Profile, EventSignal } from '../../../nostr/types';
@@ -21,6 +23,12 @@ import { getCachedProfile, findPubkeysByName } from './RelayNode';
 
 // Type for the result of createRxForwardReq with emit method
 type ForwardReq = ReturnType<typeof createRxForwardReq>;
+
+// Signal type for relay status output
+export interface RelayStatusSignal {
+  relay: string;
+  status: RelayStatusType;
+}
 
 // Default filters: empty (single element for UI)
 const getDefaultFilters = (): Filters => [
@@ -88,6 +96,7 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
 
   // RxJS Observable for output events
   private eventSubject = new Subject<EventSignal>();
+  private relayStatusSubject = new Subject<RelayStatusSignal>();
   private rxNostr: RxNostr | null = null;
   private rxReq: ForwardReq | null = null;
   private subscription: { unsubscribe: () => void } | null = null;
@@ -110,6 +119,7 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
 
   // Shared observables
   public output$: Observable<EventSignal> = this.eventSubject.asObservable().pipe(share());
+  public relayStatus$: Observable<RelayStatusSignal> = this.relayStatusSubject.asObservable().pipe(share());
   public profile$: Observable<{ pubkey: string; profile: Profile }> = this.profileSubject.asObservable().pipe(share());
 
   constructor() {
@@ -121,8 +131,9 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
     // Relay input socket
     this.addInput('relay', new ClassicPreset.Input(relaySocket, 'Relay'));
 
-    // Output socket
+    // Output sockets
     this.addOutput('output', new ClassicPreset.Output(eventSocket, 'Events'));
+    this.addOutput('relayStatus', new ClassicPreset.Output(relayStatusSocket, 'Relay Status'));
 
     // Filter control - sockets are generated based on filter elements
     // hideValues=true because values come from input sockets
@@ -456,6 +467,37 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
         if (packet.type === 'EOSE') {
           this.eoseReceived = true;
         }
+      },
+    });
+
+    // Monitor connection state changes and emit relay status
+    this.connectionStateSubscription = this.rxNostr.createConnectionStateObservable().subscribe({
+      next: (packet) => {
+        // Map rx-nostr connection state to our RelayStatusType
+        let status: RelayStatusType;
+        switch (packet.state) {
+          case 'initialized':
+            status = 'idle';
+            break;
+          case 'connecting':
+          case 'waiting-for-retrying':
+            status = 'connecting';
+            break;
+          case 'connected':
+            status = 'sub-stored';
+            break;
+          case 'dormant':
+          case 'terminated':
+            status = 'closed';
+            break;
+          case 'error':
+          case 'rejected':
+            status = 'error';
+            break;
+          default:
+            status = 'idle';
+        }
+        this.relayStatusSubject.next({ relay: packet.from, status });
       },
     });
 
