@@ -58,6 +58,7 @@ export class FilterControl extends ClassicPreset.Control {
 export class TextInputControl extends ClassicPreset.Control {
   value: string;
   label: string;
+  placeholder: string;
   onChange: (value: string) => void;
   rebuildPipeline: boolean;
 
@@ -65,11 +66,13 @@ export class TextInputControl extends ClassicPreset.Control {
     value: string,
     label: string,
     onChange: (value: string) => void,
-    rebuildPipeline: boolean = true
+    rebuildPipeline: boolean = true,
+    placeholder: string = ''
   ) {
     super();
     this.value = value;
     this.label = label;
+    this.placeholder = placeholder;
     this.onChange = onChange;
     this.rebuildPipeline = rebuildPipeline;
   }

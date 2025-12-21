@@ -143,7 +143,6 @@ export function GraphEditor({
   const pendingConnectionRef = useRef<{ nodeId: string; socketKey: string; side: 'input' | 'output' } | null>(null);
 
   // State for dropdown menus
-  const [relayDropdownOpen, setRelayDropdownOpen] = useState(false);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
   const [inputDropdownOpen, setInputDropdownOpen] = useState(false);
 
@@ -423,6 +422,8 @@ export function GraphEditor({
 
     if (getNodeType(node) === 'Relay') {
       return (node as RelayNode).output$;
+    } else if (getNodeType(node) === 'MultiTypeRelay') {
+      return (node as MultiTypeRelayNode).output$;
     } else if (getNodeType(node) === 'Operator') {
       return (node as OperatorNode).output$;
     } else if (getNodeType(node) === 'Search') {
@@ -634,23 +635,7 @@ export function GraphEditor({
           return null;
         };
 
-        // Wire up relay input
-        const relayConn = connections.find(
-          (c: { target: string; targetInput: string }) =>
-            c.target === node.id && c.targetInput === 'relay'
-        );
-        const relay$ = relayConn ? getTypedOutput(relayConn.source) : null;
-        multiRelayNode.setRelayInput(relay$);
-
-        // Wire up trigger input
-        const triggerConn = connections.find(
-          (c: { target: string; targetInput: string }) =>
-            c.target === node.id && c.targetInput === 'trigger'
-        );
-        const trigger$ = triggerConn ? getTypedOutput(triggerConn.source) : null;
-        multiRelayNode.setTriggerInput(trigger$);
-
-        // Wire up filter socket inputs
+        // Wire up filter socket inputs FIRST (before trigger, so values are ready)
         const socketKeys = multiRelayNode.getSocketKeys();
         for (const socketKey of socketKeys) {
           const socketConn = connections.find(
@@ -660,6 +645,22 @@ export function GraphEditor({
           const socket$ = socketConn ? getTypedOutput(socketConn.source) : null;
           multiRelayNode.setSocketInput(socketKey, socket$);
         }
+
+        // Wire up relay input
+        const relayConn = connections.find(
+          (c: { target: string; targetInput: string }) =>
+            c.target === node.id && c.targetInput === 'relay'
+        );
+        const relay$ = relayConn ? getTypedOutput(relayConn.source) : null;
+        multiRelayNode.setRelayInput(relay$);
+
+        // Wire up trigger input LAST (so all other inputs are ready when subscription starts)
+        const triggerConn = connections.find(
+          (c: { target: string; targetInput: string }) =>
+            c.target === node.id && c.targetInput === 'trigger'
+        );
+        const trigger$ = triggerConn ? getTypedOutput(triggerConn.source) : null;
+        multiRelayNode.setTriggerInput(trigger$);
       }
     }
 
@@ -2215,13 +2216,15 @@ export function GraphEditor({
     <div className="graph-editor">
       <div className="graph-toolbar">
         <div className="filter-dropdown">
-          <button onClick={() => setRelayDropdownOpen(!relayDropdownOpen)}>
-            {t('toolbar.relay')} ▼
+          <button onClick={() => setInputDropdownOpen(!inputDropdownOpen)}>
+            {t('toolbar.input', '+Input')} ▼
           </button>
-          {relayDropdownOpen && (
+          {inputDropdownOpen && (
             <div className="filter-dropdown-menu">
-              <button onClick={() => { addNode('Relay'); setRelayDropdownOpen(false); }}>{t('toolbar.simpleRelay', 'Simple')}</button>
-              <button onClick={() => { addNode('MultiTypeRelay'); setRelayDropdownOpen(false); }}>{t('toolbar.modularRelay', 'Modular')}</button>
+              <button onClick={() => { addNode('Relay'); setInputDropdownOpen(false); }}>{t('toolbar.simpleRelay', 'Relay (Simple)')}</button>
+              <button onClick={() => { addNode('MultiTypeRelay'); setInputDropdownOpen(false); }}>{t('toolbar.modularRelay', 'Relay (Modular)')}</button>
+              <button onClick={() => { addNode('Constant'); setInputDropdownOpen(false); }}>{t('toolbar.constant', 'Constant')}</button>
+              <button onClick={() => { addNode('Nip07'); setInputDropdownOpen(false); }}>{t('toolbar.nip07', 'NIP-07')}</button>
             </div>
           )}
         </div>
@@ -2241,18 +2244,8 @@ export function GraphEditor({
             </div>
           )}
         </div>
-        <div className="filter-dropdown">
-          <button onClick={() => setInputDropdownOpen(!inputDropdownOpen)}>
-            {t('toolbar.input', 'Input')} ▼
-          </button>
-          {inputDropdownOpen && (
-            <div className="filter-dropdown-menu">
-              <button onClick={() => { addNode('Constant'); setInputDropdownOpen(false); }}>{t('toolbar.constant', 'Constant')}</button>
-              <button onClick={() => { addNode('Nip07'); setInputDropdownOpen(false); }}>{t('toolbar.nip07', 'NIP-07')}</button>
-            </div>
-          )}
-        </div>
-        <button onClick={() => addNode('Timeline')}>{t('toolbar.timeline')}</button>
+        <button onClick={() => addNode('Timeline')}>{t('toolbar.output', '+Output')}</button>
+        <div className="toolbar-separator" />
         <button onClick={centerView}>{t('toolbar.center')}</button>
         <button onClick={deleteSelected} className="delete-btn">{t('toolbar.delete')}</button>
         <div className="toolbar-separator" />

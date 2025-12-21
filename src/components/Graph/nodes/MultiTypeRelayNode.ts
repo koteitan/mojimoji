@@ -10,7 +10,7 @@ import {
   datetimeSocket,
   eventIdSocket,
   pubkeySocket,
-  triggerSocket,
+  flagSocket,
   relaySocket,
 } from './types';
 import { FilterControl } from './controls';
@@ -81,6 +81,7 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
 
   // Trigger input
   private triggerSubscription: { unsubscribe: () => void } | null = null;
+  private triggerState: boolean = false;
 
   // RxJS Observable for output events
   private eventSubject = new Subject<EventSignal>();
@@ -109,10 +110,10 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
   public profile$: Observable<{ pubkey: string; profile: Profile }> = this.profileSubject.asObservable().pipe(share());
 
   constructor() {
-    super(i18next.t('nodes.multiTypeRelay.title', 'Multi Relay'));
+    super(i18next.t('nodes.modularRelay.title', 'Modular Relay'));
 
-    // Trigger input socket
-    this.addInput('trigger', new ClassicPreset.Input(triggerSocket, 'Trigger'));
+    // Trigger input socket (uses flagSocket for compatibility with Flag type)
+    this.addInput('trigger', new ClassicPreset.Input(flagSocket, 'Trigger'));
 
     // Relay input socket
     this.addInput('relay', new ClassicPreset.Input(relaySocket, 'Relay'));
@@ -192,7 +193,9 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
   }
 
   // Set relay input from connected node
-  setRelayInput(input: Observable<{ relays: string[] }> | null): void {
+  // Accepts both ConstantNode format { type: 'relay', value: string[] } and direct { relays: string[] }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  setRelayInput(input: Observable<any> | null): void {
     // Cleanup existing subscription
     if (this.relayInputSubscription) {
       this.relayInputSubscription.unsubscribe();
@@ -207,14 +210,28 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
 
     this.relayInputSubscription = input.subscribe({
       next: (signal) => {
+        // Handle ConstantNode format { type: 'relay', value: string[] } or direct { relays: string[] }
+        const relays = signal.value ?? signal.relays ?? [];
+        const relayArray = Array.isArray(relays) ? relays : [relays];
+
         // Accumulate relay URLs from input
-        for (const url of signal.relays) {
-          if (!this.relayUrls.includes(url)) {
+        for (const url of relayArray) {
+          if (typeof url === 'string' && url.trim() && !this.relayUrls.includes(url)) {
             this.relayUrls.push(url);
           }
         }
+
+        // Try to start subscription if trigger is already true
+        this.tryStartSubscription();
       },
     });
+  }
+
+  // Try to start subscription if conditions are met (trigger=true and relay URLs exist)
+  private tryStartSubscription(): void {
+    if (this.triggerState && this.relayUrls.length > 0 && !this.isSubscribed()) {
+      this.startSubscription();
+    }
   }
 
   // Build filters combining attribute values and input socket values
@@ -312,8 +329,8 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
     return [trimmed];
   }
 
-  // Set trigger input
-  setTriggerInput(input: Observable<{ value: number }> | null): void {
+  // Set trigger input (accepts flag signal: { type: 'flag', value: boolean } or { flag: boolean })
+  setTriggerInput(input: Observable<{ value?: boolean; flag?: boolean }> | null): void {
     // Cleanup existing trigger subscription
     if (this.triggerSubscription) {
       this.triggerSubscription.unsubscribe();
@@ -321,16 +338,21 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
     }
 
     if (!input) {
+      this.triggerState = false;
       return;
     }
 
     this.triggerSubscription = input.subscribe({
       next: (signal) => {
-        if (signal.value === 1) {
-          // Trigger value is 1: start subscription
-          this.startSubscription();
-        } else if (signal.value === 0) {
-          // Trigger value is 0: stop subscription
+        // Handle both ConstantNode format { value: boolean } and FlagSignal format { flag: boolean }
+        const flagValue = signal.value ?? signal.flag ?? false;
+        this.triggerState = flagValue;
+
+        if (flagValue) {
+          // Trigger is true: try to start subscription (if relay URLs are ready)
+          this.tryStartSubscription();
+        } else {
+          // Trigger is false: stop subscription
           this.stopSubscription();
         }
       },

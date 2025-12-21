@@ -1,5 +1,5 @@
 import { ClassicPreset } from 'rete';
-import { Subject, Observable, share } from 'rxjs';
+import { ReplaySubject, Observable, share } from 'rxjs';
 import i18next from 'i18next';
 import {
   eventIdSocket,
@@ -38,6 +38,30 @@ function getSocketForType(type: ConstantType): ClassicPreset.Socket {
   }
 }
 
+// Get default value for constant type
+function getDefaultValue(type: ConstantType): string {
+  switch (type) {
+    case 'integer': return '0';
+    case 'datetime': return new Date().toISOString();
+    case 'flag': return '1';
+    case 'relayStatus': return 'EOSE';
+    case 'relay': return 'wss://yabu.me\nwss://relay.damus.io';
+    default: return '';
+  }
+}
+
+// Get placeholder for constant type
+function getPlaceholder(type: ConstantType): string {
+  switch (type) {
+    case 'integer': return '0';
+    case 'datetime': return '2024-01-01T00:00:00Z';
+    case 'eventId': return 'nevent1... or hex';
+    case 'pubkey': return 'npub1... or hex';
+    case 'relay': return 'wss://relay.example.com';
+    default: return '';
+  }
+}
+
 export class ConstantNode extends ClassicPreset.Node {
   static readonly nodeType = 'Constant';
   readonly nodeType = 'Constant';
@@ -45,10 +69,10 @@ export class ConstantNode extends ClassicPreset.Node {
   height: number | undefined = undefined;
 
   private constantType: ConstantType = 'integer';
-  private rawValue: string = '0';
+  private rawValue: string = getDefaultValue('integer');
 
-  // Output observable
-  private outputSubject = new Subject<ConstantSignal>();
+  // Output observable - use ReplaySubject(1) so late subscribers get the last value
+  private outputSubject = new ReplaySubject<ConstantSignal>(1);
   public output$: Observable<ConstantSignal> = this.outputSubject.asObservable().pipe(share());
 
   constructor() {
@@ -73,9 +97,12 @@ export class ConstantNode extends ClassicPreset.Node {
         ],
         (value) => {
           this.constantType = value as ConstantType;
+          this.rawValue = getDefaultValue(this.constantType);
           this.updateOutputSocket();
           this.updateValueControl();
           this.emitValue();
+          // Notify graph to re-render the node with new control
+          window.dispatchEvent(new CustomEvent('graph-sockets-change', { detail: { nodeId: this.id } }));
         }
       )
     );
@@ -93,6 +120,9 @@ export class ConstantNode extends ClassicPreset.Node {
         false
       )
     );
+
+    // Emit initial value
+    this.emitValue();
   }
 
   private updateOutputSocket(): void {
@@ -114,7 +144,7 @@ export class ConstantNode extends ClassicPreset.Node {
           new TextAreaControl(
             this.rawValue,
             i18next.t('nodes.constant.value', 'Value'),
-            'wss://relay.example.com',
+            getPlaceholder('relay'),
             (value) => {
               this.rawValue = value;
               this.emitValue();
@@ -128,7 +158,7 @@ export class ConstantNode extends ClassicPreset.Node {
         this.addControl(
           'value',
           new SelectControl(
-            this.rawValue || 'idle',
+            this.rawValue || getDefaultValue('relayStatus'),
             i18next.t('nodes.constant.value', 'Value'),
             [
               { value: 'idle', label: 'idle' },
@@ -152,7 +182,7 @@ export class ConstantNode extends ClassicPreset.Node {
         this.addControl(
           'value',
           new SelectControl(
-            this.rawValue || '0',
+            this.rawValue || getDefaultValue('flag'),
             i18next.t('nodes.constant.value', 'Value'),
             [
               { value: '0', label: '0 (false)' },
@@ -177,7 +207,8 @@ export class ConstantNode extends ClassicPreset.Node {
               this.rawValue = value;
               this.emitValue();
             },
-            false
+            false,
+            getPlaceholder(this.constantType)
           )
         );
         break;
@@ -252,5 +283,8 @@ export class ConstantNode extends ClassicPreset.Node {
     // Update output socket and value control
     this.updateOutputSocket();
     this.updateValueControl();
+
+    // Emit the restored value
+    this.emitValue();
   }
 }

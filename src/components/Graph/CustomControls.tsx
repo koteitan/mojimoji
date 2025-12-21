@@ -22,6 +22,7 @@ export function TextInputComponent({ data }: TextInputProps) {
         type="text"
         className="control-input"
         defaultValue={data.value}
+        placeholder={data.placeholder}
         onChange={(e) => {
           data.value = e.target.value;
           data.onChange(e.target.value);
