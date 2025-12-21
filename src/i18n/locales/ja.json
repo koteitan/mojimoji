@@ -99,13 +99,15 @@
     },
     "if": {
       "title": "If",
-      "comparison": "比較",
-      "equal": "等しい (=)",
-      "notEqual": "等しくない (≠)",
-      "greaterThan": "より大きい (>)",
-      "lessThan": "より小さい (<)",
-      "greaterThanOrEqual": "以上 (≥)",
-      "lessThanOrEqual": "以下 (≤)"
+      "type": "タイプ",
+      "operator": "比較",
+      "integer": "整数",
+      "datetime": "日時",
+      "eventId": "イベントID",
+      "pubkey": "公開鍵",
+      "relay": "リレー",
+      "flag": "フラグ",
+      "relayStatus": "リレー状態"
     },
     "count": {
       "title": "カウント"

@@ -1,5 +1,5 @@
 import { ClassicPreset } from 'rete';
-import { ReplaySubject, Observable, share } from 'rxjs';
+import { ReplaySubject, Observable, shareReplay } from 'rxjs';
 import i18next from 'i18next';
 import {
   eventIdSocket,
@@ -71,9 +71,9 @@ export class ConstantNode extends ClassicPreset.Node {
   private constantType: ConstantType = 'integer';
   private rawValue: string = getDefaultValue('integer');
 
-  // Output observable - use ReplaySubject(1) so late subscribers get the last value
+  // Output observable - use ReplaySubject(1) and shareReplay(1) so late subscribers get the last value
   private outputSubject = new ReplaySubject<ConstantSignal>(1);
-  public output$: Observable<ConstantSignal> = this.outputSubject.asObservable().pipe(share());
+  public output$: Observable<ConstantSignal> = this.outputSubject.asObservable().pipe(shareReplay(1));
 
   constructor() {
     super(i18next.t('nodes.constant.title', 'Constant'));

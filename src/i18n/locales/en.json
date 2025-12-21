@@ -99,13 +99,15 @@
     },
     "if": {
       "title": "If",
-      "comparison": "Comparison",
-      "equal": "Equal (=)",
-      "notEqual": "Not Equal (≠)",
-      "greaterThan": "Greater Than (>)",
-      "lessThan": "Less Than (<)",
-      "greaterThanOrEqual": "Greater or Equal (≥)",
-      "lessThanOrEqual": "Less or Equal (≤)"
+      "type": "Type",
+      "operator": "Comparison",
+      "integer": "Integer",
+      "datetime": "Datetime",
+      "eventId": "Event ID",
+      "pubkey": "Pubkey",
+      "relay": "Relay",
+      "flag": "Flag",
+      "relayStatus": "Relay Status"
     },
     "count": {
       "title": "Count"

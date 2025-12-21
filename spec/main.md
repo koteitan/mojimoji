@@ -259,8 +259,10 @@ User Inrterface is as follows.
           - output terminal:
             - output (flag)
           - attributes:
-            - type: dropdown {integer, datetime}
-            - operator: dropdown {=, ≠, <, ≤, >, ≥}
+            - type: dropdown {integer, datetime, event id, pubkey, relay, flag, relay status}
+            - operator: dropdown:
+              - case integer, datetime {=, ≠, <, ≤, >, ≥}
+              - case event id, pubkey, relay, relay status, flag {=, ≠}
           - behavior:
             - default output is false (0) when no connection or no input
             - calculates comparison when A or B is updated

@@ -75,6 +75,9 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
   // Input values from sockets (key -> values)
   private socketValues: Map<string, unknown[]> = new Map();
 
+  // Socket input subscriptions (key -> subscription)
+  private socketSubscriptions: Map<string, { unsubscribe: () => void }> = new Map();
+
   // Relay input values
   private relayUrls: string[] = [];
   private relayInputSubscription: { unsubscribe: () => void } | null = null;
@@ -362,6 +365,13 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
   // Set input for a socket by key
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setSocketInput(socketKey: string, input: Observable<any> | null): void {
+    // Unsubscribe existing subscription for this socket
+    const existingSubscription = this.socketSubscriptions.get(socketKey);
+    if (existingSubscription) {
+      existingSubscription.unsubscribe();
+      this.socketSubscriptions.delete(socketKey);
+    }
+
     if (!input) {
       this.socketValues.delete(socketKey);
       return;
@@ -380,7 +390,7 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
     const field = element.field;
     this.socketValues.set(socketKey, []);
 
-    input.subscribe({
+    const subscription = input.subscribe({
       next: (signal) => {
         const values = this.socketValues.get(socketKey) || [];
 
@@ -409,6 +419,9 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
         }
       },
     });
+
+    // Store the subscription for later cleanup
+    this.socketSubscriptions.set(socketKey, subscription);
   }
 
   // Check if this node has input sockets
@@ -536,7 +549,7 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
     }
   }
 
-  // Stop all subscriptions including trigger and relay input
+  // Stop all subscriptions including trigger, relay input, and socket inputs
   stopAllSubscriptions(): void {
     this.stopSubscription();
     if (this.triggerSubscription) {
@@ -547,6 +560,11 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
       this.relayInputSubscription.unsubscribe();
       this.relayInputSubscription = null;
     }
+    // Unsubscribe all socket input subscriptions
+    for (const subscription of this.socketSubscriptions.values()) {
+      subscription.unsubscribe();
+    }
+    this.socketSubscriptions.clear();
   }
 
   isSubscribed(): boolean {
