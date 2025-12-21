@@ -213,10 +213,5 @@
 ### 14. Update specifications (spec.md, save.md, save-ja.md)
 - [x] Document new socket types
 - [x] Document new nodes
-- [ ] Update save format documentation if needed
+- [x] Update save format documentation if needed
 
-### 15. Testing
-- [ ] Test each new node individually
-- [ ] Test socket type compatibility
-- [ ] Test graph save/load with new nodes
-- [ ] Test node connections between new and existing nodes
