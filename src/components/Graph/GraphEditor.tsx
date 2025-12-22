@@ -53,6 +53,37 @@ const getNodeType = (node: NodeTypes): string => {
   return (node as NodeTypes & { nodeType: string }).nodeType;
 };
 
+// Check if adding a connection from sourceId to targetId would create a cycle
+// A cycle exists if there's already a path from targetId to sourceId
+const wouldCreateCycle = (
+  connections: Array<{ source: string; target: string }>,
+  sourceId: string,
+  targetId: string
+): boolean => {
+  // If source equals target, it's a self-loop (already prevented elsewhere)
+  if (sourceId === targetId) return true;
+
+  // Check if there's a path from targetId to sourceId using DFS
+  const visited = new Set<string>();
+
+  const canReach = (current: string, goal: string): boolean => {
+    if (current === goal) return true;
+    if (visited.has(current)) return false;
+    visited.add(current);
+
+    // Follow all outgoing connections from current node
+    for (const conn of connections) {
+      if (conn.source === current) {
+        if (canReach(conn.target, goal)) return true;
+      }
+    }
+    return false;
+  };
+
+  // If we can reach sourceId from targetId, adding sourceId -> targetId creates a cycle
+  return canReach(targetId, sourceId);
+};
+
 // Use 'any' to bypass strict Rete.js type constraints
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Schemes = any;
@@ -709,7 +740,8 @@ export function GraphEditor({
       onTimelineCreate(id, node.getTimelineName());
     }
 
-    // Create connections
+    // Create connections (skip cycles)
+    const addedConnections: Array<{ source: string; target: string }> = [];
     for (const connData of graphData.connections as Array<{
       id: string;
       source: string;
@@ -721,6 +753,11 @@ export function GraphEditor({
       const targetNode = nodeMap.get(connData.target);
 
       if (sourceNode && targetNode) {
+        // Skip if this connection would create a cycle
+        if (wouldCreateCycle(addedConnections, connData.source, connData.target)) {
+          console.warn(`[loadGraphData] Skipping cyclic connection: ${connData.source} -> ${connData.target}`);
+          continue;
+        }
         const conn = new ClassicPreset.Connection(
           sourceNode,
           connData.sourceOutput as never,
@@ -728,6 +765,7 @@ export function GraphEditor({
           connData.targetInput as never
         );
         await editor.addConnection(conn);
+        addedConnections.push({ source: connData.source, target: connData.target });
       }
     }
 
@@ -1448,9 +1486,12 @@ export function GraphEditor({
                   const targetNode = editor.getNode(nodeId);
                   const sourceOutput = pendingConnectionRef.current.socketKey;
                   const targetInput = socketKey;
-                  // Check for duplicate connection
-                  if (sourceNode && targetNode && pendingConnectionRef.current.nodeId !== nodeId &&
-                      !connectionExists(pendingConnectionRef.current.nodeId, sourceOutput, nodeId, targetInput)) {
+                  const sourceNodeId = pendingConnectionRef.current.nodeId;
+                  const targetNodeId = nodeId;
+                  // Check for duplicate connection and cycle
+                  if (sourceNode && targetNode && sourceNodeId !== targetNodeId &&
+                      !connectionExists(sourceNodeId, sourceOutput, targetNodeId, targetInput) &&
+                      !wouldCreateCycle(editor.getConnections(), sourceNodeId, targetNodeId)) {
                     const conn = new ClassicPreset.Connection(
                       sourceNode,
                       sourceOutput as never,
@@ -1465,9 +1506,12 @@ export function GraphEditor({
                   const targetNode = editor.getNode(pendingConnectionRef.current.nodeId);
                   const sourceOutput = socketKey;
                   const targetInput = pendingConnectionRef.current.socketKey;
-                  // Check for duplicate connection
-                  if (sourceNode && targetNode && pendingConnectionRef.current.nodeId !== nodeId &&
-                      !connectionExists(nodeId, sourceOutput, pendingConnectionRef.current.nodeId, targetInput)) {
+                  const sourceNodeId = nodeId;
+                  const targetNodeId = pendingConnectionRef.current.nodeId;
+                  // Check for duplicate connection and cycle
+                  if (sourceNode && targetNode && sourceNodeId !== targetNodeId &&
+                      !connectionExists(sourceNodeId, sourceOutput, targetNodeId, targetInput) &&
+                      !wouldCreateCycle(editor.getConnections(), sourceNodeId, targetNodeId)) {
                     const conn = new ClassicPreset.Connection(
                       sourceNode,
                       sourceOutput as never,
@@ -1658,7 +1702,8 @@ export function GraphEditor({
           onTimelineCreate(id, node.getTimelineName());
         }
 
-        // Create connections
+        // Create connections (skip cycles)
+        const addedConnections2: Array<{ source: string; target: string }> = [];
         for (const connData of savedGraph.connections as Array<{
           id: string;
           source: string;
@@ -1670,6 +1715,11 @@ export function GraphEditor({
           const targetNode = nodeMap.get(connData.target);
 
           if (sourceNode && targetNode) {
+            // Skip if this connection would create a cycle
+            if (wouldCreateCycle(addedConnections2, connData.source, connData.target)) {
+              console.warn(`[loadFromURL] Skipping cyclic connection: ${connData.source} -> ${connData.target}`);
+              continue;
+            }
             const conn = new ClassicPreset.Connection(
               sourceNode,
               connData.sourceOutput as never,
@@ -1677,6 +1727,7 @@ export function GraphEditor({
               connData.targetInput as never
             );
             await editor.addConnection(conn);
+            addedConnections2.push({ source: connData.source, target: connData.target });
           }
         }
 
@@ -1838,6 +1889,8 @@ export function GraphEditor({
                 onTimelineCreate(id, node.getTimelineName());
               }
 
+              // Create connections (skip cycles)
+              const addedConnections3: Array<{ source: string; target: string }> = [];
               for (const connData of graphData.connections as Array<{
                 id: string;
                 source: string;
@@ -1849,6 +1902,11 @@ export function GraphEditor({
                 const targetNode = nodeMap.get(connData.target);
 
                 if (sourceNode && targetNode) {
+                  // Skip if this connection would create a cycle
+                  if (wouldCreateCycle(addedConnections3, connData.source, connData.target)) {
+                    console.warn(`[loadFromNostr] Skipping cyclic connection: ${connData.source} -> ${connData.target}`);
+                    continue;
+                  }
                   const conn = new ClassicPreset.Connection(
                     sourceNode,
                     connData.sourceOutput as never,
@@ -1856,6 +1914,7 @@ export function GraphEditor({
                     connData.targetInput as never
                   );
                   await editor.addConnection(conn);
+                  addedConnections3.push({ source: connData.source, target: connData.target });
                 }
               }
 
