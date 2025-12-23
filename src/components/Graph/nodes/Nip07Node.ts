@@ -1,5 +1,5 @@
 import { ClassicPreset } from 'rete';
-import { Subject, Observable, share } from 'rxjs';
+import { ReplaySubject, Observable, shareReplay } from 'rxjs';
 import i18next from 'i18next';
 import { pubkeySocket } from './types';
 import { isNip07Available, getPubkey } from '../../../nostr/nip07';
@@ -18,9 +18,9 @@ export class Nip07Node extends ClassicPreset.Node {
   private pubkey: string | null = null;
   private error: string | null = null;
 
-  // Output observable
-  private outputSubject = new Subject<PubkeySignal>();
-  public output$: Observable<PubkeySignal> = this.outputSubject.asObservable().pipe(share());
+  // Output observable - use ReplaySubject(1) so late subscribers get the last value
+  private outputSubject = new ReplaySubject<PubkeySignal>(1);
+  public output$: Observable<PubkeySignal> = this.outputSubject.asObservable().pipe(shareReplay(1));
 
   constructor() {
     super(i18next.t('nodes.nip07.title', 'NIP-07'));
@@ -31,8 +31,18 @@ export class Nip07Node extends ClassicPreset.Node {
     this.fetchPubkey();
   }
 
+  private retryCount = 0;
+  private maxRetries = 10;
+  private retryDelay = 200; // ms
+
   private async fetchPubkey(): Promise<void> {
     if (!isNip07Available()) {
+      // Retry with delay if extension might not be loaded yet
+      if (this.retryCount < this.maxRetries) {
+        this.retryCount++;
+        setTimeout(() => this.fetchPubkey(), this.retryDelay);
+        return;
+      }
       this.error = i18next.t('nodes.nip07.notAvailable', 'NIP-07 extension not available');
       this.pubkey = null;
       return;
@@ -68,6 +78,7 @@ export class Nip07Node extends ClassicPreset.Node {
 
   // Refresh pubkey (in case extension was loaded after page load)
   async refresh(): Promise<void> {
+    this.retryCount = 0;
     await this.fetchPubkey();
   }
 
@@ -78,6 +89,7 @@ export class Nip07Node extends ClassicPreset.Node {
 
   deserialize(_data: Record<string, unknown>) {
     // Re-fetch pubkey on load
+    this.retryCount = 0;
     this.fetchPubkey();
   }
 }

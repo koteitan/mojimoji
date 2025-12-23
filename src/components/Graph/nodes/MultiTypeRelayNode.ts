@@ -241,9 +241,25 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
     });
   }
 
-  // Try to start subscription if conditions are met (trigger=true and relay URLs exist)
+  // Check if all required inputs are connected
+  private areAllInputsConnected(): boolean {
+    // Check trigger input is connected
+    if (!this.triggerSubscription) return false;
+
+    // Check relay input is connected
+    if (!this.relayInputSubscription) return false;
+
+    // Check all filter socket inputs are connected
+    for (const socketKey of this.currentSockets.keys()) {
+      if (!this.socketSubscriptions.has(socketKey)) return false;
+    }
+
+    return true;
+  }
+
+  // Try to start subscription if conditions are met
   private tryStartSubscription(): void {
-    if (this.triggerState && this.relayUrls.length > 0 && !this.isSubscribed()) {
+    if (this.triggerState && this.relayUrls.length > 0 && this.areAllInputsConnected() && !this.isSubscribed()) {
       this.startSubscription();
     }
   }
@@ -405,16 +421,26 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
       next: (signal) => {
         const values = this.socketValues.get(socketKey) || [];
 
-        // Extract value based on field type
+        // Extract value based on signal format
+        // ConstantNode emits { type: string, value: unknown }
+        // Nip07Node emits { pubkey: string }
+        // IfNode emits { flag: boolean }
+        // Other nodes may emit the value directly
         let value: unknown;
-        if (field === 'kinds' || field === 'limit') {
-          value = signal.value ?? signal;
-        } else if (field === 'since' || field === 'until') {
-          value = signal.datetime ?? signal;
-        } else if (field === 'ids' || field === '#e') {
-          value = signal.eventId ?? signal;
-        } else if (field === 'authors' || field === '#p') {
-          value = signal.pubkey ?? signal;
+        if (typeof signal === 'object' && signal !== null) {
+          if ('value' in signal) {
+            value = (signal as { value: unknown }).value;
+          } else if ('pubkey' in signal) {
+            value = (signal as { pubkey: string }).pubkey;
+          } else if ('flag' in signal) {
+            value = (signal as { flag: boolean }).flag;
+          } else if ('eventId' in signal) {
+            value = (signal as { eventId: string }).eventId;
+          } else if ('datetime' in signal) {
+            value = (signal as { datetime: number }).datetime;
+          } else {
+            value = signal;
+          }
         } else {
           value = signal;
         }
@@ -466,6 +492,8 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
       next: (packet) => {
         if (packet.type === 'EOSE') {
           this.eoseReceived = true;
+          // Emit EOSE status
+          this.relayStatusSubject.next({ relay: packet.from, status: 'EOSE' });
         }
       },
     });

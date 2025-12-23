@@ -34,6 +34,16 @@ function detectDataType(rawSignal: unknown): TimelineDataType {
     return 'relayStatus';
   }
 
+  // Check for PubkeySignal (from NIP-07 node: { pubkey: string })
+  if (typeof rawSignal === 'object' && 'pubkey' in rawSignal && typeof (rawSignal as { pubkey: unknown }).pubkey === 'string') {
+    return 'pubkey';
+  }
+
+  // Check for FlagSignal (from If node: { flag: boolean })
+  if (typeof rawSignal === 'object' && 'flag' in rawSignal && typeof (rawSignal as { flag: unknown }).flag === 'boolean') {
+    return 'flag';
+  }
+
   // Check for flag (boolean or 0/1)
   if (typeof rawSignal === 'boolean') {
     return 'flag';
@@ -104,6 +114,16 @@ function extractData(rawSignal: unknown, detectedType: TimelineDataType): unknow
   // For relay status from MultiTypeRelayNode, return the signal
   if (detectedType === 'relayStatus' && typeof rawSignal === 'object' && rawSignal !== null && 'relay' in rawSignal && 'status' in rawSignal) {
     return rawSignal;
+  }
+
+  // For PubkeySignal format (from NIP-07 node: { pubkey: string })
+  if (detectedType === 'pubkey' && typeof rawSignal === 'object' && rawSignal !== null && 'pubkey' in rawSignal) {
+    return (rawSignal as { pubkey: string }).pubkey;
+  }
+
+  // For FlagSignal format (from If node: { flag: boolean })
+  if (detectedType === 'flag' && typeof rawSignal === 'object' && rawSignal !== null && 'flag' in rawSignal) {
+    return (rawSignal as { flag: boolean }).flag;
   }
 
   // For ConstantSignal format (has 'type' and 'value' properties)
