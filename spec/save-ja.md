@@ -131,8 +131,9 @@ mojimoji が使用する localStorage キー:
   - Search: `{ searchText: string, exclude: boolean }`
   - Language: `{ language: string }`
   - NostrFilter: `{ filterElements: FilterElement[], exclude: boolean }`
-  - Timeline: `{ timelineName: string, inputType?: string }`
-    - inputType: オプション、入力データのタイプ（Event, EventId, Pubkey など）
+  - Timeline: `{ timelineName: string }`
+    - timelineName: タイムラインの表示名
+    - 入力型は動的に検出（dataTypeフィールドなし）
   - Constant: `{ constantType: string, rawValue: string }`
     - constantType: "integer" | "datetime" | "eventId" | "pubkey" | "relay" | "flag" | "relayStatus"
     - rawValue: 値の文字列表現

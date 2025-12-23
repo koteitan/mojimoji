@@ -21,6 +21,7 @@ Each event displays:
 ### Supported Event Kinds
 | Kind | Type | Display |
 |------|------|---------|
+| 0 | Profile | icon, name, display name |
 | 1 | Text Note | Full content display |
 | 7 | Reaction | Reaction emoji/text |
 

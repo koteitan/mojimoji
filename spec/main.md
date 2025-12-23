@@ -189,11 +189,11 @@ User Inrterface is as follows.
             - when exclude is on: invert the result (pass events that do NOT match)
       - Timeline node:
         - input terminal:
-          - input (type based on data type selection)
+          - input (any type - detected dynamically)
         - attributes:
-          - data type: dropdown {event, event id, pubkey, relay, flag, integer, datetime, relay status}
           - timeline name: string
         - behavior:
+          - detects input data type dynamically from the connected output
           - receives signals with 'add' or 'remove' type
           - 'add' signal: adds item to timeline (if not duplicate)
           - 'remove' signal: removes item from timeline (if present)
@@ -222,6 +222,15 @@ User Inrterface is as follows.
               - relay status: dropdown {idle, connecting, sub-stored, EOSE, sub-realtime, closed, error}
           - behavior:
             - outputs constant value based on type selection
+            - on change attributes: update value into default value
+              - default values:
+                - integer: 0
+                - datetime: current date/time
+                - event id
+                - pubkey: NIP-07 pubkey if available, else empty string
+                - relay: yabu.me (if locale is "ja"), else damus.io
+                - flag: true
+                - relay status: EOSE
         - NIP-07 node:
           - output terminal:
             - output (pubkey)
@@ -358,7 +367,7 @@ User Inrterface is as follows.
      - when no permalink and localStorage is empty:
        - create a default graph:
          - one Relay node: default settings, position (100, 100)
-         - one Timeline node: timeline name: "Timeline", position (120, 650)
+         - one Timeline node: position (120, 650)
          - arrangement: vertical (Relay on top, Timeline below)
          - one edge: connect the Relay node output to the Timeline node input.
 - centering: fit all nodes in view (same as Center button)

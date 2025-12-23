@@ -59,6 +59,13 @@ export class TriggerSocket extends ClassicPreset.Socket {
   }
 }
 
+// Any socket for universal input (accepts any type)
+export class AnySocket extends ClassicPreset.Socket {
+  constructor() {
+    super('Any');
+  }
+}
+
 // Singleton sockets
 export const eventSocket = new EventSocket();
 export const eventIdSocket = new EventIdSocket();
@@ -69,6 +76,7 @@ export const integerSocket = new IntegerSocket();
 export const datetimeSocket = new DatetimeSocket();
 export const relayStatusSocket = new RelayStatusSocket();
 export const triggerSocket = new TriggerSocket();
+export const anySocket = new AnySocket();
 
 // Socket type name to socket instance mapping
 export const socketMap: Record<string, ClassicPreset.Socket> = {
@@ -81,6 +89,7 @@ export const socketMap: Record<string, ClassicPreset.Socket> = {
   'Datetime': datetimeSocket,
   'RelayStatus': relayStatusSocket,
   'Trigger': triggerSocket,
+  'Any': anySocket,
 };
 
 // Get socket by type name
@@ -109,6 +118,4 @@ export interface SearchNodeControls {
   useRegex: boolean;
 }
 
-export interface TimelineNodeControls {
-  timelineName: string;
-}
+// TimelineNode no longer has controls - it detects type dynamically

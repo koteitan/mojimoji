@@ -131,8 +131,9 @@ For manual saving, we will add:
   - Search: `{ searchText: string, exclude: boolean }`
   - Language: `{ language: string }`
   - NostrFilter: `{ filterElements: FilterElement[], exclude: boolean }`
-  - Timeline: `{ timelineName: string, inputType?: string }`
-    - inputType: optional, type of input data (Event, EventId, Pubkey, etc.)
+  - Timeline: `{ timelineName: string }`
+    - timelineName: display name of the timeline
+    - input type is detected dynamically (no dataType field)
   - Constant: `{ constantType: string, rawValue: string }`
     - constantType: "integer" | "datetime" | "eventId" | "pubkey" | "relay" | "flag" | "relayStatus"
     - rawValue: string representation of the value

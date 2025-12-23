@@ -25,7 +25,7 @@ import {
 } from './nodes';
 import type { ConstantType } from './nodes';
 import type { ExtractionField, RelayFilterType } from './nodes';
-import type { TimelineDataType } from './nodes';
+import type { TimelineSignal } from './nodes';
 import type { ComparisonOperator } from './nodes';
 import type { Filters } from './nodes/controls';
 import { CustomNode } from './CustomNode';
@@ -43,7 +43,7 @@ import {
   type GraphData,
 } from '../../utils/localStorage';
 import { saveGraphToNostr, loadGraphByPath, loadGraphByEventId } from '../../nostr/graphStorage';
-import { extractContentWarning, decodeBech32ToHex, isHex64, type TimelineEvent, type EventSignal } from '../../nostr/types';
+import { extractContentWarning, decodeBech32ToHex, isHex64, type EventSignal, type TimelineItem } from '../../nostr/types';
 import type { Observable, Subscription } from 'rxjs';
 import { APP_VERSION } from '../../App';
 import './GraphEditor.css';
@@ -74,7 +74,7 @@ const getNodeType = (node: NodeTypes): string => {
 };
 
 // Helper to check socket compatibility
-// Returns true if the two sockets are compatible (same type)
+// Returns true if the two sockets are compatible (same type or Any socket)
 const areSocketsCompatible = (
   sourceNode: NodeTypes,
   sourceOutput: string,
@@ -89,6 +89,11 @@ const areSocketsCompatible = (
   const input = targetNode.inputs[targetInput];
   if (!input?.socket) return false;
 
+  // "Any" socket accepts any type
+  if (output.socket.name === 'Any' || input.socket.name === 'Any') {
+    return true;
+  }
+
   // Compare socket names (types)
   return output.socket.name === input.socket.name;
 };
@@ -102,13 +107,13 @@ type AreaExtra = any;
 interface GraphEditorProps {
   onTimelineCreate: (id: string, name: string) => void;
   onTimelineRemove: (id: string) => void;
-  onEventsUpdate: (id: string, events: TimelineEvent[]) => void;
+  onItemsUpdate: (id: string, items: TimelineItem[]) => void;
 }
 
 export function GraphEditor({
   onTimelineCreate,
   onTimelineRemove,
-  onEventsUpdate,
+  onItemsUpdate,
 }: GraphEditorProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -134,9 +139,9 @@ export function GraphEditor({
   const selectorRef = useRef<any>(null);
   const isInitializedRef = useRef(false);
   const isLoadingRef = useRef(false);
-  const eventsRef = useRef<Map<string, TimelineEvent[]>>(new Map());
-  // Track event IDs that should be excluded (received 'remove' before 'add')
-  const excludedEventsRef = useRef<Map<string, Set<string>>>(new Map());
+  const itemsRef = useRef<Map<string, TimelineItem[]>>(new Map());
+  // Track item IDs that should be excluded (received 'remove' before 'add')
+  const excludedItemsRef = useRef<Map<string, Set<string>>>(new Map());
   const rebuildPipelineRef = useRef<(() => void) | null>(null);
   const profileSubscriptionsRef = useRef<Subscription[]>([]);
   const selectedConnectionIdRef = useRef<string | null>(null);
@@ -438,6 +443,16 @@ export function GraphEditor({
       return (node as LanguageNode).output$;
     } else if (getNodeType(node) === 'NostrFilter') {
       return (node as NostrFilterNode).output$;
+    } else if (getNodeType(node) === 'Constant') {
+      return (node as ConstantNode).output$;
+    } else if (getNodeType(node) === 'Nip07') {
+      return (node as Nip07Node).output$;
+    } else if (getNodeType(node) === 'Extraction') {
+      return (node as ExtractionNode).getOutput$();
+    } else if (getNodeType(node) === 'If') {
+      return (node as IfNode).output$;
+    } else if (getNodeType(node) === 'Count') {
+      return (node as CountNode).output$;
     }
 
     return null;
@@ -518,17 +533,23 @@ export function GraphEditor({
         // Subscribe to profile updates from this relay
         const profileSub = relayNode.profile$.subscribe({
           next: ({ pubkey, profile }) => {
-            // Update all events with this pubkey across all timelines
-            for (const [timelineId, events] of eventsRef.current) {
+            // Update all items with this pubkey across all timelines
+            for (const [timelineId, items] of itemsRef.current) {
               let updated = false;
-              for (const event of events) {
-                if (event.event.pubkey === pubkey && !event.profile) {
-                  event.profile = profile;
+              for (const item of items) {
+                // Update profile for event items
+                if (item.type === 'event' && item.event.pubkey === pubkey && !item.profile) {
+                  item.profile = profile;
+                  updated = true;
+                }
+                // Update profile for pubkey items
+                if (item.type === 'pubkey' && item.pubkey === pubkey && !item.profile) {
+                  item.profile = profile;
                   updated = true;
                 }
               }
               if (updated) {
-                onEventsUpdate(timelineId, [...events]);
+                onItemsUpdate(timelineId, [...items]);
               }
             }
           },
@@ -735,59 +756,144 @@ export function GraphEditor({
         ) as { source: string; sourceOutput?: string } | undefined;
         const input$ = inputConn ? getNodeOutput(inputConn.source, inputConn.sourceOutput) : null;
 
-        // Clear events only for specified timelines, or all if no specific ones
+        // Clear items only for specified timelines, or all if no specific ones
         const shouldClear = timelinesToClearRef.current === null ||
                            timelinesToClearRef.current.has(timelineNodeId) ||
                            !input$; // Always clear if no input connection
         if (shouldClear) {
-          eventsRef.current.set(timelineNodeId, []);
-          excludedEventsRef.current.set(timelineNodeId, new Set()); // Also clear excluded set
-          onEventsUpdate(timelineNodeId, []);
+          itemsRef.current.set(timelineNodeId, []);
+          excludedItemsRef.current.set(timelineNodeId, new Set()); // Also clear excluded set
+          onItemsUpdate(timelineNodeId, []);
         }
 
         // Initialize excluded set for this timeline
-        if (!excludedEventsRef.current.has(timelineNodeId)) {
-          excludedEventsRef.current.set(timelineNodeId, new Set());
+        if (!excludedItemsRef.current.has(timelineNodeId)) {
+          excludedItemsRef.current.set(timelineNodeId, new Set());
         }
-        const excludedSet = excludedEventsRef.current.get(timelineNodeId)!;
+        const excludedSet = excludedItemsRef.current.get(timelineNodeId)!;
+
+        // Helper to generate unique ID for a timeline item
+        const generateItemId = (signal: TimelineSignal): string => {
+          const data = signal.data;
+          switch (signal.type) {
+            case 'event':
+              return (data as EventSignal).event.id;
+            case 'eventId':
+              return `eventId:${data as string}`;
+            case 'pubkey':
+              return `pubkey:${data as string}`;
+            case 'relay':
+              return `relay:${Array.isArray(data) ? (data as string[]).join(',') : data as string}`;
+            case 'datetime':
+              return `datetime:${data as number}`;
+            case 'integer':
+              return `integer:${data as number}`;
+            case 'flag':
+              return `flag:${data as boolean}`;
+            case 'relayStatus': {
+              // Handle both string (from ConstantNode) and object (from MultiTypeRelayNode)
+              if (typeof data === 'string') {
+                return `relayStatus:${data}`;
+              }
+              const statusData = data as { relay: string; status: string };
+              return `relayStatus:${statusData.relay}:${statusData.status}`;
+            }
+            default:
+              return `unknown:${Date.now()}`;
+          }
+        };
+
+        // Helper to convert TimelineSignal to TimelineItem
+        const convertToTimelineItem = (signal: TimelineSignal): TimelineItem => {
+          const itemId = generateItemId(signal);
+          const data = signal.data;
+
+          switch (signal.type) {
+            case 'event': {
+              const eventSignal = data as EventSignal;
+              const cachedProfile = getCachedProfile(eventSignal.event.pubkey);
+              const contentWarning = extractContentWarning(eventSignal.event);
+              return {
+                id: itemId,
+                type: 'event',
+                event: eventSignal.event,
+                profile: cachedProfile,
+                contentWarning,
+              };
+            }
+            case 'eventId':
+              return { id: itemId, type: 'eventId', eventId: data as string };
+            case 'pubkey': {
+              const pubkey = data as string;
+              const cachedProfile = getCachedProfile(pubkey);
+              return { id: itemId, type: 'pubkey', pubkey, profile: cachedProfile };
+            }
+            case 'relay':
+              return { id: itemId, type: 'relay', relays: Array.isArray(data) ? data as string[] : [data as string] };
+            case 'datetime':
+              return { id: itemId, type: 'datetime', datetime: data as number };
+            case 'integer':
+              return { id: itemId, type: 'integer', value: data as number };
+            case 'flag':
+              return { id: itemId, type: 'flag', flag: data as boolean };
+            case 'relayStatus': {
+              // Handle both string (from ConstantNode) and object (from MultiTypeRelayNode)
+              if (typeof data === 'string') {
+                return { id: itemId, type: 'relayStatus', status: data };
+              }
+              const statusData = data as { relay: string; status: string };
+              return { id: itemId, type: 'relayStatus', status: `${statusData.relay}: ${statusData.status}` };
+            }
+            default:
+              return { id: itemId, type: 'flag', flag: false };
+          }
+        };
 
         // Set the signal callback - handles both 'add' and 'remove' signals
-        timelineNode.setOnSignal((signal: EventSignal) => {
-          const events = eventsRef.current.get(timelineNodeId) || [];
+        timelineNode.setOnTimelineSignal((signal: TimelineSignal) => {
+          const items = itemsRef.current.get(timelineNodeId) || [];
+          const itemId = generateItemId(signal);
 
           if (signal.signal === 'add') {
-            // Skip if event is in excluded set (remove arrived before add)
-            if (excludedSet.has(signal.event.id)) {
+            // Skip if item is in excluded set (remove arrived before add)
+            if (excludedSet.has(itemId)) {
               // Remove from excluded set since we've now processed the add
-              excludedSet.delete(signal.event.id);
+              excludedSet.delete(itemId);
               return;
             }
-            // Skip if event already exists (deduplication)
-            if (events.some(e => e.event.id === signal.event.id)) {
+            // Skip if item already exists (deduplication)
+            if (items.some(item => item.id === itemId)) {
               return;
             }
-            // Try to get cached profile
-            const cachedProfile = getCachedProfile(signal.event.pubkey);
-            // Extract content warning (NIP-36)
-            const contentWarning = extractContentWarning(signal.event);
-            // Add event and sort by created_at (newest first)
-            const newEvents = [...events, { event: signal.event, profile: cachedProfile, contentWarning }].sort(
-              (a, b) => b.event.created_at - a.event.created_at
-            );
-            // Limit to 100 events
-            const limitedEvents = newEvents.slice(0, 100);
-            eventsRef.current.set(timelineNodeId, limitedEvents);
-            onEventsUpdate(timelineNodeId, limitedEvents);
-          } else if (signal.signal === 'remove') {
-            // Remove event from timeline
-            const filteredEvents = events.filter(e => e.event.id !== signal.event.id);
-            // If something was removed
-            if (filteredEvents.length !== events.length) {
-              eventsRef.current.set(timelineNodeId, filteredEvents);
-              onEventsUpdate(timelineNodeId, filteredEvents);
+            // Convert signal to timeline item
+            const newItem = convertToTimelineItem(signal);
+            // Add item (sort by time for event type, otherwise append)
+            let newItems: TimelineItem[];
+            if (signal.type === 'event') {
+              newItems = [...items, newItem].sort((a, b) => {
+                if (a.type === 'event' && b.type === 'event') {
+                  return b.event.created_at - a.event.created_at;
+                }
+                return 0;
+              });
             } else {
-              // Event not found - add to excluded set so future 'add' will be ignored
-              excludedSet.add(signal.event.id);
+              // For non-event types, prepend (newest first)
+              newItems = [newItem, ...items];
+            }
+            // Limit to 100 items
+            const limitedItems = newItems.slice(0, 100);
+            itemsRef.current.set(timelineNodeId, limitedItems);
+            onItemsUpdate(timelineNodeId, limitedItems);
+          } else if (signal.signal === 'remove') {
+            // Remove item from timeline
+            const filteredItems = items.filter(item => item.id !== itemId);
+            // If something was removed
+            if (filteredItems.length !== items.length) {
+              itemsRef.current.set(timelineNodeId, filteredItems);
+              onItemsUpdate(timelineNodeId, filteredItems);
+            } else {
+              // Item not found - add to excluded set so future 'add' will be ignored
+              excludedSet.add(itemId);
             }
           }
         });
@@ -795,7 +901,7 @@ export function GraphEditor({
         timelineNode.setInput(input$);
       }
     }
-  }, [getNodeOutput, onEventsUpdate]);
+  }, [getNodeOutput, onItemsUpdate]);
 
   // Keep ref updated
   rebuildPipelineRef.current = rebuildPipeline;
@@ -826,9 +932,9 @@ export function GraphEditor({
       await editor.removeNode(node.id);
     }
 
-    // Clear events
-    eventsRef.current.clear();
-    excludedEventsRef.current.clear();
+    // Clear items
+    itemsRef.current.clear();
+    excludedItemsRef.current.clear();
 
     const nodeMap = new Map<string, NodeTypes>();
     const timelineNodes: Array<{ node: TimelineNode; id: string }> = [];
@@ -878,7 +984,7 @@ export function GraphEditor({
         case 'Display': // backward compatibility
           node = new TimelineNode();
           if (nodeData.data) {
-            (node as TimelineNode).deserialize(nodeData.data as { timelineName: string; dataType?: TimelineDataType });
+            (node as TimelineNode).deserialize(nodeData.data as Record<string, unknown>);
           }
           // Delay onTimelineCreate until after ID is overridden
           timelineNodes.push({ node: node as TimelineNode, id: nodeData.id });
@@ -1883,7 +1989,7 @@ export function GraphEditor({
             case 'Display': // backward compatibility
               node = new TimelineNode();
               if (nodeData.data) {
-                (node as TimelineNode).deserialize(nodeData.data as { timelineName: string; dataType?: TimelineDataType });
+                (node as TimelineNode).deserialize(nodeData.data as Record<string, unknown>);
               }
               // Delay onTimelineCreate until after ID is overridden
               timelineNodes.push({ node: node as TimelineNode, id: nodeData.id });
@@ -2051,8 +2157,8 @@ export function GraphEditor({
                 await editor.removeNode(node.id);
               }
 
-              eventsRef.current.clear();
-              excludedEventsRef.current.clear();
+              itemsRef.current.clear();
+              excludedItemsRef.current.clear();
 
               const nodeMap = new Map<string, NodeTypes>();
               const timelineNodes: Array<{ node: TimelineNode; id: string }> = [];
@@ -2102,7 +2208,7 @@ export function GraphEditor({
                   case 'Display':
                     node = new TimelineNode();
                     if (nodeData.data) {
-                      (node as TimelineNode).deserialize(nodeData.data as { timelineName: string; dataType?: TimelineDataType });
+                      (node as TimelineNode).deserialize(nodeData.data as Record<string, unknown>);
                     }
                     timelineNodes.push({ node: node as TimelineNode, id: nodeData.id });
                     break;

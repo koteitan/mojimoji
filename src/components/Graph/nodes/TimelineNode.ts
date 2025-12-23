@@ -1,41 +1,123 @@
 import { ClassicPreset } from 'rete';
 import { Observable } from 'rxjs';
 import i18next from 'i18next';
-import {
-  eventSocket,
-  eventIdSocket,
-  pubkeySocket,
-  relaySocket,
-  flagSocket,
-  integerSocket,
-  datetimeSocket,
-  relayStatusSocket,
-} from './types';
-import { TextInputControl, SelectControl } from './controls';
+import { anySocket } from './types';
+import { TextInputControl } from './controls';
 import type { EventSignal } from '../../../nostr/types';
 
 // Data types that Timeline can display
 export type TimelineDataType = 'event' | 'eventId' | 'pubkey' | 'relay' | 'flag' | 'integer' | 'datetime' | 'relayStatus';
 
-// Generic signal for Timeline
+// Generic signal for Timeline with dynamically detected type
 export interface TimelineSignal {
   type: TimelineDataType;
   data: unknown;
   signal: 'add' | 'remove';
 }
 
-// Get socket for data type
-function getSocketForDataType(dataType: TimelineDataType): ClassicPreset.Socket {
-  switch (dataType) {
-    case 'event': return eventSocket;
-    case 'eventId': return eventIdSocket;
-    case 'pubkey': return pubkeySocket;
-    case 'relay': return relaySocket;
-    case 'flag': return flagSocket;
-    case 'integer': return integerSocket;
-    case 'datetime': return datetimeSocket;
-    case 'relayStatus': return relayStatusSocket;
+// Helper to detect data type from raw signal
+function detectDataType(rawSignal: unknown): TimelineDataType {
+  if (rawSignal === null || rawSignal === undefined) {
+    return 'flag'; // Default for null/undefined
   }
+
+  // Check for EventSignal (has event and signal properties)
+  if (typeof rawSignal === 'object' && 'event' in rawSignal) {
+    const eventCandidate = (rawSignal as { event: unknown }).event;
+    if (eventCandidate && typeof eventCandidate === 'object' && 'kind' in eventCandidate) {
+      return 'event';
+    }
+  }
+
+  // Check for relay status signal (has relay and status properties)
+  if (typeof rawSignal === 'object' && 'relay' in rawSignal && 'status' in rawSignal) {
+    return 'relayStatus';
+  }
+
+  // Check for flag (boolean or 0/1)
+  if (typeof rawSignal === 'boolean') {
+    return 'flag';
+  }
+
+  // Check for integer
+  if (typeof rawSignal === 'number' && Number.isInteger(rawSignal)) {
+    // Could be integer or datetime (unix timestamp)
+    // Timestamps are typically > 1000000000 (year 2001+)
+    if (rawSignal > 1000000000 && rawSignal < 10000000000) {
+      return 'datetime';
+    }
+    return 'integer';
+  }
+
+  // Check for string types
+  if (typeof rawSignal === 'string') {
+    // Check for relay URL
+    if (rawSignal.startsWith('wss://') || rawSignal.startsWith('ws://')) {
+      return 'relay';
+    }
+    // Check for hex (64 char = event id or pubkey)
+    if (/^[0-9a-fA-F]{64}$/.test(rawSignal)) {
+      // Could be event id or pubkey - default to eventId
+      return 'eventId';
+    }
+    // Check for npub/note bech32
+    if (rawSignal.startsWith('npub1')) {
+      return 'pubkey';
+    }
+    if (rawSignal.startsWith('note1') || rawSignal.startsWith('nevent1')) {
+      return 'eventId';
+    }
+  }
+
+  // Check for array (could be relay array)
+  if (Array.isArray(rawSignal)) {
+    if (rawSignal.length > 0 && typeof rawSignal[0] === 'string') {
+      if (rawSignal[0].startsWith('wss://') || rawSignal[0].startsWith('ws://')) {
+        return 'relay';
+      }
+    }
+  }
+
+  // Check for object with specific properties
+  if (typeof rawSignal === 'object') {
+    // Could be a wrapped value with type info
+    const obj = rawSignal as Record<string, unknown>;
+    if ('type' in obj && typeof obj.type === 'string') {
+      const declaredType = obj.type as string;
+      if (['event', 'eventId', 'pubkey', 'relay', 'flag', 'integer', 'datetime', 'relayStatus'].includes(declaredType)) {
+        return declaredType as TimelineDataType;
+      }
+    }
+  }
+
+  // Default to flag for unknown types
+  return 'flag';
+}
+
+// Helper to extract the actual data from raw signal
+function extractData(rawSignal: unknown, detectedType: TimelineDataType): unknown {
+  // For EventSignal, return the whole signal
+  if (detectedType === 'event' && typeof rawSignal === 'object' && rawSignal !== null && 'event' in rawSignal) {
+    return rawSignal;
+  }
+
+  // For relay status from MultiTypeRelayNode, return the signal
+  if (detectedType === 'relayStatus' && typeof rawSignal === 'object' && rawSignal !== null && 'relay' in rawSignal && 'status' in rawSignal) {
+    return rawSignal;
+  }
+
+  // For ConstantSignal format (has 'type' and 'value' properties)
+  if (typeof rawSignal === 'object' && rawSignal !== null && 'value' in rawSignal) {
+    return (rawSignal as { value: unknown }).value;
+  }
+
+  // For wrapped values with data property
+  if (typeof rawSignal === 'object' && rawSignal !== null && 'data' in rawSignal) {
+    return (rawSignal as { data: unknown }).data;
+  }
+
+  // Return as-is for primitive types
+  return rawSignal;
 }
 
 export class TimelineNode extends ClassicPreset.Node {
@@ -45,7 +127,6 @@ export class TimelineNode extends ClassicPreset.Node {
   height: number | undefined = undefined; // auto-calculated based on content
 
   private timelineName: string = 'Timeline';
-  private dataType: TimelineDataType = 'event';
 
   // Input observable (set by GraphEditor when connections change)
   private input$: Observable<unknown> | null = null;
@@ -57,7 +138,7 @@ export class TimelineNode extends ClassicPreset.Node {
   private eventCount = 0;
   private lastEventTime: number | null = null;
 
-  // Callback for when signals arrive
+  // Callback for when signals arrive (generic - detects type dynamically)
   private onSignal: ((signal: TimelineSignal) => void) | null = null;
 
   // For backward compatibility, also support EventSignal callback
@@ -66,31 +147,10 @@ export class TimelineNode extends ClassicPreset.Node {
   constructor() {
     super(i18next.t('nodes.timeline.title'));
 
-    this.addInput('input', new ClassicPreset.Input(eventSocket, 'Input'));
+    // Use anySocket to accept any type of input
+    this.addInput('input', new ClassicPreset.Input(anySocket, 'Input'));
 
-    // Data type selector
-    this.addControl(
-      'dataType',
-      new SelectControl(
-        this.dataType,
-        i18next.t('nodes.timeline.dataType', 'Type'),
-        [
-          { value: 'event', label: 'Event' },
-          { value: 'eventId', label: 'Event ID' },
-          { value: 'pubkey', label: 'Pubkey' },
-          { value: 'relay', label: 'Relay' },
-          { value: 'flag', label: 'Flag' },
-          { value: 'integer', label: 'Integer' },
-          { value: 'datetime', label: 'Datetime' },
-          { value: 'relayStatus', label: 'Relay Status' },
-        ],
-        (value) => {
-          this.dataType = value as TimelineDataType;
-          this.updateInputSocket();
-        }
-      )
-    );
-
+    // Timeline name control
     this.addControl(
       'name',
       new TextInputControl(
@@ -104,45 +164,26 @@ export class TimelineNode extends ClassicPreset.Node {
     );
   }
 
-  private updateInputSocket(): void {
-    this.removeInput('input');
-    const socket = getSocketForDataType(this.dataType);
-    this.addInput('input', new ClassicPreset.Input(socket, 'Input'));
-  }
-
   getTimelineName(): string {
     return this.timelineName;
-  }
-
-  getDataType(): TimelineDataType {
-    return this.dataType;
   }
 
   serialize() {
     return {
       timelineName: this.timelineName,
-      dataType: this.dataType,
     };
   }
 
-  deserialize(data: { timelineName: string; dataType?: TimelineDataType }) {
-    this.timelineName = data.timelineName;
-    this.dataType = data.dataType || 'event';
+  deserialize(data: { timelineName?: string }) {
+    this.timelineName = data.timelineName || 'Timeline';
 
     const nameControl = this.controls['name'] as TextInputControl;
     if (nameControl) {
       nameControl.value = this.timelineName;
     }
-
-    const dataTypeControl = this.controls['dataType'] as SelectControl;
-    if (dataTypeControl) {
-      dataTypeControl.value = this.dataType;
-    }
-
-    this.updateInputSocket();
   }
 
-  // Set the signal callback (generic)
+  // Set the signal callback (generic - type is detected dynamically)
   setOnTimelineSignal(callback: (signal: TimelineSignal) => void): void {
     this.onSignal = callback;
   }
@@ -175,16 +216,19 @@ export class TimelineNode extends ClassicPreset.Node {
         this.eventCount++;
         this.lastEventTime = Date.now();
 
+        // Detect the type dynamically
+        const detectedType = detectDataType(rawSignal);
+
         // For backward compatibility, call onEventSignal for event type
-        if (this.dataType === 'event' && this.onEventSignal) {
+        if (detectedType === 'event' && this.onEventSignal) {
           this.onEventSignal(rawSignal as EventSignal);
         }
 
         // Call the generic onSignal callback
         if (this.onSignal) {
           const timelineSignal: TimelineSignal = {
-            type: this.dataType,
-            data: rawSignal,
+            type: detectedType,
+            data: extractData(rawSignal, detectedType),
             signal: this.extractSignalType(rawSignal),
           };
           this.onSignal(timelineSignal);

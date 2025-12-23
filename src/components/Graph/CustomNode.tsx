@@ -26,6 +26,11 @@ const dispatchControlChange = (nodeId: string, rebuildPipeline: boolean = true) 
 function TextInputControlComponent({ control, nodeId }: { control: TextInputControl; nodeId: string }) {
   const [value, setValue] = useState(control.value);
 
+  // Sync local state when control value changes (e.g., when type changes and control is recreated)
+  useEffect(() => {
+    setValue(control.value);
+  }, [control.value]);
+
   return (
     <div className="control-wrapper">
       <label className="control-label">{control.label}</label>

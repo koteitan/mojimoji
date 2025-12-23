@@ -38,16 +38,37 @@ function getSocketForType(type: ConstantType): ClassicPreset.Socket {
   }
 }
 
-// Get default value for constant type
+// Get default value for constant type (synchronous)
 function getDefaultValue(type: ConstantType): string {
   switch (type) {
     case 'integer': return '0';
     case 'datetime': return new Date().toISOString();
     case 'flag': return '1';
     case 'relayStatus': return 'EOSE';
-    case 'relay': return 'wss://yabu.me\nwss://relay.damus.io';
+    case 'relay': {
+      // Check locale: yabu.me for ja, damus.io for others
+      const lang = i18next.language || navigator.language;
+      if (lang.startsWith('ja')) {
+        return 'wss://yabu.me';
+      }
+      return 'wss://relay.damus.io';
+    }
     default: return '';
   }
+}
+
+// Try to get NIP-07 pubkey (async)
+async function tryGetNip07Pubkey(): Promise<string> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nostr = (window as any).nostr;
+    if (nostr?.getPublicKey) {
+      return await nostr.getPublicKey();
+    }
+  } catch {
+    // NIP-07 not available or error
+  }
+  return '';
 }
 
 // Get placeholder for constant type
@@ -100,9 +121,23 @@ export class ConstantNode extends ClassicPreset.Node {
           this.rawValue = getDefaultValue(this.constantType);
           this.updateOutputSocket();
           this.updateValueControl();
-          this.emitValue();
           // Notify graph to re-render the node with new control
           window.dispatchEvent(new CustomEvent('graph-sockets-change', { detail: { nodeId: this.id } }));
+
+          // For pubkey type, try to get NIP-07 pubkey first before emitting
+          if (this.constantType === 'pubkey') {
+            tryGetNip07Pubkey().then(pubkey => {
+              if (this.constantType === 'pubkey') {
+                if (pubkey) {
+                  this.rawValue = pubkey;
+                  this.updateValueControl();
+                }
+                this.emitValue();
+              }
+            });
+          } else {
+            this.emitValue();
+          }
         }
       )
     );

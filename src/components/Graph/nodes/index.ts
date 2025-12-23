@@ -32,9 +32,10 @@ export {
   datetimeSocket,
   relayStatusSocket,
   triggerSocket,
+  anySocket,
   socketMap,
   getSocketByType,
 } from './types';
 export type { RelayStatusType } from './types';
-export type { FilterItem, RelayNodeControls, OperatorNodeControls, SearchNodeControls, TimelineNodeControls } from './types';
+export type { FilterItem, RelayNodeControls, OperatorNodeControls, SearchNodeControls } from './types';
 export { TextInputControl, TextAreaControl, SelectControl, CheckboxControl } from './controls';
