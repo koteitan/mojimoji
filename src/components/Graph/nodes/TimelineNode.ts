@@ -34,6 +34,11 @@ function detectDataType(rawSignal: unknown): TimelineDataType {
     return 'relayStatus';
   }
 
+  // Check for RelaySignal from ExtractionNode (has relay string and signal)
+  if (typeof rawSignal === 'object' && 'relay' in rawSignal && typeof (rawSignal as { relay: unknown }).relay === 'string') {
+    return 'relay';
+  }
+
   // Check for PubkeySignal (from NIP-07 node: { pubkey: string })
   if (typeof rawSignal === 'object' && 'pubkey' in rawSignal && typeof (rawSignal as { pubkey: unknown }).pubkey === 'string') {
     return 'pubkey';
@@ -114,6 +119,11 @@ function extractData(rawSignal: unknown, detectedType: TimelineDataType): unknow
   // For relay status from MultiTypeRelayNode, return the signal
   if (detectedType === 'relayStatus' && typeof rawSignal === 'object' && rawSignal !== null && 'relay' in rawSignal && 'status' in rawSignal) {
     return rawSignal;
+  }
+
+  // For RelaySignal from ExtractionNode, return the relay string
+  if (detectedType === 'relay' && typeof rawSignal === 'object' && rawSignal !== null && 'relay' in rawSignal) {
+    return (rawSignal as { relay: string }).relay;
   }
 
   // For PubkeySignal format (from NIP-07 node: { pubkey: string })

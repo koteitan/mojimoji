@@ -381,6 +381,18 @@ export function GraphEditor({
 
       saveCurrentGraph();
 
+      // Check if the changed node is a Timeline node and update its name
+      if (nodeId) {
+        const editor = editorRef.current;
+        if (editor) {
+          const node = editor.getNode(nodeId);
+          if (node && getNodeType(node) === 'Timeline') {
+            const timelineNode = node as TimelineNode;
+            onTimelineCreate(nodeId, timelineNode.getTimelineName());
+          }
+        }
+      }
+
       // Skip pipeline rebuild if not needed (e.g., display-only changes like timeline name)
       if (!shouldRebuild) return;
 
@@ -399,7 +411,7 @@ export function GraphEditor({
     return () => {
       window.removeEventListener('graph-control-change', handleControlChange);
     };
-  }, [saveCurrentGraph, findDownstreamTimelines]);
+  }, [saveCurrentGraph, findDownstreamTimelines, onTimelineCreate]);
 
   // Listen for socket changes to update the node visually
   useEffect(() => {
@@ -634,6 +646,20 @@ export function GraphEditor({
         const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
 
         countNode.setInput(input$);
+      }
+    }
+
+    // Wire up Extraction nodes
+    for (const node of nodes) {
+      if (getNodeType(node) === 'Extraction') {
+        const extractionNode = node as ExtractionNode;
+
+        const inputConn = connections.find(
+          (c: { target: string }) => c.target === node.id
+        );
+        const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+
+        extractionNode.setInput(input$ as Observable<EventSignal> | null);
       }
     }
 

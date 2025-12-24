@@ -34,7 +34,7 @@ export interface DatetimeSignal {
 }
 
 export interface RelaySignal {
-  relays: string[];
+  relay: string;
   signal: 'add' | 'remove';
 }
 
@@ -205,8 +205,7 @@ export class ExtractionNode extends ClassicPreset.Node {
         break;
 
       case '#r':
-        // Extract #r tags with optional filtering
-        const relays: string[] = [];
+        // Extract #r tags with optional filtering, emit each relay separately
         for (const tag of event.tags) {
           if (tag[0] === 'r' && tag[1]) {
             const url = tag[1];
@@ -229,12 +228,9 @@ export class ExtractionNode extends ClassicPreset.Node {
             }
 
             if (include) {
-              relays.push(url);
+              this.relaySubject.next({ relay: url, signal });
             }
           }
-        }
-        if (relays.length > 0) {
-          this.relaySubject.next({ relays, signal });
         }
         break;
     }

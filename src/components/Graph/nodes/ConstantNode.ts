@@ -1,5 +1,5 @@
 import { ClassicPreset } from 'rete';
-import { ReplaySubject, Observable, shareReplay } from 'rxjs';
+import { ReplaySubject, Observable, shareReplay, defer, from } from 'rxjs';
 import i18next from 'i18next';
 import {
   eventIdSocket,
@@ -94,7 +94,25 @@ export class ConstantNode extends ClassicPreset.Node {
 
   // Output observable - use ReplaySubject(1) and shareReplay(1) so late subscribers get the last value
   private outputSubject = new ReplaySubject<ConstantSignal>(1);
-  public output$: Observable<ConstantSignal> = this.outputSubject.asObservable().pipe(shareReplay(1));
+  private _baseOutput$: Observable<ConstantSignal> = this.outputSubject.asObservable().pipe(shareReplay(1));
+
+  // For relay type, store URLs to emit all on subscription
+  private relayUrls: string[] = [];
+
+  // Getter that returns appropriate observable based on type
+  public get output$(): Observable<ConstantSignal> {
+    if (this.constantType === 'relay') {
+      // For relay type, emit all stored URLs on each subscription
+      return defer(() => {
+        const signals = this.relayUrls.map(url => ({
+          type: 'relay' as ConstantType,
+          value: url,
+        }));
+        return from(signals);
+      });
+    }
+    return this._baseOutput$;
+  }
 
   constructor() {
     super(i18next.t('nodes.constant.title', 'Constant'));
@@ -280,10 +298,18 @@ export class ConstantNode extends ClassicPreset.Node {
 
   emitValue(): void {
     const value = this.parseValue();
-    this.outputSubject.next({
-      type: this.constantType,
-      value,
-    });
+
+    // For relay type with multiple URLs, store URLs for emission on subscription
+    if (this.constantType === 'relay' && Array.isArray(value)) {
+      this.relayUrls = value;
+      // Don't emit through subject - the getter handles relay type specially
+    } else {
+      this.relayUrls = [];
+      this.outputSubject.next({
+        type: this.constantType,
+        value,
+      });
+    }
   }
 
   getConstantType(): ConstantType {
