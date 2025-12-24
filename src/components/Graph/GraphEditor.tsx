@@ -44,7 +44,7 @@ import {
 } from '../../utils/localStorage';
 import { saveGraphToNostr, loadGraphByPath, loadGraphByEventId } from '../../nostr/graphStorage';
 import { extractContentWarning, decodeBech32ToHex, isHex64, type EventSignal, type TimelineItem } from '../../nostr/types';
-import type { Observable, Subscription } from 'rxjs';
+import { merge, type Observable, type Subscription } from 'rxjs';
 import { APP_VERSION } from '../../App';
 import './GraphEditor.css';
 
@@ -750,11 +750,21 @@ export function GraphEditor({
         const timelineNode = node as TimelineNode;
         const timelineNodeId = node.id;
 
-        // Find input connection
-        const inputConn = connections.find(
+        // Find ALL input connections (multiple sources can connect to the same input)
+        const inputConns = connections.filter(
           (c: { target: string; sourceOutput?: string }) => c.target === node.id
-        ) as { source: string; sourceOutput?: string } | undefined;
-        const input$ = inputConn ? getNodeOutput(inputConn.source, inputConn.sourceOutput) : null;
+        ) as Array<{ source: string; sourceOutput?: string }>;
+
+        // Merge all input observables
+        let input$: Observable<unknown> | null = null;
+        if (inputConns.length > 0) {
+          const observables = inputConns
+            .map(conn => getNodeOutput(conn.source, conn.sourceOutput))
+            .filter((obs): obs is Observable<unknown> => obs !== null);
+          if (observables.length > 0) {
+            input$ = observables.length === 1 ? observables[0] : merge(...observables);
+          }
+        }
 
         // Clear items only for specified timelines, or all if no specific ones
         const shouldClear = timelinesToClearRef.current === null ||

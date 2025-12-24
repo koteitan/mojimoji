@@ -185,3 +185,21 @@ export class SimpleFilterControl extends ClassicPreset.Control {
     this.onChange = onChange;
   }
 }
+
+// Toggle switch control for boolean values
+export class ToggleControl extends ClassicPreset.Control {
+  value: boolean;
+  label: string;
+  onChange: (value: boolean) => void;
+
+  constructor(
+    value: boolean,
+    label: string,
+    onChange: (value: boolean) => void
+  ) {
+    super();
+    this.value = value;
+    this.label = label;
+    this.onChange = onChange;
+  }
+}

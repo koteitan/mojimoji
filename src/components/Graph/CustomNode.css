@@ -302,6 +302,78 @@
   cursor: pointer;
 }
 
+/* Toggle switch styles */
+.toggle-control-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toggle-switch-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.toggle-label {
+  font-size: 12px;
+  color: #666;
+  min-width: 20px;
+  text-align: center;
+  transition: color 0.2s ease;
+}
+
+.toggle-label.active {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.toggle-switch {
+  position: relative;
+  width: 40px;
+  height: 20px;
+  background: #444;
+  border: 2px solid #555;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+  padding: 0;
+}
+
+.toggle-switch.on {
+  background: #22c55e;
+  border-color: #16a34a;
+}
+
+.toggle-switch.off {
+  background: #444;
+  border-color: #555;
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+}
+
+.toggle-switch.on .toggle-slider {
+  transform: translateX(20px);
+}
+
+.toggle-switch:hover {
+  border-color: #888;
+}
+
+.toggle-switch.on:hover {
+  border-color: #4ade80;
+}
+
 /* Mobile touch support */
 @media (max-width: 768px) {
   .custom-node {

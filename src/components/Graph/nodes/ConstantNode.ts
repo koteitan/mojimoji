@@ -11,7 +11,7 @@ import {
   relayStatusSocket,
 } from './types';
 import type { RelayStatusType } from './types';
-import { SelectControl, TextInputControl, TextAreaControl } from './controls';
+import { SelectControl, TextInputControl, TextAreaControl, ToggleControl } from './controls';
 
 // Constant value types
 export type ConstantType = 'integer' | 'datetime' | 'eventId' | 'pubkey' | 'relay' | 'flag' | 'relayStatus';
@@ -213,18 +213,14 @@ export class ConstantNode extends ClassicPreset.Node {
         break;
 
       case 'flag':
-        // Dropdown for flag (0 or 1)
+        // Toggle switch for flag
         this.addControl(
           'value',
-          new SelectControl(
-            this.rawValue || getDefaultValue('flag'),
+          new ToggleControl(
+            this.rawValue === '1',
             i18next.t('nodes.constant.value', 'Value'),
-            [
-              { value: '0', label: '0 (false)' },
-              { value: '1', label: '1 (true)' },
-            ],
             (value) => {
-              this.rawValue = value;
+              this.rawValue = value ? '1' : '0';
               this.emitValue();
             }
           )

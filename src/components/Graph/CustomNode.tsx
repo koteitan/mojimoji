@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Presets } from 'rete-react-plugin';
-import { TextInputControl, TextAreaControl, SelectControl, CheckboxControl, CheckboxGroupControl, FilterControl, SimpleFilterControl, FILTER_FIELDS, NOSTR_FILTER_FIELDS, type Filters, type FilterElement } from './nodes/controls';
+import { TextInputControl, TextAreaControl, SelectControl, CheckboxControl, CheckboxGroupControl, FilterControl, SimpleFilterControl, ToggleControl, FILTER_FIELDS, NOSTR_FILTER_FIELDS, type Filters, type FilterElement } from './nodes/controls';
 import './CustomNode.css';
 
 const { RefSocket } = Presets.classic;
@@ -166,6 +166,39 @@ function CheckboxControlComponent({ control, nodeId }: { control: CheckboxContro
         />
         {control.label}
       </label>
+    </div>
+  );
+}
+
+// Toggle switch control for flag values
+function ToggleControlComponent({ control, nodeId }: { control: ToggleControl; nodeId: string }) {
+  const [value, setValue] = useState(control.value);
+
+  // Sync when control value changes externally
+  useEffect(() => {
+    setValue(control.value);
+  }, [control.value]);
+
+  return (
+    <div className="control-wrapper toggle-control-wrapper">
+      <label className="control-label">{control.label}</label>
+      <div className="toggle-switch-container">
+        <span className={`toggle-label ${!value ? 'active' : ''}`}>off</span>
+        <button
+          className={`toggle-switch ${value ? 'on' : 'off'}`}
+          onClick={() => {
+            const newValue = !value;
+            setValue(newValue);
+            control.value = newValue;
+            control.onChange(newValue);
+            dispatchControlChange(nodeId);
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <span className="toggle-slider" />
+        </button>
+        <span className={`toggle-label ${value ? 'active' : ''}`}>on</span>
+      </div>
     </div>
   );
 }
@@ -446,6 +479,9 @@ function CustomControl({ data, nodeId }: { data: any; nodeId: string }) {
   }
   if (data instanceof CheckboxGroupControl) {
     return <CheckboxGroupControlComponent control={data} nodeId={nodeId} />;
+  }
+  if (data instanceof ToggleControl) {
+    return <ToggleControlComponent control={data} nodeId={nodeId} />;
   }
   // Fallback to classic control
   return <Presets.classic.Control data={data} />;
