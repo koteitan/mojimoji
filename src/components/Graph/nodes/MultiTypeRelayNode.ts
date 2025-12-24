@@ -19,7 +19,8 @@ import { FilterControl } from './controls';
 import type { Filters } from './controls';
 import type { NostrEvent, Profile, EventSignal } from '../../../nostr/types';
 import { decodeBech32ToHex, isHex64 } from '../../../nostr/types';
-import { getCachedProfile, findPubkeysByName } from './RelayNode';
+import { findPubkeysByName } from '../../../nostr/profileCache';
+import { ProfileFetcher } from '../../../nostr/ProfileFetcher';
 
 // Type for the result of createRxForwardReq with emit method
 type ForwardReq = ReturnType<typeof createRxForwardReq>;
@@ -101,13 +102,9 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
   private rxReq: ForwardReq | null = null;
   private subscription: { unsubscribe: () => void } | null = null;
 
-  // Profile updates
+  // Profile updates - uses ProfileFetcher for batching
   private profileSubject = new Subject<{ pubkey: string; profile: Profile }>();
-  private profileRxReq: ForwardReq | null = null;
-  private profileSubscription: { unsubscribe: () => void } | null = null;
-  private pendingProfiles = new Set<string>();
-  private profileBatchQueue: string[] = [];
-  private profileBatchTimer: ReturnType<typeof setTimeout> | null = null;
+  private profileFetcher: ProfileFetcher | null = null;
 
   // Connection monitoring
   private messageSubscription: { unsubscribe: () => void } | null = null;
@@ -485,7 +482,12 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
     this.rxNostr.setDefaultRelays(relayUrls);
 
     this.rxReq = createRxForwardReq(`multirelay-${this.id}`);
-    this.profileRxReq = createRxForwardReq(`profile-multi-${this.id}`);
+
+    // Profile fetcher for batching profile requests
+    this.profileFetcher = new ProfileFetcher(this.rxNostr, this.id);
+    this.profileFetcher.start((pubkey, profile) => {
+      this.profileSubject.next({ pubkey, profile });
+    });
 
     // Monitor messages
     this.messageSubscription = this.rxNostr.createAllMessageObservable().subscribe({
@@ -529,55 +531,13 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
       },
     });
 
-    // Profile batch handling
-    const flushProfileBatch = () => {
-      if (this.profileBatchQueue.length === 0) return;
-      const authors = [...this.profileBatchQueue];
-      this.profileBatchQueue = [];
-      this.profileRxReq?.emit({ kinds: [0], authors, limit: authors.length });
-    };
-
-    const queueProfileRequest = (pubkey: string) => {
-      if (getCachedProfile(pubkey) || this.pendingProfiles.has(pubkey)) return;
-      this.pendingProfiles.add(pubkey);
-      this.profileBatchQueue.push(pubkey);
-
-      if (this.profileBatchQueue.length >= 50) {
-        if (this.profileBatchTimer) {
-          clearTimeout(this.profileBatchTimer);
-          this.profileBatchTimer = null;
-        }
-        flushProfileBatch();
-      } else if (!this.profileBatchTimer) {
-        this.profileBatchTimer = setTimeout(() => {
-          this.profileBatchTimer = null;
-          flushProfileBatch();
-        }, 100);
-      }
-    };
-
     // Main event subscription
     this.subscription = this.rxNostr.use(this.rxReq).subscribe({
       next: (packet) => {
         const event = packet.event as NostrEvent;
         this.eventCount++;
         this.eventSubject.next({ event, signal: 'add' });
-        queueProfileRequest(event.pubkey);
-      },
-    });
-
-    // Profile subscription
-    this.profileSubscription = this.rxNostr.use(this.profileRxReq).subscribe({
-      next: (packet) => {
-        const event = packet.event as NostrEvent;
-        if (event.kind !== 0) return;
-        try {
-          const profile = JSON.parse(event.content) as Profile;
-          this.pendingProfiles.delete(event.pubkey);
-          this.profileSubject.next({ pubkey: event.pubkey, profile });
-        } catch {
-          // Ignore parse errors
-        }
+        this.profileFetcher?.queueRequest(event.pubkey);
       },
     });
 
@@ -593,9 +553,9 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
       this.subscription.unsubscribe();
       this.subscription = null;
     }
-    if (this.profileSubscription) {
-      this.profileSubscription.unsubscribe();
-      this.profileSubscription = null;
+    if (this.profileFetcher) {
+      this.profileFetcher.stop();
+      this.profileFetcher = null;
     }
     if (this.messageSubscription) {
       this.messageSubscription.unsubscribe();
@@ -610,13 +570,6 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
       this.rxNostr = null;
     }
     this.rxReq = null;
-    this.profileRxReq = null;
-    this.pendingProfiles.clear();
-    this.profileBatchQueue = [];
-    if (this.profileBatchTimer) {
-      clearTimeout(this.profileBatchTimer);
-      this.profileBatchTimer = null;
-    }
   }
 
   // Stop all subscriptions including trigger, relay input, and socket inputs
