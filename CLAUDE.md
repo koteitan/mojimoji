@@ -6,25 +6,15 @@
 # git rules
 - git add/commit/push only if I ask you to do so.
 - don't git restore/checkout/revert/add -A.
-- don't git add and commit at once.
-- commit messages is in the following format:
-```
-[short description]
-[empty line]
-- [change item 1]
-- [change item 2]
-```
-or
-```
-[short description]
-```
+- write commit messages in the following format:
 
-- commit message rules:
-  - the number of the change items should be MECE.
-    - don't write the redundant change items.
-    - Don't miss the necessary change items.
-    - use git diff when you make a commit message suggestion.
-  - commit message suggestion is written in commit-msg.txt.
+```
+Fix bugs: Timeline name update, ExtractionNode wiring, relay output
+
+- [TimelineNode] Update name in parent component when control value changes on blur
+- [ExtractionNode] Add input wiring in rebuildPipeline
+- [ConstantNode] Emit each relay URL separately on subscription
+```
 
 # development cycle
 - loop:
