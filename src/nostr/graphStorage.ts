@@ -372,14 +372,14 @@ export async function loadGraphByEventId(
       limit: 1,
     });
 
-    // Timeout after 10 seconds
+    // Timeout after 7 seconds
     setTimeout(() => {
       if (!resolved) {
         resolved = true;
         subscription.unsubscribe();
         resolve(null);
       }
-    }, 10000);
+    }, 7000);
   });
 }
 

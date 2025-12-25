@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Timeline } from './components/Timeline';
 import { GraphEditor } from './components/Graph/GraphEditor';
 import type { TimelineItem } from './nostr/types';
@@ -8,6 +8,7 @@ import './App.css';
 export const APP_VERSION = '0.10.3';
 
 const APP_NAME = '(.>_<)-(.>_<)-mojimoji: Nostr Modular Client';
+const LOADING_PREFIX = '(.>_<)-(.>_<)-loading ';
 
 interface TimelineData {
   id: string;
@@ -17,6 +18,27 @@ interface TimelineData {
 
 function App() {
   const [timelines, setTimelines] = useState<TimelineData[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingDots, setLoadingDots] = useState('* * *');
+
+  // Animate loading dots
+  useEffect(() => {
+    if (!isLoading) return;
+
+    const frames = ['*    ', '* *  ', '* * *', '  * *', '    *', '  * *', '* * *', '* *  '];
+    let frameIndex = 0;
+
+    const interval = setInterval(() => {
+      frameIndex = (frameIndex + 1) % frames.length;
+      setLoadingDots(frames[frameIndex]);
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, [isLoading]);
+
+  const handleLoadingChange = useCallback((loading: boolean) => {
+    setIsLoading(loading);
+  }, []);
 
   const handleTimelineCreate = useCallback((id: string, name: string) => {
     setTimelines(prev => {
@@ -41,7 +63,7 @@ function App() {
   return (
     <div className="app">
       <div className="title-bar">
-        {APP_NAME}
+        {isLoading ? LOADING_PREFIX + loadingDots : APP_NAME}
       </div>
       <div className="main-content">
         <div className="timeline-columns">
@@ -65,6 +87,7 @@ function App() {
             onTimelineCreate={handleTimelineCreate}
             onTimelineRemove={handleTimelineRemove}
             onItemsUpdate={handleItemsUpdate}
+            onLoadingChange={handleLoadingChange}
           />
         </div>
       </div>

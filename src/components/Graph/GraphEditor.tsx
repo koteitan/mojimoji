@@ -153,12 +153,14 @@ interface GraphEditorProps {
   onTimelineCreate: (id: string, name: string) => void;
   onTimelineRemove: (id: string) => void;
   onItemsUpdate: (id: string, items: TimelineItem[]) => void;
+  onLoadingChange?: (loading: boolean) => void;
 }
 
 export function GraphEditor({
   onTimelineCreate,
   onTimelineRemove,
   onItemsUpdate,
+  onLoadingChange,
 }: GraphEditorProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -2010,52 +2012,9 @@ export function GraphEditor({
       const hasPermalink = permalinkEventId !== null;
 
       // Load saved graph (skip if we have a permalink - will load from Nostr later)
-      const savedGraph = hasPermalink ? null : loadGraph();
-      if (savedGraph) {
-        await loadGraphDataRef.current?.(savedGraph);
-      } else {
-        // Create default graph when localStorage is empty
-        isLoadingRef.current = true;
-
-        // Create default Relay node (at top)
-        const relayNode = new RelayNode();
-        await editor.addNode(relayNode);
-        await area.translate(relayNode.id, { x: 100, y: 100 });
-
-        // Create default Timeline node (below Relay node - vertical arrangement)
-        const timelineNode = new TimelineNode();
-        await editor.addNode(timelineNode);
-        await area.translate(timelineNode.id, { x: 120, y: 650 });
-        onTimelineCreate(timelineNode.id, timelineNode.getTimelineName());
-
-        // Connect Relay node to Timeline node
-        const conn = new ClassicPreset.Connection(
-          relayNode,
-          'output' as never,
-          timelineNode,
-          'input' as never
-        );
-        await editor.addConnection(conn);
-
-        isLoadingRef.current = false;
-
-        // Save the default graph
-        saveCurrentGraph();
-
-        // Rebuild the Observable pipeline
-        setTimeout(() => rebuildPipelineRef.current?.(), 100);
-
-        // Fit view to show all nodes (delay to ensure DOM is ready)
-        setTimeout(async () => {
-          await AreaExtensions.zoomAt(area, editor.getNodes());
-          // Adjust for toolbar height (move view down)
-          const { x, y } = area.area.transform;
-          area.area.translate(x, y + 30);
-        }, 150);
-      }
-
-      // If we have a permalink, load from Nostr after editor is initialized
       if (hasPermalink && permalinkEventId) {
+        // Load from permalink - don't create default graph
+        onLoadingChange?.(true);
         setTimeout(async () => {
           try {
             console.log('Loading graph from permalink:', permalinkEventId);
@@ -2063,12 +2022,74 @@ export function GraphEditor({
             if (graphData) {
               await loadGraphDataRef.current?.(graphData);
             } else {
+              // Graph not found - show warning and leave empty
               console.error('Graph not found for event ID:', permalinkEventId);
+              window.alert(
+                'Graph not found.\n\n' +
+                'Possible reasons:\n' +
+                '- Network issue\n' +
+                '- Graph was overwritten\n' +
+                '- Graph was deleted'
+              );
             }
           } catch (err) {
             console.error('Failed to load graph from permalink:', err);
+            window.alert(
+              'Failed to load graph.\n\n' +
+              'Possible reasons:\n' +
+              '- Network issue\n' +
+              '- Graph was overwritten\n' +
+              '- Graph was deleted'
+            );
+          } finally {
+            onLoadingChange?.(false);
           }
         }, 500);
+      } else {
+        // No permalink - load from localStorage or create default
+        const savedGraph = loadGraph();
+        if (savedGraph) {
+          await loadGraphDataRef.current?.(savedGraph);
+        } else {
+          // Create default graph when localStorage is empty
+          isLoadingRef.current = true;
+
+          // Create default Relay node (at top)
+          const relayNode = new RelayNode();
+          await editor.addNode(relayNode);
+          await area.translate(relayNode.id, { x: 100, y: 100 });
+
+          // Create default Timeline node (below Relay node - vertical arrangement)
+          const timelineNode = new TimelineNode();
+          await editor.addNode(timelineNode);
+          await area.translate(timelineNode.id, { x: 120, y: 650 });
+          onTimelineCreate(timelineNode.id, timelineNode.getTimelineName());
+
+          // Connect Relay node to Timeline node
+          const conn = new ClassicPreset.Connection(
+            relayNode,
+            'output' as never,
+            timelineNode,
+            'input' as never
+          );
+          await editor.addConnection(conn);
+
+          isLoadingRef.current = false;
+
+          // Save the default graph
+          saveCurrentGraph();
+
+          // Rebuild the Observable pipeline
+          setTimeout(() => rebuildPipelineRef.current?.(), 100);
+
+          // Fit view to show all nodes (delay to ensure DOM is ready)
+          setTimeout(async () => {
+            await AreaExtensions.zoomAt(area, editor.getNodes());
+            // Adjust for toolbar height (move view down)
+            const { x, y } = area.area.transform;
+            area.area.translate(x, y + 30);
+          }, 150);
+        }
       }
     };
 
@@ -2101,7 +2122,7 @@ export function GraphEditor({
         areaRef.current.destroy();
       }
     };
-  }, [onTimelineCreate, onTimelineRemove, saveCurrentGraph]);
+  }, [onTimelineCreate, onTimelineRemove, onLoadingChange, saveCurrentGraph]);
 
   // Keyboard shortcuts - separate useEffect to access latest callbacks
   useEffect(() => {
