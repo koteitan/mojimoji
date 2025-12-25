@@ -221,14 +221,34 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
 
     this.relayInputSubscription = input.subscribe({
       next: (signal) => {
-        // Handle ConstantNode format { type: 'relay', value: string[] } or direct { relays: string[] }
-        const relays = signal.value ?? signal.relays ?? [];
-        const relayArray = Array.isArray(relays) ? relays : [relays];
+        // Handle various relay signal formats:
+        // - ConstantNode: { type: 'relay', value: string | string[] }
+        // - ExtractionNode: { relay: string, signal: 'add' | 'remove' }
+        // - Direct: { relays: string[] }
+        let relayArray: string[] = [];
+
+        if (typeof signal === 'string') {
+          // Direct string URL
+          relayArray = [signal];
+        } else if (signal.relay && typeof signal.relay === 'string') {
+          // ExtractionNode format: { relay: string }
+          relayArray = [signal.relay];
+        } else if (signal.value !== undefined) {
+          // ConstantNode format: { value: string | string[] }
+          relayArray = Array.isArray(signal.value) ? signal.value : [signal.value];
+        } else if (signal.relays) {
+          // Direct format: { relays: string[] }
+          relayArray = Array.isArray(signal.relays) ? signal.relays : [signal.relays];
+        }
 
         // Accumulate relay URLs from input
         for (const url of relayArray) {
           if (typeof url === 'string' && url.trim() && !this.relayUrls.includes(url)) {
             this.relayUrls.push(url);
+            // Emit idle status for newly added relay if subscription not yet started
+            if (!this.isSubscribed()) {
+              this.relayStatusSubject.next({ relay: url, status: 'idle' });
+            }
           }
         }
 
