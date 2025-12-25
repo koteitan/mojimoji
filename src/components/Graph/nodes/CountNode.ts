@@ -1,13 +1,14 @@
 import { ClassicPreset } from 'rete';
-import { Subject, Observable, share } from 'rxjs';
+import { ReplaySubject, Observable, shareReplay } from 'rxjs';
 import i18next from 'i18next';
 import {
-  eventSocket,
+  anySocket,
   integerSocket,
 } from './types';
 
 // Output signal type
 export interface IntegerSignal {
+  type: 'integer';
   value: number;
 }
 
@@ -25,20 +26,20 @@ export class CountNode extends ClassicPreset.Node {
   // Count value
   private count = 0;
 
-  // Output observable
-  private outputSubject = new Subject<IntegerSignal>();
-  public output$: Observable<IntegerSignal> = this.outputSubject.asObservable().pipe(share());
+  // Output observable - use ReplaySubject(1) so late subscribers get the last value
+  private outputSubject = new ReplaySubject<IntegerSignal>(1);
+  public output$: Observable<IntegerSignal> = this.outputSubject.asObservable().pipe(shareReplay(1));
 
   constructor() {
     super(i18next.t('nodes.count.title', 'Count'));
 
-    // Input socket (accepts event type)
-    this.addInput('input', new ClassicPreset.Input(eventSocket, 'Input'));
+    // Input socket (accepts any type)
+    this.addInput('input', new ClassicPreset.Input(anySocket, 'Input'));
     // Output socket (integer)
     this.addOutput('output', new ClassicPreset.Output(integerSocket, 'Count'));
 
     // Emit initial count (0)
-    this.outputSubject.next({ value: this.count });
+    this.outputSubject.next({ type: 'integer', value: this.count });
   }
 
   getCount(): number {
@@ -61,7 +62,7 @@ export class CountNode extends ClassicPreset.Node {
 
     // Reset count when input changes
     this.count = 0;
-    this.outputSubject.next({ value: this.count });
+    this.outputSubject.next({ type: 'integer', value: this.count });
 
     if (!this.input$) return;
 
@@ -69,7 +70,7 @@ export class CountNode extends ClassicPreset.Node {
       next: () => {
         // Increment count for each received input
         this.count++;
-        this.outputSubject.next({ value: this.count });
+        this.outputSubject.next({ type: 'integer', value: this.count });
       },
     });
   }
@@ -90,7 +91,7 @@ export class CountNode extends ClassicPreset.Node {
   deserialize(data: { count?: number }) {
     if (data.count !== undefined) {
       this.count = data.count;
-      this.outputSubject.next({ value: this.count });
+      this.outputSubject.next({ type: 'integer', value: this.count });
     }
   }
 }

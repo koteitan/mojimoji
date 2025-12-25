@@ -274,9 +274,23 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
     return true;
   }
 
+  // Check if all connected socket inputs have received values
+  private areAllSocketValuesReceived(): boolean {
+    for (const socketKey of this.currentSockets.keys()) {
+      // Only check sockets that are connected
+      if (this.socketSubscriptions.has(socketKey)) {
+        const values = this.socketValues.get(socketKey);
+        if (!values || values.length === 0) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
   // Try to start subscription if conditions are met
   private tryStartSubscription(): void {
-    if (this.triggerState && this.relayUrls.length > 0 && this.areAllInputsConnected() && !this.isSubscribed()) {
+    if (this.triggerState && this.relayUrls.length > 0 && this.areAllInputsConnected() && this.areAllSocketValuesReceived() && !this.isSubscribed()) {
       this.startSubscription();
     }
   }
@@ -294,10 +308,14 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
         const { field, value } = element;
         const socketKey = makeSocketKey(fi, ei);
         const socketValue = this.socketValues.get(socketKey);
+        const isSocketConnected = this.socketSubscriptions.has(socketKey);
 
         // Use socket value if connected, otherwise use attribute value
         if (socketValue && socketValue.length > 0) {
           this.applySocketValueToFilter(nostrFilter, field, socketValue);
+        } else if (isSocketConnected && (field === 'kinds' || field === 'authors' || field === 'ids' || field.startsWith('#'))) {
+          // Socket is connected but no value yet - include empty array to prevent matching all
+          nostrFilter[field] = [];
         } else if (value.trim()) {
           this.applyAttributeValueToFilter(nostrFilter, field, value);
         }
@@ -389,17 +407,18 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
       return;
     }
 
+    // Subscribe and store reference
     this.triggerSubscription = input.subscribe({
       next: (signal) => {
         // Handle both ConstantNode format { value: boolean } and FlagSignal format { flag: boolean }
         const flagValue = signal.value ?? signal.flag ?? false;
         this.triggerState = flagValue;
 
+        // Simply try to start when true, stop when false
+        // tryStartSubscription() already checks !isSubscribed(), so it's safe to call multiple times
         if (flagValue) {
-          // Trigger is true: try to start subscription (if relay URLs are ready)
           this.tryStartSubscription();
         } else {
-          // Trigger is false: stop subscription
           this.stopSubscription();
         }
       },
@@ -471,6 +490,9 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
             this.socketValues.set(socketKey, values);
           }
         }
+
+        // Try to start subscription when socket value is received
+        this.tryStartSubscription();
       },
     });
 
