@@ -1143,6 +1143,7 @@ export function GraphEditor({
     setTimeout(() => rebuildPipelineRef.current?.(), 100);
 
     // Restore view transform if available, otherwise fit view to show all nodes
+    // Then update all nodes to recalculate connection positions
     setTimeout(async () => {
       if (graphData.viewTransform) {
         // Restore saved view transform
@@ -1153,6 +1154,10 @@ export function GraphEditor({
         await AreaExtensions.zoomAt(area, editor.getNodes());
         const { x, y } = area.area.transform;
         area.area.translate(x, y + 30);
+      }
+      // Update all nodes to recalculate connection positions after view is set
+      for (const node of editor.getNodes()) {
+        await area.update('node', node.id);
       }
     }, 150);
 
@@ -2161,6 +2166,7 @@ export function GraphEditor({
         setTimeout(() => rebuildPipelineRef.current?.(), 100);
 
         // Restore view transform if available, otherwise fit view to show all nodes
+        // Then update all nodes to recalculate connection positions
         setTimeout(async () => {
           if (savedGraph.viewTransform) {
             // Restore saved view transform
@@ -2172,6 +2178,10 @@ export function GraphEditor({
             // Adjust for toolbar height (move view down)
             const { x, y } = area.area.transform;
             area.area.translate(x, y + 30);
+          }
+          // Update all nodes to recalculate connection positions after view is set
+          for (const node of editor.getNodes()) {
+            await area.update('node', node.id);
           }
         }, 150);
       } else {
@@ -2382,6 +2392,7 @@ export function GraphEditor({
 
               setTimeout(() => rebuildPipelineRef.current?.(), 100);
 
+              // Restore view transform and update node positions
               setTimeout(async () => {
                 if (graphData.viewTransform) {
                   area.area.zoom(graphData.viewTransform.k, 0, 0);
@@ -2390,6 +2401,10 @@ export function GraphEditor({
                   await AreaExtensions.zoomAt(area, editor.getNodes());
                   const { x, y } = area.area.transform;
                   area.area.translate(x, y + 30);
+                }
+                // Update all nodes to recalculate connection positions after view is set
+                for (const node of editor.getNodes()) {
+                  await area.update('node', node.id);
                 }
               }, 150);
 
