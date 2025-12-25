@@ -129,6 +129,20 @@ const areSocketsCompatible = (
   return output.socket.name === input.socket.name;
 };
 
+// Clear socket selection highlight styles
+const clearSocketSelection = (container: HTMLElement | null) => {
+  if (!container) return;
+  container.querySelectorAll('.socket-selected').forEach(el => {
+    el.classList.remove('socket-selected');
+    const innerSocket = el.querySelector('.custom-socket') as HTMLElement;
+    if (innerSocket) {
+      innerSocket.style.background = '';
+      innerSocket.style.borderColor = '';
+      innerSocket.style.boxShadow = '';
+    }
+  });
+};
+
 // Use 'any' to bypass strict Rete.js type constraints
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Schemes = any;
@@ -1356,17 +1370,7 @@ export function GraphEditor({
       selectedConnectionIdRef.current = null;
       pendingConnectionRef.current = null;
       // Clear socket selection highlight
-      if (container) {
-        container.querySelectorAll('.socket-selected').forEach(el => {
-          el.classList.remove('socket-selected');
-          const innerSocket = el.querySelector('.custom-socket') as HTMLElement;
-          if (innerSocket) {
-            innerSocket.style.background = '';
-            innerSocket.style.borderColor = '';
-            innerSocket.style.boxShadow = '';
-          }
-        });
-      }
+      clearSocketSelection(container);
       return;
     }
 
@@ -1862,61 +1866,49 @@ export function GraphEditor({
               const existingConnection = findConnectionBySocket(nodeId, socketKey, side);
 
               // Clear previous socket selection highlight
-              container.querySelectorAll('.socket-selected').forEach(el => {
-                el.classList.remove('socket-selected');
-                // Clear inline styles
-                const innerSocket = el.querySelector('.custom-socket') as HTMLElement;
-                if (innerSocket) {
-                  innerSocket.style.background = '';
-                  innerSocket.style.borderColor = '';
-                  innerSocket.style.boxShadow = '';
-                }
-              });
+              clearSocketSelection(container);
 
               if (pendingConnectionRef.current) {
                 // Second click - create connection
+                // Helper to create connection with validation
+                const tryCreateConnection = (
+                  sourceNodeId: string,
+                  sourceOutput: string,
+                  targetNodeId: string,
+                  targetInput: string
+                ) => {
+                  const sourceNode = editor.getNode(sourceNodeId);
+                  const targetNode = editor.getNode(targetNodeId);
+                  if (sourceNode && targetNode && sourceNodeId !== targetNodeId &&
+                      !connectionExists(sourceNodeId, sourceOutput, targetNodeId, targetInput) &&
+                      areSocketsCompatible(sourceNode as NodeTypes, sourceOutput, targetNode as NodeTypes, targetInput) &&
+                      !wouldCreateCycle(editor.getConnections(), sourceNodeId, targetNodeId)) {
+                    const conn = new ClassicPreset.Connection(
+                      sourceNode,
+                      sourceOutput as never,
+                      targetNode,
+                      targetInput as never
+                    );
+                    editor.addConnection(conn);
+                  }
+                };
+
                 if (pendingConnectionRef.current.side === 'output' && side === 'input') {
                   // Connect output -> input
-                  const sourceNode = editor.getNode(pendingConnectionRef.current.nodeId);
-                  const targetNode = editor.getNode(nodeId);
-                  const sourceOutput = pendingConnectionRef.current.socketKey;
-                  const targetInput = socketKey;
-                  const sourceNodeId = pendingConnectionRef.current.nodeId;
-                  const targetNodeId = nodeId;
-                  // Check for duplicate connection, socket compatibility, and cycle
-                  if (sourceNode && targetNode && sourceNodeId !== targetNodeId &&
-                      !connectionExists(sourceNodeId, sourceOutput, targetNodeId, targetInput) &&
-                      areSocketsCompatible(sourceNode as NodeTypes, sourceOutput, targetNode as NodeTypes, targetInput) &&
-                      !wouldCreateCycle(editor.getConnections(), sourceNodeId, targetNodeId)) {
-                    const conn = new ClassicPreset.Connection(
-                      sourceNode,
-                      sourceOutput as never,
-                      targetNode,
-                      targetInput as never
-                    );
-                    editor.addConnection(conn);
-                  }
+                  tryCreateConnection(
+                    pendingConnectionRef.current.nodeId,
+                    pendingConnectionRef.current.socketKey,
+                    nodeId,
+                    socketKey
+                  );
                 } else if (pendingConnectionRef.current.side === 'input' && side === 'output') {
-                  // Connect output -> input (reverse order)
-                  const sourceNode = editor.getNode(nodeId);
-                  const targetNode = editor.getNode(pendingConnectionRef.current.nodeId);
-                  const sourceOutput = socketKey;
-                  const targetInput = pendingConnectionRef.current.socketKey;
-                  const sourceNodeId = nodeId;
-                  const targetNodeId = pendingConnectionRef.current.nodeId;
-                  // Check for duplicate connection, socket compatibility, and cycle
-                  if (sourceNode && targetNode && sourceNodeId !== targetNodeId &&
-                      !connectionExists(sourceNodeId, sourceOutput, targetNodeId, targetInput) &&
-                      areSocketsCompatible(sourceNode as NodeTypes, sourceOutput, targetNode as NodeTypes, targetInput) &&
-                      !wouldCreateCycle(editor.getConnections(), sourceNodeId, targetNodeId)) {
-                    const conn = new ClassicPreset.Connection(
-                      sourceNode,
-                      sourceOutput as never,
-                      targetNode,
-                      targetInput as never
-                    );
-                    editor.addConnection(conn);
-                  }
+                  // Connect input <- output (reverse order)
+                  tryCreateConnection(
+                    nodeId,
+                    socketKey,
+                    pendingConnectionRef.current.nodeId,
+                    pendingConnectionRef.current.socketKey
+                  );
                 }
                 pendingConnectionRef.current = null;
                 selectedConnectionIdRef.current = null;
@@ -1941,16 +1933,7 @@ export function GraphEditor({
           pendingConnectionRef.current = null;
           selectedConnectionIdRef.current = null;
           // Clear socket selection highlight
-          container.querySelectorAll('.socket-selected').forEach(el => {
-            el.classList.remove('socket-selected');
-            // Clear inline styles
-            const innerSocket = el.querySelector('.custom-socket') as HTMLElement;
-            if (innerSocket) {
-              innerSocket.style.background = '';
-              innerSocket.style.borderColor = '';
-              innerSocket.style.boxShadow = '';
-            }
-          });
+          clearSocketSelection(container);
         }
       }, true); // Use capture phase to run before rete's handlers
 
