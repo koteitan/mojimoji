@@ -1,12 +1,19 @@
 {
   "toolbar": {
-    "relay": "+Relay",
+    "input": "+Input",
+    "simpleRelay": "Relay (Simple)",
+    "modularRelay": "Relay (Modular)",
+    "constant": "Constant",
+    "nip07": "NIP-07",
     "filter": "+Filter",
-    "operator": "+Operator",
-    "search": "+Search",
-    "language": "+Lang",
-    "nostrFilter": "+Nostr",
-    "timeline": "+Timeline",
+    "operator": "Operator",
+    "search": "Search",
+    "language": "Language",
+    "nostrFilter": "Nostr Filter",
+    "extraction": "Extraction",
+    "if": "If",
+    "count": "Count",
+    "output": "+Output",
     "center": "Center",
     "delete": "Delete",
     "save": "Save",
@@ -26,7 +33,8 @@
       "title": "Operator",
       "and": "AND",
       "or": "OR",
-      "diff": "A-B"
+      "diff": "A-B",
+      "dataType": "Data Type"
     },
     "search": {
       "title": "Search",
@@ -44,7 +52,65 @@
     },
     "timeline": {
       "title": "Timeline",
-      "name": "Timeline Name"
+      "name": "Timeline Name",
+      "dataType": "Input Type"
+    },
+    "modularRelay": {
+      "title": "Modular Relay",
+      "inputs": "Inputs",
+      "source": "Source",
+      "sourceAuto": "auto (NIP-07→kind:10002)",
+      "sourceManual": "Manual",
+      "relays": "Relay URLs (one per line)",
+      "filter": "Filters"
+    },
+    "extraction": {
+      "title": "Extraction",
+      "field": "Field",
+      "fieldEventId": "Event ID",
+      "fieldAuthor": "Author (pubkey)",
+      "fieldCreatedAt": "Created At",
+      "fieldTagE": "#e (referenced event)",
+      "fieldTagP": "#p (referenced pubkey)",
+      "fieldTagR": "#r (relay)",
+      "relayType": "Relay Type",
+      "relayTypeAll": "All",
+      "relayTypeRead": "With read",
+      "relayTypeWrite": "With write",
+      "relayTypeReadWrite": "With read and write"
+    },
+    "constant": {
+      "title": "Constant",
+      "type": "Type",
+      "typeInteger": "Integer",
+      "typeDatetime": "Datetime",
+      "typeEventId": "Event ID",
+      "typePubkey": "Pubkey",
+      "typeRelay": "Relay",
+      "typeFlag": "Flag",
+      "typeRelayStatus": "Relay Status",
+      "value": "Value",
+      "flagOn": "On (1)",
+      "flagOff": "Off (0)"
+    },
+    "nip07": {
+      "title": "NIP-07",
+      "description": "Get pubkey from NIP-07 extension"
+    },
+    "if": {
+      "title": "If",
+      "type": "Type",
+      "operator": "Comparison",
+      "integer": "Integer",
+      "datetime": "Datetime",
+      "eventId": "Event ID",
+      "pubkey": "Pubkey",
+      "relay": "Relay",
+      "flag": "Flag",
+      "relayStatus": "Relay Status"
+    },
+    "count": {
+      "title": "Count"
     }
   },
   "timeline": {

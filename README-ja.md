@@ -140,31 +140,56 @@ GitHub Actionsが自動的に：
 
 ```
 src/
-+-- main.tsx              # エントリーポイント
-+-- App.tsx               # メインアプリコンポーネント
++-- main.tsx                    # エントリーポイント
++-- App.tsx                     # メインアプリコンポーネント、バージョン情報
 +-- components/
 |   +-- Graph/
-|   |   +-- GraphEditor.tsx    # メイングラフエディタ
-|   |   +-- CustomNode.tsx     # ノードレンダラー
-|   |   +-- CustomSocket.tsx   # ソケットレンダラー
-|   |   +-- CustomConnection.tsx
+|   |   +-- GraphEditor.tsx     # メイングラフエディタ、ノード配線、パイプライン
+|   |   +-- GraphEditor.css     # グラフエディタスタイル
+|   |   +-- CustomNode.tsx      # ノードUIレンダラー、コントロールコンポーネント
+|   |   +-- CustomNode.css      # ノードスタイル（ソケット、コントロール、トグル）
+|   |   +-- CustomSocket.tsx    # ソケットレンダラー
+|   |   +-- CustomConnection.tsx # コネクションレンダラー
 |   |   +-- nodes/
-|   |       +-- RelayNode.ts   # リレー購読
-|   |       +-- OperatorNode.ts
-|   |       +-- SearchNode.ts
-|   |       +-- LanguageNode.ts
-|   |       +-- TimelineNode.ts
+|   |       +-- index.ts        # ノードエクスポート
+|   |       +-- types.ts        # ソケット型定義
+|   |       +-- controls.tsx    # コントロールクラス（TextInput, Select等）
+|   |       +-- RelayNode.ts    # シンプルリレーノード（直接設定）
+|   |       +-- MultiTypeRelayNode.ts  # モジュラーリレーノード（ソケット入力）
+|   |       +-- OperatorNode.ts # AND/OR/A-B 集合演算
+|   |       +-- SearchNode.ts   # キーワード/正規表現フィルタ
+|   |       +-- LanguageNode.ts # 言語検出フィルタ
+|   |       +-- NostrFilterNode.ts    # NIP-01フィルタパススルー
+|   |       +-- TimelineNode.ts # 動的型検出でイベント表示
+|   |       +-- ConstantNode.ts # 定数値出力（整数、pubkey等）
+|   |       +-- Nip07Node.ts    # NIP-07拡張機能pubkey
+|   |       +-- ExtractionNode.ts     # イベントからフィールド抽出
+|   |       +-- IfNode.ts       # 条件比較
+|   |       +-- CountNode.ts    # イベントカウンター
 |   +-- Timeline/
-|       +-- Timeline.tsx
-|       +-- TimelineItem.tsx
+|   |   +-- Timeline.tsx        # タイムラインパネルコンポーネント
+|   |   +-- Timeline.css        # タイムラインスタイル
+|   |   +-- TimelineItem.tsx    # 個別タイムラインアイテムレンダラー
+|   +-- Dialogs/
+|       +-- index.ts            # ダイアログエクスポート
+|       +-- SaveDialog.tsx      # 保存ダイアログ（Browser/Nostr/File）
+|       +-- LoadDialog.tsx      # 読込ダイアログ
+|       +-- PostDialog.tsx      # 投稿ダイアログ
 +-- i18n/
+|   +-- index.ts                # i18n初期化
 |   +-- locales/
-|       +-- en.json
-|       +-- ja.json
+|       +-- en.json             # 英語翻訳
+|       +-- ja.json             # 日本語翻訳
 +-- nostr/
-|   +-- types.ts
+|   +-- types.ts                # Nostrイベント/プロファイル型
+|   +-- client.ts               # RxNostrクライアントセットアップ
+|   +-- subscription.ts         # サブスクリプション管理
+|   +-- nip07.ts                # NIP-07ブラウザ拡張機能インターフェース
+|   +-- graphStorage.ts         # Nostrリレーへのグラフ保存/読込
+|   +-- profileCache.ts         # プロファイル(kind:0)キャッシュ（localStorage使用）
+|   +-- ProfileFetcher.ts       # バッチ処理プロファイル取得ユーティリティ
 +-- utils/
-    +-- localStorage.ts
+    +-- localStorage.ts         # localStorageへのグラフ保存/読込
 ```
 
 ### デバッグツール

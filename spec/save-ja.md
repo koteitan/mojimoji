@@ -94,7 +94,7 @@ mojimoji が使用する localStorage キー:
   "nodes": [
     {
       "id": "[node-id]",
-      "type": "Relay" | "Operator" | "Search" | "Language" | "NostrFilter" | "Timeline",
+      "type": "Relay" | "MultiTypeRelay" | "Operator" | "Search" | "Language" | "NostrFilter" | "Timeline" | "Constant" | "Nip07" | "Extraction" | "If" | "Count",
       "position": { "x": number, "y": number },
       "data": { ... }
     },
@@ -124,11 +124,28 @@ mojimoji が使用する localStorage キー:
 - ノードタイプ別のデータ形式:
   - Relay: `{ relaySource?: "auto" | "manual", relayUrls: string[], filters: Filters }`
     - relaySource: オプション、後方互換性のためデフォルトは "manual"
-  - Operator: `{ operation: "and" | "or" | "a-b" }`
+  - MultiTypeRelay: `{ filters: Filters }`
+    - filters: フィールドと値を持つフィルタ要素の配列
+  - Operator: `{ operation: "and" | "or" | "a-b", dataType?: string }`
+    - dataType: オプション、型付き操作用のソケットタイプ
   - Search: `{ searchText: string, exclude: boolean }`
   - Language: `{ language: string }`
   - NostrFilter: `{ filterElements: FilterElement[], exclude: boolean }`
   - Timeline: `{ timelineName: string }`
+    - timelineName: タイムラインの表示名
+    - 入力型は動的に検出（dataTypeフィールドなし）
+  - Constant: `{ constantType: string, rawValue: string }`
+    - constantType: "integer" | "datetime" | "eventId" | "pubkey" | "relay" | "flag" | "relayStatus"
+    - rawValue: 値の文字列表現
+  - Nip07: `{}`
+    - 永続データなし（pubkey は拡張機能から取得）
+  - Extraction: `{ extractionField: string, relayType?: string }`
+    - extractionField: "eventId" | "author" | "createdAt" | "#e" | "#p" | "#r"
+    - relayType: "all" | "read" | "write" | "readwrite"（#r フィールドのみ）
+  - If: `{ comparison: string }`
+    - comparison: "equal" | "notEqual" | "greaterThan" | "lessThan" | "greaterThanOrEqual" | "lessThanOrEqual"
+  - Count: `{}`
+    - 永続データなし（カウントは実行時の状態）
 - viewTransform: グラフエディタのビュー位置（パンとズーム）
   - x, y: パンオフセット（ピクセル単位）
   - k: ズーム倍率（1.0 = 100%）

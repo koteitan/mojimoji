@@ -140,31 +140,56 @@ GitHub Actions will automatically:
 
 ```
 src/
-+-- main.tsx              # Entry point
-+-- App.tsx               # Main app component
++-- main.tsx                    # Entry point
++-- App.tsx                     # Main app component, version info
 +-- components/
 |   +-- Graph/
-|   |   +-- GraphEditor.tsx    # Main graph editor
-|   |   +-- CustomNode.tsx     # Node renderer
-|   |   +-- CustomSocket.tsx   # Socket renderer
-|   |   +-- CustomConnection.tsx
+|   |   +-- GraphEditor.tsx     # Main graph editor, node wiring, pipeline
+|   |   +-- GraphEditor.css     # Graph editor styles
+|   |   +-- CustomNode.tsx      # Node UI renderer, control components
+|   |   +-- CustomNode.css      # Node styles (sockets, controls, toggle)
+|   |   +-- CustomSocket.tsx    # Socket renderer
+|   |   +-- CustomConnection.tsx # Connection renderer
 |   |   +-- nodes/
-|   |       +-- RelayNode.ts   # Relay subscription
-|   |       +-- OperatorNode.ts
-|   |       +-- SearchNode.ts
-|   |       +-- LanguageNode.ts
-|   |       +-- TimelineNode.ts
+|   |       +-- index.ts        # Node exports
+|   |       +-- types.ts        # Socket type definitions
+|   |       +-- controls.tsx    # Control classes (TextInput, Select, etc.)
+|   |       +-- RelayNode.ts    # Simple relay node (direct config)
+|   |       +-- MultiTypeRelayNode.ts  # Modular relay node (socket inputs)
+|   |       +-- OperatorNode.ts # AND/OR/A-B set operations
+|   |       +-- SearchNode.ts   # Keyword/regex filter
+|   |       +-- LanguageNode.ts # Language detection filter
+|   |       +-- NostrFilterNode.ts    # NIP-01 filter pass-through
+|   |       +-- TimelineNode.ts # Display events with dynamic type detection
+|   |       +-- ConstantNode.ts # Constant value output (int, pubkey, etc.)
+|   |       +-- Nip07Node.ts    # NIP-07 extension pubkey
+|   |       +-- ExtractionNode.ts     # Extract fields from events
+|   |       +-- IfNode.ts       # Conditional comparison
+|   |       +-- CountNode.ts    # Event counter
 |   +-- Timeline/
-|       +-- Timeline.tsx
-|       +-- TimelineItem.tsx
+|   |   +-- Timeline.tsx        # Timeline panel component
+|   |   +-- Timeline.css        # Timeline styles
+|   |   +-- TimelineItem.tsx    # Individual timeline item renderer
+|   +-- Dialogs/
+|       +-- index.ts            # Dialog exports
+|       +-- SaveDialog.tsx      # Save dialog (Browser/Nostr/File)
+|       +-- LoadDialog.tsx      # Load dialog
+|       +-- PostDialog.tsx      # Post dialog
 +-- i18n/
+|   +-- index.ts                # i18n initialization
 |   +-- locales/
-|       +-- en.json
-|       +-- ja.json
+|       +-- en.json             # English translations
+|       +-- ja.json             # Japanese translations
 +-- nostr/
-|   +-- types.ts
+|   +-- types.ts                # Nostr event/profile types
+|   +-- client.ts               # RxNostr client setup
+|   +-- subscription.ts         # Subscription management
+|   +-- nip07.ts                # NIP-07 browser extension interface
+|   +-- graphStorage.ts         # Save/load graphs to Nostr relays
+|   +-- profileCache.ts         # Profile (kind:0) caching with localStorage
+|   +-- ProfileFetcher.ts       # Batched profile fetching utility
 +-- utils/
-    +-- localStorage.ts
+    +-- localStorage.ts         # Graph save/load to localStorage
 ```
 
 ### Debug Tools

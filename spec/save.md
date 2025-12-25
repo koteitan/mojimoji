@@ -94,7 +94,7 @@ For manual saving, we will add:
   "nodes": [
     {
       "id": "[node-id]",
-      "type": "Relay" | "Operator" | "Search" | "Language" | "NostrFilter" | "Timeline",
+      "type": "Relay" | "MultiTypeRelay" | "Operator" | "Search" | "Language" | "NostrFilter" | "Timeline" | "Constant" | "Nip07" | "Extraction" | "If" | "Count",
       "position": { "x": number, "y": number },
       "data": { ... }
     },
@@ -124,11 +124,28 @@ For manual saving, we will add:
 - node data formats by type:
   - Relay: `{ relaySource?: "auto" | "manual", relayUrls: string[], filters: Filters }`
     - relaySource: optional, defaults to "manual" for backward compatibility
-  - Operator: `{ operation: "and" | "or" | "a-b" }`
+  - MultiTypeRelay: `{ filters: Filters }`
+    - filters: array of filter elements with field and value
+  - Operator: `{ operation: "and" | "or" | "a-b", dataType?: string }`
+    - dataType: optional, socket type for typed operations
   - Search: `{ searchText: string, exclude: boolean }`
   - Language: `{ language: string }`
   - NostrFilter: `{ filterElements: FilterElement[], exclude: boolean }`
   - Timeline: `{ timelineName: string }`
+    - timelineName: display name of the timeline
+    - input type is detected dynamically (no dataType field)
+  - Constant: `{ constantType: string, rawValue: string }`
+    - constantType: "integer" | "datetime" | "eventId" | "pubkey" | "relay" | "flag" | "relayStatus"
+    - rawValue: string representation of the value
+  - Nip07: `{}`
+    - no persistent data (pubkey is fetched from extension)
+  - Extraction: `{ extractionField: string, relayType?: string }`
+    - extractionField: "eventId" | "author" | "createdAt" | "#e" | "#p" | "#r"
+    - relayType: "all" | "read" | "write" | "readwrite" (for #r field only)
+  - If: `{ comparison: string }`
+    - comparison: "equal" | "notEqual" | "greaterThan" | "lessThan" | "greaterThanOrEqual" | "lessThanOrEqual"
+  - Count: `{}`
+    - no persistent data (count is runtime state)
 - viewTransform: graph editor view position (pan and zoom)
   - x, y: pan offset in pixels
   - k: zoom scale factor (1.0 = 100%)

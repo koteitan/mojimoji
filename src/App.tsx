@@ -1,18 +1,18 @@
 import { useState, useCallback } from 'react';
 import { Timeline } from './components/Timeline';
 import { GraphEditor } from './components/Graph/GraphEditor';
-import type { TimelineEvent } from './nostr/types';
+import type { TimelineItem } from './nostr/types';
 import './App.css';
 
 // Version: Update this on each deployment
-export const APP_VERSION = '0.9.3';
+export const APP_VERSION = '0.10.0';
 
 const APP_NAME = '(.>_<)-(.>_<)-mojimoji: Nostr Modular Client';
 
 interface TimelineData {
   id: string;
   name: string;
-  events: TimelineEvent[];
+  items: TimelineItem[];
 }
 
 function App() {
@@ -24,7 +24,7 @@ function App() {
       if (exists) {
         return prev.map(t => t.id === id ? { ...t, name } : t);
       }
-      return [...prev, { id, name, events: [] }];
+      return [...prev, { id, name, items: [] }];
     });
   }, []);
 
@@ -32,9 +32,9 @@ function App() {
     setTimelines(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  const handleEventsUpdate = useCallback((id: string, events: TimelineEvent[]) => {
+  const handleItemsUpdate = useCallback((id: string, items: TimelineItem[]) => {
     setTimelines(prev =>
-      prev.map(t => t.id === id ? { ...t, events } : t)
+      prev.map(t => t.id === id ? { ...t, items } : t)
     );
   }, []);
 
@@ -55,7 +55,7 @@ function App() {
               <Timeline
                 key={timeline.id}
                 name={timeline.name}
-                events={timeline.events}
+                items={timeline.items}
               />
             ))
           )}
@@ -64,7 +64,7 @@ function App() {
           <GraphEditor
             onTimelineCreate={handleTimelineCreate}
             onTimelineRemove={handleTimelineRemove}
-            onEventsUpdate={handleEventsUpdate}
+            onItemsUpdate={handleItemsUpdate}
           />
         </div>
       </div>

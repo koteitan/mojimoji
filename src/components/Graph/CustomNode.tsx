@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Presets } from 'rete-react-plugin';
-import { TextInputControl, TextAreaControl, SelectControl, CheckboxControl, FilterControl, SimpleFilterControl, FILTER_FIELDS, NOSTR_FILTER_FIELDS, type Filters, type FilterElement } from './nodes/controls';
+import { TextInputControl, TextAreaControl, SelectControl, CheckboxControl, CheckboxGroupControl, FilterControl, SimpleFilterControl, ToggleControl, FILTER_FIELDS, NOSTR_FILTER_FIELDS, type Filters, type FilterElement } from './nodes/controls';
 import './CustomNode.css';
 
 const { RefSocket } = Presets.classic;
@@ -25,6 +25,11 @@ const dispatchControlChange = (nodeId: string, rebuildPipeline: boolean = true) 
 // Changes are applied on blur (losing focus) for text inputs
 function TextInputControlComponent({ control, nodeId }: { control: TextInputControl; nodeId: string }) {
   const [value, setValue] = useState(control.value);
+
+  // Sync local state when control value changes (e.g., when type changes and control is recreated)
+  useEffect(() => {
+    setValue(control.value);
+  }, [control.value]);
 
   return (
     <div className="control-wrapper">
@@ -98,6 +103,22 @@ function TextAreaControlComponent({ control, nodeId }: { control: TextAreaContro
 // Select applies immediately since it's a single action
 function SelectControlComponent({ control, nodeId }: { control: SelectControl; nodeId: string }) {
   const [value, setValue] = useState(control.value);
+  const [, forceUpdate] = useState(0);
+
+  // Listen for control changes to update disabled state
+  useEffect(() => {
+    const handleControlChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.nodeId === nodeId) {
+        forceUpdate(n => n + 1);
+        setValue(control.value);
+      }
+    };
+    window.addEventListener('graph-control-change', handleControlChange);
+    return () => {
+      window.removeEventListener('graph-control-change', handleControlChange);
+    };
+  }, [control, nodeId]);
 
   return (
     <div className="control-wrapper">
@@ -105,6 +126,7 @@ function SelectControlComponent({ control, nodeId }: { control: SelectControl; n
       <select
         className="control-select"
         value={value}
+        disabled={control.disabled}
         onChange={(e) => {
           setValue(e.target.value);
           control.value = e.target.value;
@@ -144,6 +166,39 @@ function CheckboxControlComponent({ control, nodeId }: { control: CheckboxContro
         />
         {control.label}
       </label>
+    </div>
+  );
+}
+
+// Toggle switch control for flag values
+function ToggleControlComponent({ control, nodeId }: { control: ToggleControl; nodeId: string }) {
+  const [value, setValue] = useState(control.value);
+
+  // Sync when control value changes externally
+  useEffect(() => {
+    setValue(control.value);
+  }, [control.value]);
+
+  return (
+    <div className="control-wrapper toggle-control-wrapper">
+      <label className="control-label">{control.label}</label>
+      <div className="toggle-switch-container">
+        <span className={`toggle-label ${!value ? 'active' : ''}`}>off</span>
+        <button
+          className={`toggle-switch ${value ? 'on' : 'off'}`}
+          onClick={() => {
+            const newValue = !value;
+            setValue(newValue);
+            control.value = newValue;
+            control.onChange(newValue);
+            dispatchControlChange(nodeId);
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <span className="toggle-slider" />
+        </button>
+        <span className={`toggle-label ${value ? 'active' : ''}`}>on</span>
+      </div>
     </div>
   );
 }
@@ -223,7 +278,7 @@ function FilterControlComponent({ control, nodeId }: { control: FilterControl; n
           {filter.map((element, elementIndex) => (
             <div key={elementIndex} className="filter-element">
               <select
-                className="filter-field-select"
+                className={control.hideValues ? "filter-field-select-wide" : "filter-field-select"}
                 value={element.field}
                 onChange={(e) => updateElement(filterIndex, elementIndex, e.target.value, element.value)}
                 onBlur={commitChanges}
@@ -235,15 +290,17 @@ function FilterControlComponent({ control, nodeId }: { control: FilterControl; n
                   </option>
                 ))}
               </select>
-              <input
-                type="text"
-                className="filter-value-input"
-                value={element.value}
-                placeholder="value"
-                onChange={(e) => updateElement(filterIndex, elementIndex, element.field, e.target.value)}
-                onBlur={commitChanges}
-                onPointerDown={(e) => e.stopPropagation()}
-              />
+              {!control.hideValues && (
+                <input
+                  type="text"
+                  className="filter-value-input"
+                  value={element.value}
+                  placeholder="value"
+                  onChange={(e) => updateElement(filterIndex, elementIndex, element.field, e.target.value)}
+                  onBlur={commitChanges}
+                  onPointerDown={(e) => e.stopPropagation()}
+                />
+              )}
               {filter.length > 1 && (
                 <button
                   className="filter-element-remove-btn"
@@ -273,6 +330,40 @@ function FilterControlComponent({ control, nodeId }: { control: FilterControl; n
       >
         + Add Filter
       </button>
+    </div>
+  );
+}
+
+// Checkbox group control for multiple selections
+function CheckboxGroupControlComponent({ control, nodeId }: { control: CheckboxGroupControl; nodeId: string }) {
+  const [selected, setSelected] = useState<string[]>(control.selected);
+
+  const handleChange = (value: string, checked: boolean) => {
+    const newSelected = checked
+      ? [...selected, value]
+      : selected.filter((v) => v !== value);
+    setSelected(newSelected);
+    control.selected = newSelected;
+    control.onChange(newSelected);
+    dispatchControlChange(nodeId);
+  };
+
+  return (
+    <div className="control-wrapper checkbox-group-control">
+      <label className="control-label">{control.label}</label>
+      <div className="checkbox-group-options">
+        {control.options.map((opt) => (
+          <label key={opt.value} className="checkbox-group-option">
+            <input
+              type="checkbox"
+              checked={selected.includes(opt.value)}
+              onChange={(e) => handleChange(opt.value, e.target.checked)}
+              onPointerDown={(e) => e.stopPropagation()}
+            />
+            {opt.label}
+          </label>
+        ))}
+      </div>
     </div>
   );
 }
@@ -386,6 +477,12 @@ function CustomControl({ data, nodeId }: { data: any; nodeId: string }) {
   if (data instanceof CheckboxControl) {
     return <CheckboxControlComponent control={data} nodeId={nodeId} />;
   }
+  if (data instanceof CheckboxGroupControl) {
+    return <CheckboxGroupControlComponent control={data} nodeId={nodeId} />;
+  }
+  if (data instanceof ToggleControl) {
+    return <ToggleControlComponent control={data} nodeId={nodeId} />;
+  }
   // Fallback to classic control
   return <Presets.classic.Control data={data} />;
 }
@@ -432,6 +529,7 @@ export function CustomNode(props: Props) {
               className="custom-node-input"
               key={key}
               data-testid={`input-${key}`}
+              title={input.label || key}
             >
               <RefSocket
                 name="input-socket"
@@ -466,6 +564,7 @@ export function CustomNode(props: Props) {
               className="custom-node-output"
               key={key}
               data-testid={`output-${key}`}
+              title={output.label || key}
             >
               <RefSocket
                 name="output-socket"

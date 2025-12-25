@@ -1,24 +1,24 @@
-import { TimelineItem } from './TimelineItem';
-import type { TimelineEvent } from '../../nostr/types';
+import { TimelineGenericItemComponent } from './TimelineItem';
+import type { TimelineItem as TimelineItemData } from '../../nostr/types';
 import './Timeline.css';
 
 interface TimelineProps {
   name: string;
-  events: TimelineEvent[];
+  items: TimelineItemData[];
 }
 
-export function Timeline({ name, events }: TimelineProps) {
+export function Timeline({ name, items }: TimelineProps) {
   return (
     <div className="timeline">
       <div className="timeline-header">
         <h3>{name}</h3>
       </div>
       <div className="timeline-events">
-        {events.length === 0 ? (
-          <div className="timeline-empty">No events</div>
+        {items.length === 0 ? (
+          <div className="timeline-empty">No items</div>
         ) : (
-          events.map((event) => (
-            <TimelineItem key={event.event.id} event={event} />
+          items.map((item) => (
+            <TimelineGenericItemComponent key={item.id} item={item} />
           ))
         )}
       </div>

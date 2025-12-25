@@ -73,7 +73,7 @@ User Inrterface is as follows.
           - relay source: dropdown select
             - auto (NIP-07→kind:10002): fetch relay URLs from user's kind:10002 event via NIP-07 browser extension
             - manual: use the relay URL textarea below
-            - default: manual
+            - default: auto
             - fallback: manual (if no relay source is set in saved data)
           - relay URL list: multiple line text area (one URL per line)
             - used when relay source is manual, or when auto fails to fetch relays
@@ -189,23 +189,118 @@ User Inrterface is as follows.
             - when exclude is on: invert the result (pass events that do NOT match)
       - Timeline node:
         - input terminal:
-          - input (event signal)
+          - input (any type - detected dynamically)
         - attributes:
           - timeline name: string
         - behavior:
-          - receives event signals with 'add' or 'remove' type
-          - 'add' signal: adds event to timeline (if not duplicate)
-          - 'remove' signal: removes event from timeline (if present)
-          - out-of-order handling: if 'remove' arrives before 'add', the event ID is tracked in an excluded set, and subsequent 'add' for that event is ignored
+          - detects input data type dynamically from the connected output
+          - receives signals with 'add' or 'remove' type
+          - 'add' signal: adds item to timeline (if not duplicate)
+          - 'remove' signal: removes item from timeline (if present)
+          - out-of-order handling: if 'remove' arrives before 'add', the item ID is tracked in an excluded set
+          - type-specific rendering:
+            - event kind 0: profile summary (pubkey, name, about, picture)
+            - event kind 1: icon, name, display_name, content, datetime
+            - event kind others: event id string (bech32)
+            - event id: bech32 string
+            - pubkey: icon, name, display_name
+            - datetime: ISO 8601 string
+            - relay: URL strings (one per line)
+            - integer, flag, relay status: string representation
+      - data-class nodes:
+        - constant node:
+          - output terminal:
+            - output (type based on selection)
+          - attributes:
+            - type: dropdown select {integer, datetime, event id, pubkey, relay, flag, relay status}
+            - value: input field (format depends on type)
+              - integer: number input
+              - datetime: date/time input
+              - event id/pubkey: text input (hex or bech32)
+              - relay: textarea (one URL per line)
+              - flag: checkbox
+              - relay status: dropdown {idle, connecting, sub-stored, EOSE, sub-realtime, closed, error}
+          - behavior:
+            - outputs constant value based on type selection
+            - on change attributes: update value into default value
+              - default values:
+                - integer: 0
+                - datetime: current date/time
+                - event id
+                - pubkey: NIP-07 pubkey if available, else empty string
+                - relay: yabu.me (if locale is "ja"), else damus.io
+                - flag: true
+                - relay status: EOSE
+        - NIP-07 node:
+          - output terminal:
+            - output (pubkey)
+          - behavior:
+            - fetches pubkey from NIP-07 browser extension
+            - handles unavailable extension case
+        - extraction node:
+          - input terminal:
+            - input (event)
+          - output terminal:
+            - output (type based on selection)
+          - attributes:
+            - field: dropdown select {event id, author, created_at, #e, #p, #r}
+            - relay filter: dropdown {all, with read, with write, with read and write} (only for #r)
+          - behavior:
+            - extracts specified field from input events
+            - for #e/#p/#r: extracts from event tags
+        - multi type relay node (modular relay):
+          - input terminals:
+            - trigger (trigger type)
+            - relay (relay type)
+            - dynamic sockets based on filter elements (kinds, limit, since, until, ids, authors, #e, #p)
+          - output terminals:
+            - output (event)
+            - relayStatus (relay status) - emits connection state changes for each relay
+          - attributes:
+            - filter: structured filter UI (values come from input sockets)
+          - behavior:
+            - when trigger input receives 1, subscribe to relays with merged filter
+            - when trigger input receives 0, stop subscription
+            - filter values come from input sockets, not text input
+            - relay status output emits {relay: string, status: RelayStatusType} for each connection state change
+        - if node:
+          - input terminals:
+            - A (type based on type selection)
+            - B (same type as A)
+          - output terminal:
+            - output (flag)
+          - attributes:
+            - type: dropdown {integer, datetime, event id, pubkey, relay, flag, relay status}
+            - operator: dropdown:
+              - case integer, datetime {=, ≠, <, ≤, >, ≥}
+              - case event id, pubkey, relay, relay status, flag {=, ≠}
+          - behavior:
+            - default output is false (0) when no connection or no input
+            - calculates comparison when A or B is updated
+        - count node:
+          - input terminal:
+            - input (event)
+          - output terminal:
+            - output (integer)
+          - behavior:
+            - counts the number of input data received
+            - outputs current count on each input
     - edges:
       - edges are the connectors between nodes.
         - input: an output terminal of a node.
         - output: an input terminal of a node.
       - the edges has types:
         - event signals (nostr events with add/remove signal)
-        - relays
-        - npubs
+        - event id
+        - pubkey
+        - relay
+        - flag
+        - integer
+        - datetime
+        - relay status
+        - trigger
       - the edges are colored differently by types.
+      - only compatible socket types can be connected.
     - sockets (terminals):
       - shape: rounded thin rectangle (40px width x 12px height, 6px border-radius)
       - color: blue (#646cff) default, green (#4ade80) when selected
@@ -272,7 +367,7 @@ User Inrterface is as follows.
      - when no permalink and localStorage is empty:
        - create a default graph:
          - one Relay node: default settings, position (100, 100)
-         - one Timeline node: timeline name: "Timeline", position (120, 650)
+         - one Timeline node: position (120, 650)
          - arrangement: vertical (Relay on top, Timeline below)
          - one edge: connect the Relay node output to the Timeline node input.
 - centering: fit all nodes in view (same as Center button)
@@ -399,7 +494,14 @@ User Inrterface is as follows.
   │   │           ├── OperatorNode.ts
   │   │           ├── SearchNode.ts
   │   │           ├── LanguageNode.ts
-  │   │           └── TimelineNode.ts
+  │   │           ├── NostrFilterNode.ts
+  │   │           ├── TimelineNode.ts
+  │   │           ├── ConstantNode.ts
+  │   │           ├── Nip07Node.ts
+  │   │           ├── ExtractionNode.ts
+  │   │           ├── MultiTypeRelayNode.ts
+  │   │           ├── IfNode.ts
+  │   │           └── CountNode.ts
   │   ├── i18n/
   │   │   ├── index.ts
   │   │   └── locales/

@@ -1,12 +1,19 @@
 {
   "toolbar": {
-    "relay": "+リレー",
+    "input": "+入力",
+    "simpleRelay": "リレー(シンプル)",
+    "modularRelay": "リレー(モジュラー)",
+    "constant": "定数",
+    "nip07": "NIP-07",
     "filter": "+フィルタ",
-    "operator": "+演算",
-    "search": "+検索",
-    "language": "+言語",
-    "nostrFilter": "+Nostr",
-    "timeline": "+TL",
+    "operator": "演算",
+    "search": "検索",
+    "language": "言語",
+    "nostrFilter": "Nostrフィルタ",
+    "extraction": "抽出",
+    "if": "If",
+    "count": "カウント",
+    "output": "+出力",
     "center": "center",
     "delete": "del",
     "save": "保存",
@@ -26,7 +33,8 @@
       "title": "演算",
       "and": "AND",
       "or": "OR",
-      "diff": "A-B"
+      "diff": "A-B",
+      "dataType": "データタイプ"
     },
     "search": {
       "title": "検索",
@@ -44,7 +52,65 @@
     },
     "timeline": {
       "title": "タイムライン",
-      "name": "タイムライン名"
+      "name": "タイムライン名",
+      "dataType": "入力タイプ"
+    },
+    "modularRelay": {
+      "title": "モジュラーリレー",
+      "inputs": "入力",
+      "source": "ソース",
+      "sourceAuto": "auto (NIP-07→kind:10002)",
+      "sourceManual": "manual",
+      "relays": "リレーURL（1行に1つ）",
+      "filter": "フィルター"
+    },
+    "extraction": {
+      "title": "抽出",
+      "field": "フィールド",
+      "fieldEventId": "イベントID",
+      "fieldAuthor": "作者 (pubkey)",
+      "fieldCreatedAt": "作成日時",
+      "fieldTagE": "#e (参照イベント)",
+      "fieldTagP": "#p (参照pubkey)",
+      "fieldTagR": "#r (リレー)",
+      "relayType": "リレータイプ",
+      "relayTypeAll": "すべて",
+      "relayTypeRead": "読み取り可",
+      "relayTypeWrite": "書き込み可",
+      "relayTypeReadWrite": "読み書き可"
+    },
+    "constant": {
+      "title": "定数",
+      "type": "タイプ",
+      "typeInteger": "整数",
+      "typeDatetime": "日時",
+      "typeEventId": "イベントID",
+      "typePubkey": "公開鍵",
+      "typeRelay": "リレー",
+      "typeFlag": "フラグ",
+      "typeRelayStatus": "リレー状態",
+      "value": "値",
+      "flagOn": "オン (1)",
+      "flagOff": "オフ (0)"
+    },
+    "nip07": {
+      "title": "NIP-07",
+      "description": "NIP-07拡張から公開鍵を取得"
+    },
+    "if": {
+      "title": "If",
+      "type": "タイプ",
+      "operator": "比較",
+      "integer": "整数",
+      "datetime": "日時",
+      "eventId": "イベントID",
+      "pubkey": "公開鍵",
+      "relay": "リレー",
+      "flag": "フラグ",
+      "relayStatus": "リレー状態"
+    },
+    "count": {
+      "title": "カウント"
     }
   },
   "timeline": {
