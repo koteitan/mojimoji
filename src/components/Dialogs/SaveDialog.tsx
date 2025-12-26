@@ -38,7 +38,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
   const [userPubkey, setUserPubkey] = useState<string | null>(null);
   // Share dialog state (for Nostr saves)
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [savedEventId, setSavedEventId] = useState<string | null>(null);
+  const [savedPath, setSavedPath] = useState<string | null>(null);
 
   // Refresh data when dialog opens
   useEffect(() => {
@@ -214,9 +214,9 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
 
       const result = await onSave(destination, savePath, options);
 
-      // For Nostr saves, show share dialog with event ID
+      // For Nostr saves, show share dialog with path info
       if (destination === 'nostr' && typeof result === 'string') {
-        setSavedEventId(result);
+        setSavedPath(savePath);
         setShareDialogOpen(true);
         // Don't close the save dialog yet - let share dialog handle closing
       } else {
@@ -231,7 +231,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
 
   const handleShareDialogClose = useCallback(() => {
     setShareDialogOpen(false);
-    setSavedEventId(null);
+    setSavedPath(null);
     onClose();
   }, [onClose]);
 
@@ -259,12 +259,13 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
   if (!isOpen) return null;
 
   // Show share dialog if we just saved to Nostr
-  if (shareDialogOpen && savedEventId) {
+  if (shareDialogOpen && savedPath && userPubkey) {
     return (
       <ShareDialog
         isOpen={true}
         onClose={handleShareDialogClose}
-        eventId={savedEventId}
+        pubkey={userPubkey}
+        path={savedPath}
       />
     );
   }

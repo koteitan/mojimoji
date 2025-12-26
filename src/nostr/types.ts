@@ -86,6 +86,107 @@ export function isHex64(str: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(str.trim());
 }
 
+// NIP-19 naddr encoding (parameterized replaceable event address)
+// TLV format:
+// - Type 0 (special): 32 bytes - pubkey
+// - Type 1 (relay): string - relay URL (optional, can be multiple)
+// - Type 2 (identifier): string - d-tag
+// - Type 3 (kind): 4 bytes big-endian integer
+export function naddrEncode(kind: number, pubkey: string, dTag: string, relays?: string[]): string {
+  try {
+    const tlvData: number[] = [];
+
+    // Type 0: pubkey (32 bytes)
+    const pubkeyBytes: number[] = [];
+    for (let i = 0; i < pubkey.length; i += 2) {
+      pubkeyBytes.push(parseInt(pubkey.slice(i, i + 2), 16));
+    }
+    tlvData.push(0, 32, ...pubkeyBytes);
+
+    // Type 2: d-tag (identifier)
+    const dTagBytes = new TextEncoder().encode(dTag);
+    tlvData.push(2, dTagBytes.length, ...dTagBytes);
+
+    // Type 3: kind (4 bytes big-endian)
+    tlvData.push(3, 4,
+      (kind >> 24) & 0xff,
+      (kind >> 16) & 0xff,
+      (kind >> 8) & 0xff,
+      kind & 0xff
+    );
+
+    // Type 1: relays (optional)
+    if (relays) {
+      for (const relay of relays) {
+        const relayBytes = new TextEncoder().encode(relay);
+        tlvData.push(1, relayBytes.length, ...relayBytes);
+      }
+    }
+
+    const words = bech32.toWords(new Uint8Array(tlvData));
+    return bech32.encode('naddr', words, 1500);
+  } catch {
+    return '';
+  }
+}
+
+// NIP-19 naddr decoding
+export interface NaddrData {
+  kind: number;
+  pubkey: string;
+  dTag: string;
+  relays: string[];
+}
+
+export function naddrDecode(naddr: string): NaddrData | null {
+  try {
+    const trimmed = naddr.trim().toLowerCase();
+    if (!trimmed.startsWith('naddr1')) {
+      return null;
+    }
+
+    const decoded = bech32.decode(trimmed, 1500);
+    const data = bech32.fromWords(decoded.words);
+
+    let pubkey = '';
+    let dTag = '';
+    let kind = 0;
+    const relays: string[] = [];
+
+    let i = 0;
+    while (i < data.length) {
+      const type = data[i];
+      const length = data[i + 1];
+      const value = data.slice(i + 2, i + 2 + length);
+
+      switch (type) {
+        case 0: // pubkey
+          pubkey = Array.from(value).map(b => b.toString(16).padStart(2, '0')).join('');
+          break;
+        case 1: // relay
+          relays.push(new TextDecoder().decode(new Uint8Array(value)));
+          break;
+        case 2: // d-tag (identifier)
+          dTag = new TextDecoder().decode(new Uint8Array(value));
+          break;
+        case 3: // kind (4 bytes big-endian)
+          kind = (value[0] << 24) | (value[1] << 16) | (value[2] << 8) | value[3];
+          break;
+      }
+
+      i += 2 + length;
+    }
+
+    if (!pubkey || kind === 0) {
+      return null;
+    }
+
+    return { kind, pubkey, dTag, relays };
+  } catch {
+    return null;
+  }
+}
+
 // Parse date string to Unix timestamp (seconds)
 // Supports:
 // - Date only: YYYY-MM-DD, YYYY.MM.DD, YYYY/MM/DD (time defaults to 00:00:00)

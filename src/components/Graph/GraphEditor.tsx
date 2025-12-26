@@ -42,8 +42,8 @@ import {
   GRAPH_DATA_VERSION,
   type GraphData,
 } from '../../utils/localStorage';
-import { saveGraphToNostr, loadGraphByPath, loadGraphByEventId } from '../../nostr/graphStorage';
-import { extractContentWarning, decodeBech32ToHex, isHex64, type EventSignal, type TimelineItem } from '../../nostr/types';
+import { saveGraphToNostr, loadGraphByPath, loadGraphByEventId, loadGraphByNaddr } from '../../nostr/graphStorage';
+import { extractContentWarning, decodeBech32ToHex, isHex64, naddrDecode, type EventSignal, type TimelineItem } from '../../nostr/types';
 import { merge, type Observable, type Subscription } from 'rxjs';
 import { APP_VERSION } from '../../App';
 import './GraphEditor.css';
@@ -2256,45 +2256,66 @@ export function GraphEditor({
         return context;
       });
 
-      // Check for permalink query parameter first
+      // Check for permalink query parameters (?e= for nevent, ?a= for naddr)
       const urlParams = new URLSearchParams(window.location.search);
-      const rawPermalinkParam = urlParams.get('e');
+      const neventParam = urlParams.get('e');
+      const naddrParam = urlParams.get('a');
 
-      // Parse permalink parameter - supports both nevent (bech32) and hex formats
+      // Parse nevent parameter (legacy format - points to specific event)
       let permalinkEventId: string | null = null;
-      if (rawPermalinkParam) {
-        if (isHex64(rawPermalinkParam)) {
-          // Direct hex event ID
-          permalinkEventId = rawPermalinkParam;
-        } else if (rawPermalinkParam.startsWith('nevent1')) {
-          // bech32 nevent format
-          const decoded = decodeBech32ToHex(rawPermalinkParam);
+      if (neventParam) {
+        if (isHex64(neventParam)) {
+          permalinkEventId = neventParam;
+        } else if (neventParam.startsWith('nevent1')) {
+          const decoded = decodeBech32ToHex(neventParam);
           if (decoded && decoded.type === 'nevent') {
             permalinkEventId = decoded.hex;
           }
         }
       }
-      const hasPermalink = permalinkEventId !== null;
+
+      // Parse naddr parameter (new format - points to latest version)
+      let permalinkNaddr: { kind: number; pubkey: string; dTag: string; relays: string[] } | null = null;
+      if (naddrParam && naddrParam.startsWith('naddr1')) {
+        permalinkNaddr = naddrDecode(naddrParam);
+      }
+
+      const hasPermalink = permalinkEventId !== null || permalinkNaddr !== null;
 
       // Load saved graph (skip if we have a permalink - will load from Nostr later)
-      if (hasPermalink && permalinkEventId) {
+      if (hasPermalink) {
         // Load from permalink - don't create default graph
         onLoadingChange?.(true);
         setTimeout(async () => {
           try {
-            console.log('Loading graph from permalink:', permalinkEventId);
-            const graphData = await loadGraphByEventId(permalinkEventId);
+            let graphData: GraphData | null = null;
+
+            if (permalinkNaddr) {
+              // Load by naddr (kind + pubkey + d-tag) - gets latest version
+              graphData = await loadGraphByNaddr(
+                permalinkNaddr.kind,
+                permalinkNaddr.pubkey,
+                permalinkNaddr.dTag,
+                permalinkNaddr.relays.length > 0 ? permalinkNaddr.relays : undefined
+              );
+            } else if (permalinkEventId) {
+              // Load by event ID (legacy nevent format)
+              graphData = await loadGraphByEventId(permalinkEventId);
+            }
+
             if (graphData) {
               await loadGraphDataRef.current?.(graphData);
+              // Clear URL params after successful load (Issue #8)
+              // This prevents reload from overwriting user edits
+              window.history.replaceState(null, '', window.location.pathname);
             } else {
               // Graph not found - show warning and leave empty
-              console.error('Graph not found for event ID:', permalinkEventId);
               window.alert(
                 'Graph not found.\n\n' +
                 'Possible reasons:\n' +
                 '- Network issue\n' +
-                '- Graph was overwritten\n' +
-                '- Graph was deleted'
+                '- Graph was deleted\n' +
+                '- Author changed their relays'
               );
             }
           } catch (err) {
@@ -2303,8 +2324,8 @@ export function GraphEditor({
               'Failed to load graph.\n\n' +
               'Possible reasons:\n' +
               '- Network issue\n' +
-              '- Graph was overwritten\n' +
-              '- Graph was deleted'
+              '- Graph was deleted\n' +
+              '- Author changed their relays'
             );
           } finally {
             onLoadingChange?.(false);

@@ -1,29 +1,35 @@
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { eventIdToNevent } from '../../nostr/types';
+import { naddrEncode } from '../../nostr/types';
 import './Dialog.css';
+
+// Kind constant for mojimoji graphs (NIP-78)
+const KIND_APP_DATA = 30078;
+const GRAPH_PATH_PREFIX = 'mojimoji/graphs/';
 
 interface ShareDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  eventId: string;
+  pubkey: string;
+  path: string;
 }
 
-// Generate permalink URL from event ID (using nevent bech32 format)
-export function generatePermalink(eventId: string): string {
-  // Use the current origin for local development, or the production URL
+// Generate permalink URL using naddr (addressable event reference)
+// This always points to the latest version of the graph
+export function generatePermalink(pubkey: string, path: string): string {
   const baseUrl = window.location.origin + window.location.pathname;
-  const nevent = eventIdToNevent(eventId);
-  return `${baseUrl}?e=${nevent}`;
+  const dTag = GRAPH_PATH_PREFIX + path;
+  const naddr = naddrEncode(KIND_APP_DATA, pubkey, dTag);
+  return `${baseUrl}?a=${naddr}`;
 }
 
-export function ShareDialog({ isOpen, onClose, eventId }: ShareDialogProps) {
+export function ShareDialog({ isOpen, onClose, pubkey, path }: ShareDialogProps) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   // Track if mousedown started on overlay (for proper click-outside handling)
   const [mouseDownOnOverlay, setMouseDownOnOverlay] = useState(false);
 
-  const permalink = generatePermalink(eventId);
+  const permalink = generatePermalink(pubkey, path);
 
   const handleCopy = useCallback(async () => {
     try {

@@ -352,10 +352,10 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
 
   // Handle copy URL button click
   const handleCopyUrl = useCallback(async () => {
-    if (!selectedNostrGraph?.event?.id) return;
+    if (!selectedNostrGraph) return;
 
     try {
-      const permalink = generatePermalink(selectedNostrGraph.event.id);
+      const permalink = generatePermalink(selectedNostrGraph.pubkey, selectedNostrGraph.path);
       await navigator.clipboard.writeText(permalink);
       setUrlCopied(true);
       setTimeout(() => setUrlCopied(false), 2000);
@@ -686,7 +686,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
             <button
               className="dialog-button"
               onClick={handleCopyUrl}
-              disabled={!selectedNostrGraph?.event?.id}
+              disabled={!selectedNostrGraph}
             >
               {urlCopied ? t('dialogs.load.urlCopied') : t('dialogs.load.copyUrl')}
             </button>

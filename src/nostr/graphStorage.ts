@@ -431,6 +431,93 @@ export async function loadGraphByEventId(
   });
 }
 
+// Load a graph by naddr parameters (kind + pubkey + d-tag)
+// This always fetches the latest version of the addressable event
+export async function loadGraphByNaddr(
+  kind: number,
+  pubkey: string,
+  dTag: string,
+  relayHints?: string[]
+): Promise<GraphData | null> {
+  // Use relay hints if provided, otherwise use user's relays or well-known
+  let relays = relayHints?.filter(url => url.trim());
+  if (!relays || relays.length === 0) {
+    relays = await fetchUserRelays(pubkey);
+  }
+  if (relays.length === 0) {
+    relays = PERMALINK_RELAYS;
+  }
+
+  return new Promise((resolve) => {
+    const client = getRxNostr();
+    client.setDefaultRelays(relays!);
+
+    // Use backward strategy for one-shot queries
+    const rxReq = createRxBackwardReq();
+    let resolved = false;
+    let latestEvent: NostrEvent | null = null;
+
+    const subscription = client.use(rxReq).subscribe({
+      next: (packet) => {
+        const event = packet.event as NostrEvent;
+        // Verify it matches our query
+        const eventDTag = event.tags.find(t => t[0] === 'd');
+        if (event.kind === kind &&
+            event.pubkey === pubkey &&
+            eventDTag && eventDTag[1] === dTag) {
+          // Keep the newest event
+          if (!latestEvent || event.created_at > latestEvent.created_at) {
+            latestEvent = event;
+          }
+        }
+      },
+      error: () => {
+        if (!resolved) {
+          resolved = true;
+          resolveWithEvent();
+        }
+      },
+      complete: () => {
+        // EOSE received - resolve with the latest event
+        if (!resolved) {
+          resolved = true;
+          resolveWithEvent();
+        }
+      },
+    });
+
+    function resolveWithEvent() {
+      if (latestEvent) {
+        try {
+          const graphData = JSON.parse(latestEvent.content) as GraphData;
+          resolve(graphData);
+        } catch {
+          resolve(null);
+        }
+      } else {
+        resolve(null);
+      }
+    }
+
+    rxReq.emit({
+      kinds: [kind],
+      authors: [pubkey],
+      '#d': [dTag],
+      limit: 1,
+    }, { relays: relays! });
+    rxReq.over();
+
+    // Timeout after 7 seconds
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        subscription.unsubscribe();
+        resolveWithEvent();
+      }
+    }, 7000);
+  });
+}
+
 // Delete graph from Nostr relay (NIP-09)
 export async function deleteGraphFromNostr(
   path: string,
