@@ -1912,14 +1912,15 @@ export function GraphEditor({
 
       // Helper to highlight a socket
       const highlightSocket = (container: HTMLElement, color: 'green' | 'blue') => {
-        container.classList.add('socket-selected');
         const innerSocket = container.querySelector('.custom-socket') as HTMLElement;
         if (innerSocket) {
           if (color === 'green') {
+            container.classList.add('socket-selected');
             innerSocket.style.background = '#4ade80';
             innerSocket.style.borderColor = '#22c55e';
             innerSocket.style.boxShadow = '0 0 8px rgba(34, 197, 94, 0.6)';
           } else {
+            container.classList.add('socket-target');
             innerSocket.style.background = '#60a5fa';
             innerSocket.style.borderColor = '#3b82f6';
             innerSocket.style.boxShadow = '0 0 8px rgba(59, 130, 246, 0.6)';
@@ -1927,8 +1928,9 @@ export function GraphEditor({
         }
       };
 
-      // Helper to unhighlight a socket (but not clear selection)
+      // Helper to unhighlight a target socket (clears blue highlight)
       const unhighlightSocket = (container: HTMLElement) => {
+        container.classList.remove('socket-target');
         const innerSocket = container.querySelector('.custom-socket') as HTMLElement;
         if (innerSocket && !container.classList.contains('socket-selected')) {
           innerSocket.style.background = '';
@@ -1958,10 +1960,7 @@ export function GraphEditor({
 
         if (!tempConnectionLine) {
           tempConnectionLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          tempConnectionLine.setAttribute('stroke', '#4ade80');
-          tempConnectionLine.setAttribute('stroke-width', '3');
-          tempConnectionLine.setAttribute('fill', 'none');
-          tempConnectionLine.setAttribute('stroke-dasharray', '8,4');
+          tempConnectionLine.classList.add('temp-connection-line');
           tempConnectionLine.style.pointerEvents = 'none';
           tempConnectionSvg.appendChild(tempConnectionLine);
         }

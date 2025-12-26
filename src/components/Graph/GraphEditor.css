@@ -125,12 +125,26 @@
   position: relative !important;
 }
 
-/* Enlarged clickable area (4x height, extends into socket intervals) */
-.socket::before,
-.custom-socket::before {
+/* Enlarged clickable area - extends OUTSIDE the node only */
+/* Input sockets (at top): extend upward */
+.custom-node-input .socket::before,
+.custom-node-input .custom-socket::before {
   content: '';
   position: absolute;
-  top: -18px;
+  bottom: 0;
+  left: -8px;
+  width: calc(100% + 16px);
+  height: 48px;
+  cursor: crosshair;
+  z-index: 99;
+}
+
+/* Output sockets (at bottom): extend downward */
+.custom-node-output .socket::before,
+.custom-node-output .custom-socket::before {
+  content: '';
+  position: absolute;
+  top: 0;
   left: -8px;
   width: calc(100% + 16px);
   height: 48px;
@@ -147,6 +161,13 @@
 .connection path,
 svg path {
   stroke: #646cff !important;
+  stroke-width: 3px !important;
+  fill: none !important;
+}
+
+/* Temp connection line during drag (green, same as selected socket) */
+.temp-connection-line {
+  stroke: #4ade80 !important;
   stroke-width: 3px !important;
   fill: none !important;
 }
