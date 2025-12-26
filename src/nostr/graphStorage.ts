@@ -1,7 +1,7 @@
 // Nostr Graph Storage - Save/Load graphs to/from Nostr relays
 // Uses NIP-78 (kind:30078) for application-specific data
 
-import { createRxNostr, createRxForwardReq } from 'rx-nostr';
+import { createRxNostr, createRxBackwardReq } from 'rx-nostr';
 import type { RxNostr } from 'rx-nostr';
 import { verifier } from '@rx-nostr/crypto';
 import { getPubkey, signEvent, isNip07Available } from './nip07';
@@ -29,7 +29,13 @@ let rxNostr: RxNostr | null = null;
 
 function getRxNostr(): RxNostr {
   if (!rxNostr) {
-    rxNostr = createRxNostr({ verifier });
+    rxNostr = createRxNostr({
+      verifier,
+      // Performance optimizations
+      eoseTimeout: 3000,        // Wait max 3 seconds for EOSE (default is longer)
+      skipFetchNip11: true,     // Skip fetching relay information
+      skipExpirationCheck: true, // Skip NIP-40 expiration check for faster processing
+    });
   }
   return rxNostr;
 }
@@ -51,7 +57,8 @@ export async function fetchUserRelays(pubkey: string): Promise<string[]> {
     const client = getRxNostr();
     client.setDefaultRelays(WELL_KNOWN_RELAYS);
 
-    const rxReq = createRxForwardReq();
+    // Use backward strategy for one-shot queries
+    const rxReq = createRxBackwardReq();
     const relays: string[] = [];
     let resolved = false;
 
@@ -66,6 +73,7 @@ export async function fetchUserRelays(pubkey: string): Promise<string[]> {
               relays.push(tag[1]);
             }
           }
+          // Resolve immediately when we get the relay list
           if (!resolved) {
             resolved = true;
             subscription.unsubscribe();
@@ -79,6 +87,13 @@ export async function fetchUserRelays(pubkey: string): Promise<string[]> {
           resolve([]);
         }
       },
+      complete: () => {
+        // EOSE received - resolve with whatever relays we found
+        if (!resolved) {
+          resolved = true;
+          resolve(relays);
+        }
+      },
     });
 
     // Emit filter for relay list
@@ -86,16 +101,17 @@ export async function fetchUserRelays(pubkey: string): Promise<string[]> {
       kinds: [KIND_RELAY_LIST],
       authors: [pubkey],
       limit: 1,
-    });
+    }, { relays: WELL_KNOWN_RELAYS });
+    rxReq.over();
 
-    // Timeout after 5 seconds
+    // Fallback timeout after 3 seconds
     setTimeout(() => {
       if (!resolved) {
         resolved = true;
         subscription.unsubscribe();
         resolve(relays);
       }
-    }, 5000);
+    }, 3000);
   });
 }
 
@@ -204,7 +220,8 @@ export async function loadGraphsFromNostr(
     const client = getRxNostr();
     client.setDefaultRelays(relays!);
 
-    const rxReq = createRxForwardReq();
+    // Use backward strategy - completes on EOSE instead of waiting for timeout
+    const rxReq = createRxBackwardReq();
     // Use Map to deduplicate events by d-tag (addressable event identifier)
     const eventsMap = new Map<string, NostrEvent>();
     let resolved = false;
@@ -230,6 +247,13 @@ export async function loadGraphsFromNostr(
           resolve(parseGraphEvents(Array.from(eventsMap.values()), userPubkey));
         }
       },
+      complete: () => {
+        // EOSE received from all relays - resolve immediately
+        if (!resolved) {
+          resolved = true;
+          resolve(parseGraphEvents(Array.from(eventsMap.values()), userPubkey));
+        }
+      },
     });
 
     // Build filter based on type
@@ -246,16 +270,19 @@ export async function loadGraphsFromNostr(
       nostrFilter['#public'] = [''];
     }
 
-    rxReq.emit(nostrFilter as { kinds: number[]; limit: number });
+    // Emit with relay specification for backward strategy
+    rxReq.emit(nostrFilter as { kinds: number[]; limit: number }, { relays: relays! });
+    // Signal that no more REQs will be emitted
+    rxReq.over();
 
-    // Timeout after 10 seconds
+    // Fallback timeout after 5 seconds (in case EOSE never arrives)
     setTimeout(() => {
       if (!resolved) {
         resolved = true;
         subscription.unsubscribe();
         resolve(parseGraphEvents(Array.from(eventsMap.values()), userPubkey));
       }
-    }, 10000);
+    }, 5000);
   });
 }
 
@@ -277,7 +304,8 @@ export async function loadGraphByPath(
     const client = getRxNostr();
     client.setDefaultRelays(relays!);
 
-    const rxReq = createRxForwardReq();
+    // Use backward strategy for one-shot queries
+    const rxReq = createRxBackwardReq();
     let resolved = false;
 
     const subscription = client.use(rxReq).subscribe({
@@ -303,6 +331,13 @@ export async function loadGraphByPath(
           resolve(null);
         }
       },
+      complete: () => {
+        // EOSE received without finding the graph
+        if (!resolved) {
+          resolved = true;
+          resolve(null);
+        }
+      },
     });
 
     rxReq.emit({
@@ -310,7 +345,8 @@ export async function loadGraphByPath(
       authors: [pubkey],
       '#d': [GRAPH_PATH_PREFIX + path],
       limit: 1,
-    });
+    }, { relays: relays! });
+    rxReq.over();
 
     // Timeout after 5 seconds
     setTimeout(() => {
@@ -339,7 +375,8 @@ export async function loadGraphByEventId(
     const client = getRxNostr();
     client.setDefaultRelays(PERMALINK_RELAYS);
 
-    const rxReq = createRxForwardReq();
+    // Use backward strategy for one-shot queries
+    const rxReq = createRxBackwardReq();
     let resolved = false;
 
     const subscription = client.use(rxReq).subscribe({
@@ -364,13 +401,21 @@ export async function loadGraphByEventId(
           resolve(null);
         }
       },
+      complete: () => {
+        // EOSE received without finding the graph
+        if (!resolved) {
+          resolved = true;
+          resolve(null);
+        }
+      },
     });
 
     rxReq.emit({
       kinds: [KIND_APP_DATA],
       ids: [eventId],
       limit: 1,
-    });
+    }, { relays: PERMALINK_RELAYS });
+    rxReq.over();
 
     // Timeout after 7 seconds
     setTimeout(() => {
@@ -605,7 +650,8 @@ export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<numbe
     const client = getRxNostr();
     client.setDefaultRelays(relays!);
 
-    const rxReq = createRxForwardReq();
+    // Use backward strategy for one-shot queries
+    const rxReq = createRxBackwardReq();
     const profiles: Record<string, Profile> = {};
     let resolved = false;
 
@@ -634,13 +680,22 @@ export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<numbe
           resolve(Object.keys(profiles).length);
         }
       },
+      complete: () => {
+        // EOSE received - resolve with profiles collected
+        if (!resolved) {
+          resolved = true;
+          updateProfileCache(profiles);
+          resolve(Object.keys(profiles).length);
+        }
+      },
     });
 
     // Emit filter for recent profiles
     rxReq.emit({
       kinds: [0],
       limit: 500,
-    });
+    }, { relays: relays! });
+    rxReq.over();
 
     // Timeout after 5 seconds
     setTimeout(() => {
