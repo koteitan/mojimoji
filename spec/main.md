@@ -313,6 +313,39 @@ User Inrterface is as follows.
     - connection deletion:
       - click on socket with existing connection: select connection
       - press Delete/Backspace or click Delete button: delete selected connection
+    - drag-to-connect (state machine):
+      - on load: set the state to idle
+      - on idle state:
+        - on mouse press on socket:
+          - turn the socket color green
+          - select the socket
+          - go to pressing state
+      - on pressing state:
+        - on mouse release on the same socket:
+          - keep the socket selected
+          - go to idle state
+        - on mouse drag out of the socket:
+          - start to draw a pipe from the socket to the mouse pointer
+          - go to dragging state
+      - on dragging state:
+        - on mouse release on the same socket:
+          - keep the socket selected
+          - go to idle state
+        - on mouse release on empty space:
+          - keep the socket selected
+          - go to idle state
+        - on mouse drag over a target socket:
+          - highlight the target socket (blue)
+        - on mouse drag out of the target socket:
+          - unhighlight the target socket
+        - on mouse release on the target socket:
+          - connect the pipe from the source socket to the target socket
+          - clear selection
+          - go to idle state
+      - visual feedback:
+        - source socket: green highlight during drag
+        - target socket: blue highlight when hovered
+        - temporary pipe: solid green line from source socket to mouse pointer
 
 ## Behavior
 ### graph editor navigation

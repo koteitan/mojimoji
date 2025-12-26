@@ -198,6 +198,22 @@ export function GraphEditor({
   // State for dropdown menus
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
   const [inputDropdownOpen, setInputDropdownOpen] = useState(false);
+  const inputDropdownRef = useRef<HTMLDivElement>(null);
+  const filterDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (inputDropdownOpen && inputDropdownRef.current && !inputDropdownRef.current.contains(event.target as Node)) {
+        setInputDropdownOpen(false);
+      }
+      if (filterDropdownOpen && filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
+        setFilterDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [inputDropdownOpen, filterDropdownOpen]);
 
   // State for save/load/post dialogs
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
@@ -2028,6 +2044,28 @@ export function GraphEditor({
           selectorRef.current.unselectAll();
         }
 
+        // Check if there's a pending connection (click-to-connect)
+        const pending = pendingConnectionRef.current;
+        if (pending && (pending.nodeId !== socketInfo.nodeId || pending.socketKey !== socketInfo.socketKey)) {
+          // Try to connect the two sockets
+          let connected = false;
+          if (pending.side === 'output' && socketInfo.side === 'input') {
+            tryCreateConnection(pending.nodeId, pending.socketKey, socketInfo.nodeId, socketInfo.socketKey);
+            connected = true;
+          } else if (pending.side === 'input' && socketInfo.side === 'output') {
+            tryCreateConnection(socketInfo.nodeId, socketInfo.socketKey, pending.nodeId, pending.socketKey);
+            connected = true;
+          }
+          if (connected) {
+            // Clear selection after successful connection
+            pendingConnectionRef.current = null;
+            selectedConnectionIdRef.current = null;
+            clearSocketSelection(container);
+            dragState = 'idle';
+            return;
+          }
+        }
+
         // Check if this socket has a connection
         const existingConnection = findConnectionBySocket(socketInfo.nodeId, socketInfo.socketKey, socketInfo.side);
 
@@ -2462,7 +2500,7 @@ export function GraphEditor({
   return (
     <div className="graph-editor">
       <div className="graph-toolbar">
-        <div className="filter-dropdown">
+        <div className="filter-dropdown" ref={inputDropdownRef}>
           <button onClick={() => setInputDropdownOpen(!inputDropdownOpen)}>
             {t('toolbar.input', '+Input')} ▼
           </button>
@@ -2475,7 +2513,7 @@ export function GraphEditor({
             </div>
           )}
         </div>
-        <div className="filter-dropdown">
+        <div className="filter-dropdown" ref={filterDropdownRef}>
           <button onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}>
             {t('toolbar.filter')} ▼
           </button>
@@ -2501,7 +2539,14 @@ export function GraphEditor({
         <div className="toolbar-separator" />
         <button onClick={() => setPostDialogOpen(true)}>{t('toolbar.post')}</button>
       </div>
-      <div ref={containerRef} className="graph-editor-container" />
+      <div
+        ref={containerRef}
+        className="graph-editor-container"
+        onClick={() => {
+          setInputDropdownOpen(false);
+          setFilterDropdownOpen(false);
+        }}
+      />
       <div className="footer-info">
         <span className="version-info">v{APP_VERSION} ({BUILD_TIMESTAMP})</span>
         <a
