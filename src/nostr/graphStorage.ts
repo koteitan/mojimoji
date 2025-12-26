@@ -17,12 +17,14 @@ const KIND_DELETE = 5;
 // Graph path prefix
 const GRAPH_PATH_PREFIX = 'mojimoji/graphs/';
 
-// Well-known relays for fetching user metadata
-const WELL_KNOWN_RELAYS = [
-  'wss://relay.damus.io',
-  'wss://relay.nostr.band',
-  'wss://nos.lol',
-];
+// Get bootstrap relay based on browser locale
+function getBootstrapRelay(): string[] {
+  const lang = typeof navigator !== 'undefined' ? navigator.language : 'en';
+  if (lang.startsWith('ja')) {
+    return ['wss://yabu.me'];
+  }
+  return ['wss://relay.damus.io'];
+}
 
 // Singleton rx-nostr instance for graph storage
 let rxNostr: RxNostr | null = null;
@@ -55,7 +57,7 @@ export interface NostrGraphItem {
 export async function fetchUserRelays(pubkey: string): Promise<string[]> {
   return new Promise((resolve) => {
     const client = getRxNostr();
-    client.setDefaultRelays(WELL_KNOWN_RELAYS);
+    client.setDefaultRelays(getBootstrapRelay());
 
     // Use backward strategy for one-shot queries
     const rxReq = createRxBackwardReq();
@@ -101,7 +103,7 @@ export async function fetchUserRelays(pubkey: string): Promise<string[]> {
       kinds: [KIND_RELAY_LIST],
       authors: [pubkey],
       limit: 1,
-    }, { relays: WELL_KNOWN_RELAYS });
+    }, { relays: getBootstrapRelay() });
     rxReq.over();
 
     // Fallback timeout after 3 seconds
@@ -209,11 +211,12 @@ export async function loadGraphsFromNostr(
 
   // For 'public', use well-known relays if not specified
   if (filter === 'public' && (!relays || relays.length === 0)) {
-    relays = WELL_KNOWN_RELAYS;
+    relays = getBootstrapRelay();
   }
 
+  // For 'mine' and 'by-author', require relays from user's relay list
   if (!relays || relays.length === 0) {
-    relays = WELL_KNOWN_RELAYS;
+    throw new Error('No relay URLs available. Please configure your relay list (kind:10002).');
   }
 
   return new Promise((resolve) => {
@@ -297,7 +300,7 @@ export async function loadGraphByPath(
     relays = await fetchUserRelays(pubkey);
   }
   if (relays.length === 0) {
-    relays = WELL_KNOWN_RELAYS;
+    relays = getBootstrapRelay();
   }
 
   return new Promise((resolve) => {
@@ -431,7 +434,8 @@ export async function loadGraphByEventId(
 // Delete graph from Nostr relay (NIP-09)
 export async function deleteGraphFromNostr(
   path: string,
-  relayUrls?: string[]
+  relayUrls?: string[],
+  eventId?: string
 ): Promise<void> {
   if (!isNip07Available()) {
     throw new Error('NIP-07 extension not available');
@@ -447,14 +451,22 @@ export async function deleteGraphFromNostr(
     throw new Error('No relay URLs available for deletion');
   }
 
+  // Build deletion tags (NIP-09)
+  const tags: string[][] = [
+    ['a', `${KIND_APP_DATA}:${pubkey}:${GRAPH_PATH_PREFIX}${path}`],
+    ['k', String(KIND_APP_DATA)],
+  ];
+
+  // Add event ID reference if provided (better relay compatibility)
+  if (eventId) {
+    tags.unshift(['e', eventId]);
+  }
+
   // Create deletion event (NIP-09)
   const unsignedEvent: UnsignedEvent = {
     kind: KIND_DELETE,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [
-      ['a', `${KIND_APP_DATA}:${pubkey}:${GRAPH_PATH_PREFIX}${path}`],
-      ['k', String(KIND_APP_DATA)],
-    ],
+    tags,
     content: '',
   };
 
@@ -643,7 +655,7 @@ export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<numbe
     }
   }
   if (!relays || relays.length === 0) {
-    relays = WELL_KNOWN_RELAYS;
+    relays = getBootstrapRelay();
   }
 
   return new Promise((resolve) => {

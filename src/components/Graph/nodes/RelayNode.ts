@@ -359,7 +359,6 @@ export class RelayNode extends ClassicPreset.Node {
       next: (packet) => {
         if (packet.type === 'EOSE') {
           this.eoseReceived = true;
-          console.log(`[RelayNode ${this.id.slice(0, 8)}] EOSE received from ${packet.from}`);
         } else if (packet.type === 'CLOSED') {
           console.warn(`[RelayNode ${this.id.slice(0, 8)}] CLOSED received from ${packet.from}: ${(packet as { notice?: string }).notice || 'no reason'}`);
         }
@@ -368,8 +367,8 @@ export class RelayNode extends ClassicPreset.Node {
 
     // Monitor connection state changes
     this.connectionStateSubscription = this.rxNostr.createConnectionStateObservable().subscribe({
-      next: (packet) => {
-        console.log(`[RelayNode ${this.id.slice(0, 8)}] Connection state: ${packet.from} -> ${packet.state}`);
+      next: (_packet) => {
+        // Connection state monitoring (no logging)
       },
     });
 

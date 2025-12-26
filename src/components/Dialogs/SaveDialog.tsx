@@ -154,7 +154,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
     setGraphName(name);
   }, []);
 
-  const handleDeleteGraph = useCallback(async (e: React.MouseEvent, path: string, name: string) => {
+  const handleDeleteGraph = useCallback(async (e: React.MouseEvent, path: string, name: string, eventId?: string) => {
     e.stopPropagation();
     if (confirm(t('dialogs.load.confirmDeleteGraph', { name }))) {
       if (destination === 'local') {
@@ -163,7 +163,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
       } else if (destination === 'nostr') {
         try {
           const relays = relayUrls.split('\n').filter(url => url.trim());
-          await deleteGraphFromNostr(path, relays.length > 0 ? relays : undefined);
+          await deleteGraphFromNostr(path, relays.length > 0 ? relays : undefined, eventId);
           // Reload Nostr graphs
           const graphs = await loadGraphsFromNostr('mine');
           setNostrGraphs(graphs);
@@ -394,7 +394,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                           </span>
                           <button
                             className="item-delete"
-                            onClick={(e) => handleDeleteGraph(e, item.path, item.name)}
+                            onClick={(e) => handleDeleteGraph(e, item.path, item.name, nostrItem?.event?.id)}
                             title={t('dialogs.load.deleteGraph')}
                           >
                             ×

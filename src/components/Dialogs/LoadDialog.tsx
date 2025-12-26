@@ -239,7 +239,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
     e.stopPropagation();
     if (confirm(t('dialogs.load.confirmDeleteGraph', { name: item.name }))) {
       try {
-        await deleteGraphFromNostr(item.path);
+        await deleteGraphFromNostr(item.path, undefined, item.event?.id);
         // Reload graphs
         const graphs = await loadGraphsFromNostr(nostrFilter, nostrFilter === 'by-author' ? authorPubkey! : undefined);
         setNostrGraphs(graphs);
