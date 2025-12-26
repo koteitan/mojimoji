@@ -112,7 +112,7 @@
   border-bottom: 1px solid #333;
 }
 
-/* Socket styles - rounded thin rectangle */
+/* Socket styles - rounded thin rectangle with enlarged clickable area */
 .socket,
 .custom-socket {
   width: 40px !important;
@@ -123,6 +123,19 @@
   cursor: crosshair !important;
   z-index: 100 !important;
   position: relative !important;
+}
+
+/* Enlarged clickable area (4x height, extends into socket intervals) */
+.socket::before,
+.custom-socket::before {
+  content: '';
+  position: absolute;
+  top: -18px;
+  left: -8px;
+  width: calc(100% + 16px);
+  height: 48px;
+  cursor: crosshair;
+  z-index: 99;
 }
 
 .socket:hover,

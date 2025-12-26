@@ -1441,8 +1441,7 @@ export function GraphEditor({
       const connection = new ConnectionPlugin<Schemes, AreaExtra>();
       const render = new ReactPlugin<Schemes, AreaExtra>({ createRoot });
 
-      // Don't add connection presets - we handle connections manually via click-to-connect
-      // This prevents pseudo-connection visual artifacts
+      // Don't use classic preset - we implement custom drag-to-connect
 
 
       // Set up render presets with custom node, connection, and socket
@@ -1468,6 +1467,52 @@ export function GraphEditor({
       editor.use(area);
       area.use(connection);
       area.use(render);
+
+      // Validate connections before they are created (socket type compatibility + cycle detection)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      editor.addPipe((context: any) => {
+        if (context.type === 'connectioncreate') {
+          const { data } = context;
+          const sourceNode = editor.getNode(data.source);
+          const targetNode = editor.getNode(data.target);
+
+          if (!sourceNode || !targetNode) return context;
+
+          // Check socket compatibility
+          if (!areSocketsCompatible(
+            sourceNode as NodeTypes,
+            data.sourceOutput,
+            targetNode as NodeTypes,
+            data.targetInput
+          )) {
+            console.log('[Connection] Blocked: incompatible socket types');
+            return; // Block connection
+          }
+
+          // Check for cycles
+          const existingConnections = editor.getConnections().map(c => ({
+            source: c.source,
+            target: c.target,
+          }));
+          if (wouldCreateCycle(existingConnections, data.source, data.target)) {
+            console.log('[Connection] Blocked: would create cycle');
+            return; // Block connection
+          }
+
+          // Check for duplicate connections
+          const isDuplicate = editor.getConnections().some(c =>
+            c.source === data.source &&
+            c.sourceOutput === data.sourceOutput &&
+            c.target === data.target &&
+            c.targetInput === data.targetInput
+          );
+          if (isDuplicate) {
+            console.log('[Connection] Blocked: duplicate connection');
+            return; // Block connection
+          }
+        }
+        return context;
+      });
 
       // Configure connection path for vertical flow (top to bottom)
       // Custom transformer that creates vertical bezier curves
@@ -1810,7 +1855,15 @@ export function GraphEditor({
       });
       AreaExtensions.simpleNodesOrder(area);
 
-      // Track socket interactions for manual connection creation and selection
+      // ========================================
+      // Custom drag-to-connect state machine
+      // ========================================
+      // States: 'idle' | 'pressing' | 'dragging'
+      let dragState: 'idle' | 'pressing' | 'dragging' = 'idle';
+      let dragSourceSocket: { nodeId: string; socketKey: string; side: 'input' | 'output'; element: HTMLElement } | null = null;
+      let dragStartPos: { x: number; y: number } | null = null;
+      let dragCurrentTarget: HTMLElement | null = null;
+      let tempConnectionLine: SVGPathElement | null = null;
       let lastPointerDownOnSocket = false;
 
       // Function to find connection by socket
@@ -1834,110 +1887,285 @@ export function GraphEditor({
         );
       };
 
+      // Helper to get socket info from element
+      const getSocketInfo = (element: HTMLElement): { nodeId: string; socketKey: string; side: 'input' | 'output'; container: HTMLElement } | null => {
+        const inputSocket = element.closest('.custom-node-input') as HTMLElement | null;
+        const outputSocket = element.closest('.custom-node-output') as HTMLElement | null;
+        if (!inputSocket && !outputSocket) return null;
+
+        const nodeElement = element.closest('.custom-node') as HTMLElement | null;
+        if (!nodeElement) return null;
+
+        const nodeId = nodeElement.getAttribute('data-node-id');
+        if (!nodeId) return null;
+
+        const side = outputSocket ? 'output' : 'input';
+        const socketContainer = (outputSocket || inputSocket)!;
+        const testId = socketContainer.getAttribute('data-testid');
+        let socketKey = side;
+        if (testId && testId.includes('-')) {
+          socketKey = testId.substring(testId.indexOf('-') + 1);
+        }
+
+        return { nodeId, socketKey, side, container: socketContainer };
+      };
+
+      // Helper to highlight a socket
+      const highlightSocket = (container: HTMLElement, color: 'green' | 'blue') => {
+        container.classList.add('socket-selected');
+        const innerSocket = container.querySelector('.custom-socket') as HTMLElement;
+        if (innerSocket) {
+          if (color === 'green') {
+            innerSocket.style.background = '#4ade80';
+            innerSocket.style.borderColor = '#22c55e';
+            innerSocket.style.boxShadow = '0 0 8px rgba(34, 197, 94, 0.6)';
+          } else {
+            innerSocket.style.background = '#60a5fa';
+            innerSocket.style.borderColor = '#3b82f6';
+            innerSocket.style.boxShadow = '0 0 8px rgba(59, 130, 246, 0.6)';
+          }
+        }
+      };
+
+      // Helper to unhighlight a socket (but not clear selection)
+      const unhighlightSocket = (container: HTMLElement) => {
+        const innerSocket = container.querySelector('.custom-socket') as HTMLElement;
+        if (innerSocket && !container.classList.contains('socket-selected')) {
+          innerSocket.style.background = '';
+          innerSocket.style.borderColor = '';
+          innerSocket.style.boxShadow = '';
+        }
+      };
+
+      // Dedicated SVG overlay for temp connection (created once)
+      let tempConnectionSvg: SVGSVGElement | null = null;
+
+      // Helper to create/update temp connection line (uses screen coordinates relative to container)
+      const updateTempConnection = (startScreenX: number, startScreenY: number, endScreenX: number, endScreenY: number) => {
+        // Create dedicated SVG overlay if it doesn't exist
+        if (!tempConnectionSvg) {
+          tempConnectionSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          tempConnectionSvg.style.position = 'absolute';
+          tempConnectionSvg.style.top = '0';
+          tempConnectionSvg.style.left = '0';
+          tempConnectionSvg.style.width = '100%';
+          tempConnectionSvg.style.height = '100%';
+          tempConnectionSvg.style.overflow = 'visible';
+          tempConnectionSvg.style.pointerEvents = 'none';
+          tempConnectionSvg.style.zIndex = '10000';
+          container.appendChild(tempConnectionSvg);
+        }
+
+        if (!tempConnectionLine) {
+          tempConnectionLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          tempConnectionLine.setAttribute('stroke', '#4ade80');
+          tempConnectionLine.setAttribute('stroke-width', '3');
+          tempConnectionLine.setAttribute('fill', 'none');
+          tempConnectionLine.setAttribute('stroke-dasharray', '8,4');
+          tempConnectionLine.style.pointerEvents = 'none';
+          tempConnectionSvg.appendChild(tempConnectionLine);
+        }
+
+        // Create vertical bezier curve (using screen coordinates)
+        const yDistance = Math.abs(endScreenY - startScreenY);
+        const xDistance = Math.abs(endScreenX - startScreenX);
+        const offset = Math.max(yDistance * 0.4, xDistance / 2, 30);
+
+        const d = `M ${startScreenX} ${startScreenY} C ${startScreenX} ${startScreenY + offset}, ${endScreenX} ${endScreenY - offset}, ${endScreenX} ${endScreenY}`;
+        tempConnectionLine.setAttribute('d', d);
+      };
+
+      // Helper to remove temp connection line
+      const removeTempConnection = () => {
+        if (tempConnectionLine) {
+          tempConnectionLine.remove();
+          tempConnectionLine = null;
+        }
+      };
+
+      // Helper to create connection with validation
+      const tryCreateConnection = (
+        sourceNodeId: string,
+        sourceOutput: string,
+        targetNodeId: string,
+        targetInput: string
+      ): boolean => {
+        const sourceNode = editor.getNode(sourceNodeId);
+        const targetNode = editor.getNode(targetNodeId);
+        if (sourceNode && targetNode && sourceNodeId !== targetNodeId &&
+            !connectionExists(sourceNodeId, sourceOutput, targetNodeId, targetInput) &&
+            areSocketsCompatible(sourceNode as NodeTypes, sourceOutput, targetNode as NodeTypes, targetInput) &&
+            !wouldCreateCycle(editor.getConnections(), sourceNodeId, targetNodeId)) {
+          const conn = new ClassicPreset.Connection(
+            sourceNode,
+            sourceOutput as never,
+            targetNode,
+            targetInput as never
+          );
+          editor.addConnection(conn);
+          return true;
+        }
+        return false;
+      };
+
+      // POINTERDOWN handler
       container.addEventListener('pointerdown', (e) => {
         const target = e.target as HTMLElement;
-        const inputSocket = target.closest('.custom-node-input');
-        const outputSocket = target.closest('.custom-node-output');
+        const socketInfo = getSocketInfo(target);
 
-        lastPointerDownOnSocket = !!(inputSocket || outputSocket);
+        lastPointerDownOnSocket = !!socketInfo;
 
-        if (inputSocket || outputSocket) {
-          // Unselect all nodes when clicking on socket
-          if (selectorRef.current) {
-            selectorRef.current.unselectAll();
-          }
-
-          // Find the node this socket belongs to
-          const nodeElement = target.closest('.custom-node') as HTMLElement | null;
-
-          if (nodeElement) {
-            // Get node ID from our custom data-node-id attribute
-            const nodeId = nodeElement.getAttribute('data-node-id');
-
-            if (nodeId) {
-              const side = outputSocket ? 'output' : 'input';
-              // Get socket key from data-testid (format: "input-keyName" or "output-keyName")
-              const socketContainer = outputSocket || inputSocket;
-              const testId = socketContainer?.getAttribute('data-testid');
-              let socketKey = side; // fallback
-              if (testId && testId.includes('-')) {
-                socketKey = testId.substring(testId.indexOf('-') + 1);
-              }
-
-              // Check if this socket has a connection
-              const existingConnection = findConnectionBySocket(nodeId, socketKey, side);
-
-              // Clear previous socket selection highlight
-              clearSocketSelection(container);
-
-              if (pendingConnectionRef.current) {
-                // Second click - create connection
-                // Helper to create connection with validation
-                const tryCreateConnection = (
-                  sourceNodeId: string,
-                  sourceOutput: string,
-                  targetNodeId: string,
-                  targetInput: string
-                ) => {
-                  const sourceNode = editor.getNode(sourceNodeId);
-                  const targetNode = editor.getNode(targetNodeId);
-                  if (sourceNode && targetNode && sourceNodeId !== targetNodeId &&
-                      !connectionExists(sourceNodeId, sourceOutput, targetNodeId, targetInput) &&
-                      areSocketsCompatible(sourceNode as NodeTypes, sourceOutput, targetNode as NodeTypes, targetInput) &&
-                      !wouldCreateCycle(editor.getConnections(), sourceNodeId, targetNodeId)) {
-                    const conn = new ClassicPreset.Connection(
-                      sourceNode,
-                      sourceOutput as never,
-                      targetNode,
-                      targetInput as never
-                    );
-                    editor.addConnection(conn);
-                  }
-                };
-
-                if (pendingConnectionRef.current.side === 'output' && side === 'input') {
-                  // Connect output -> input
-                  tryCreateConnection(
-                    pendingConnectionRef.current.nodeId,
-                    pendingConnectionRef.current.socketKey,
-                    nodeId,
-                    socketKey
-                  );
-                } else if (pendingConnectionRef.current.side === 'input' && side === 'output') {
-                  // Connect input <- output (reverse order)
-                  tryCreateConnection(
-                    nodeId,
-                    socketKey,
-                    pendingConnectionRef.current.nodeId,
-                    pendingConnectionRef.current.socketKey
-                  );
-                }
-                pendingConnectionRef.current = null;
-                selectedConnectionIdRef.current = null;
-              } else {
-                // First click - store pending connection and existing connection (if any)
-                pendingConnectionRef.current = { nodeId, socketKey, side };
-                // Store existing connection for potential deletion via delete button
-                selectedConnectionIdRef.current = existingConnection?.id ?? null;
-                // Highlight the selected socket (green)
-                socketContainer?.classList.add('socket-selected');
-                const innerSocket = socketContainer?.querySelector('.custom-socket') as HTMLElement;
-                if (innerSocket) {
-                  innerSocket.style.background = '#4ade80';
-                  innerSocket.style.borderColor = '#22c55e';
-                  innerSocket.style.boxShadow = '0 0 8px rgba(34, 197, 94, 0.6)';
-                }
-              }
-            }
-          }
-        } else {
-          // Clicked elsewhere, cancel pending connection and selection
+        if (!socketInfo) {
+          // Clicked elsewhere - clear selection
           pendingConnectionRef.current = null;
           selectedConnectionIdRef.current = null;
-          // Clear socket selection highlight
           clearSocketSelection(container);
+          dragState = 'idle';
+          return;
         }
-      }, true); // Use capture phase to run before rete's handlers
+
+        // Unselect all nodes when clicking on socket
+        if (selectorRef.current) {
+          selectorRef.current.unselectAll();
+        }
+
+        // Check if this socket has a connection
+        const existingConnection = findConnectionBySocket(socketInfo.nodeId, socketInfo.socketKey, socketInfo.side);
+
+        // Store source socket info
+        dragSourceSocket = {
+          nodeId: socketInfo.nodeId,
+          socketKey: socketInfo.socketKey,
+          side: socketInfo.side,
+          element: socketInfo.container,
+        };
+        dragStartPos = { x: e.clientX, y: e.clientY };
+
+        // Clear previous selection and highlight new socket (green)
+        clearSocketSelection(container);
+        highlightSocket(socketInfo.container, 'green');
+
+        // Store for click-to-connect and delete functionality
+        pendingConnectionRef.current = { nodeId: socketInfo.nodeId, socketKey: socketInfo.socketKey, side: socketInfo.side };
+        selectedConnectionIdRef.current = existingConnection?.id ?? null;
+
+        dragState = 'pressing';
+      }, true);
+
+      // POINTERMOVE handler
+      container.addEventListener('pointermove', (e) => {
+        if (dragState === 'idle' || !dragSourceSocket || !dragStartPos) return;
+
+        // Use elementFromPoint to get the actual element under the pointer
+        const elementUnderPointer = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+
+        if (dragState === 'pressing') {
+          // Check if mouse has left the source socket area
+          const isStillOnSourceSocket = elementUnderPointer &&
+            dragSourceSocket.element.contains(elementUnderPointer);
+
+          if (!isStillOnSourceSocket) {
+            // Mouse dragged out of the socket - start dragging
+            dragState = 'dragging';
+            container.setPointerCapture(e.pointerId);
+          }
+        }
+
+        if (dragState === 'dragging') {
+          // Update temp connection line using screen coordinates relative to container
+          const containerRect = containerRef.current?.getBoundingClientRect() || { left: 0, top: 0 };
+          const socketRect = dragSourceSocket.element.getBoundingClientRect();
+          const startX = socketRect.left + socketRect.width / 2 - containerRect.left;
+          const startY = socketRect.top + socketRect.height / 2 - containerRect.top;
+          const endX = e.clientX - containerRect.left;
+          const endY = e.clientY - containerRect.top;
+
+          // Swap start/end for input sockets (draw from top)
+          if (dragSourceSocket.side === 'input') {
+            updateTempConnection(endX, endY, startX, startY);
+          } else {
+            updateTempConnection(startX, startY, endX, endY);
+          }
+
+          // Check if over a target socket
+          const targetSocketInfo = elementUnderPointer ? getSocketInfo(elementUnderPointer) : null;
+          if (targetSocketInfo && targetSocketInfo.container !== dragSourceSocket.element) {
+            // Highlight target socket (blue)
+            if (dragCurrentTarget !== targetSocketInfo.container) {
+              // Unhighlight previous target
+              if (dragCurrentTarget) {
+                unhighlightSocket(dragCurrentTarget);
+              }
+              dragCurrentTarget = targetSocketInfo.container;
+              highlightSocket(targetSocketInfo.container, 'blue');
+            }
+          } else {
+            // Unhighlight previous target
+            if (dragCurrentTarget) {
+              unhighlightSocket(dragCurrentTarget);
+              dragCurrentTarget = null;
+            }
+          }
+        }
+      }, true);
+
+      // POINTERUP handler
+      container.addEventListener('pointerup', (e) => {
+        if (dragState === 'idle' || !dragSourceSocket) {
+          return;
+        }
+
+        // Use elementFromPoint to get the actual element under the pointer
+        const elementUnderPointer = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+        const targetSocketInfo = elementUnderPointer ? getSocketInfo(elementUnderPointer) : null;
+
+        try {
+          container.releasePointerCapture(e.pointerId);
+        } catch {
+          // Ignore if not captured
+        }
+
+        if (dragState === 'pressing') {
+          // Simple click - socket stays selected, go to idle
+          dragState = 'idle';
+          dragSourceSocket = null;
+          dragStartPos = null;
+          return;
+        }
+
+        // dragState === 'dragging'
+        removeTempConnection();
+
+        // Unhighlight target
+        if (dragCurrentTarget) {
+          unhighlightSocket(dragCurrentTarget);
+          dragCurrentTarget = null;
+        }
+
+        if (targetSocketInfo && targetSocketInfo.container !== dragSourceSocket.element) {
+          // Released on a different socket - try to connect
+          if (dragSourceSocket.side === 'output' && targetSocketInfo.side === 'input') {
+            tryCreateConnection(
+              dragSourceSocket.nodeId,
+              dragSourceSocket.socketKey,
+              targetSocketInfo.nodeId,
+              targetSocketInfo.socketKey
+            );
+          } else if (dragSourceSocket.side === 'input' && targetSocketInfo.side === 'output') {
+            tryCreateConnection(
+              targetSocketInfo.nodeId,
+              targetSocketInfo.socketKey,
+              dragSourceSocket.nodeId,
+              dragSourceSocket.socketKey
+            );
+          }
+        }
+        // Released on same socket or empty space - socket stays selected
+
+        dragState = 'idle';
+        dragSourceSocket = null;
+        dragStartPos = null;
+      }, true);
 
       // Cancel node picking/dragging when drag starts from socket
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

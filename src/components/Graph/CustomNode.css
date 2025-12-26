@@ -85,8 +85,36 @@
 
 .custom-node-input {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   z-index: 100;
+  position: relative;
+}
+
+/* Socket label styles - absolutely positioned outside the socket */
+.socket-label {
+  position: absolute;
+  font-size: 10px;
+  color: #888;
+  white-space: nowrap;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Input socket labels: above the socket */
+.socket-label-top {
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 2px;
+}
+
+/* Output socket labels: below the socket */
+.custom-node-output .socket-label {
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 2px;
 }
 
 /* Output sockets container (at bottom) */
@@ -104,8 +132,10 @@
 
 .custom-node-output {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   z-index: 100;
+  position: relative;
 }
 
 /* Socket styles - rounded thin rectangle for vertical connections */

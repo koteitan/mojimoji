@@ -502,6 +502,10 @@ export function CustomNode(props: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sortedControls = sortByIndex(controls.map(([key, control]: [string, any]) => ({ key, control, index: control?.index })));
 
+  // Show socket labels when there are 2+ inputs or outputs
+  const showInputLabels = sortedInputs.length >= 2;
+  const showOutputLabels = sortedOutputs.length >= 2;
+
   // Handle tap/click on node to select it (for mobile touch support)
   const handleNodeInteraction = (e: React.MouseEvent | React.TouchEvent) => {
     // Don't select if clicking on input elements
@@ -531,6 +535,9 @@ export function CustomNode(props: Props) {
               data-testid={`input-${key}`}
               title={input.label || key}
             >
+              {showInputLabels && (
+                <span className="socket-label socket-label-top">{input.label || key}</span>
+              )}
               <RefSocket
                 name="input-socket"
                 side="input"
@@ -574,6 +581,9 @@ export function CustomNode(props: Props) {
                 emit={emit}
                 payload={output.socket}
               />
+              {showOutputLabels && (
+                <span className="socket-label">{output.label || key}</span>
+              )}
             </div>
           ) : null
         )}
