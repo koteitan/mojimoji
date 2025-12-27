@@ -1,6 +1,7 @@
 import { ClassicPreset } from 'rete';
 import { ReplaySubject, Observable, shareReplay, defer, from } from 'rxjs';
 import i18next from 'i18next';
+import { getBootstrapRelayUrl } from '../../../nostr/bootstrap';
 import {
   eventIdSocket,
   pubkeySocket,
@@ -45,14 +46,7 @@ function getDefaultValue(type: ConstantType): string {
     case 'datetime': return new Date().toISOString();
     case 'flag': return '1';
     case 'relayStatus': return 'EOSE';
-    case 'relay': {
-      // Check locale: yabu.me for ja, damus.io for others
-      const lang = i18next.language || navigator.language;
-      if (lang.startsWith('ja')) {
-        return 'wss://yabu.me';
-      }
-      return 'wss://relay.damus.io';
-    }
+    case 'relay': return getBootstrapRelayUrl();
     default: return '';
   }
 }

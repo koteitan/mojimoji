@@ -11,6 +11,7 @@ import { decodeBech32ToHex, isHex64, parseDateToTimestamp } from '../../../nostr
 import { isNip07Available, getPubkey } from '../../../nostr/nip07';
 import { fetchUserRelays } from '../../../nostr/graphStorage';
 import { ProfileFetcher } from '../../../nostr/ProfileFetcher';
+import { getBootstrapRelayUrl } from '../../../nostr/bootstrap';
 import {
   getCachedProfile,
   findPubkeysByName,
@@ -25,15 +26,6 @@ const DEBUG = false;
 
 // Type for the result of createRxForwardReq with emit method
 type ForwardReq = ReturnType<typeof createRxForwardReq>;
-
-// Get default relay URL based on locale
-const getDefaultRelayUrl = (): string => {
-  const lang = i18next.language || navigator.language || 'en';
-  if (lang.startsWith('ja')) {
-    return 'wss://yabu.me';
-  }
-  return 'wss://relay.damus.io';
-};
 
 // Default filters: kinds=[1], limit=200
 const getDefaultFilters = (): Filters => [
@@ -158,7 +150,7 @@ export class RelayNode extends ClassicPreset.Node {
   height: number | undefined = undefined; // auto-calculated based on content
 
   private relaySource: RelaySourceType = 'auto';
-  private relayUrls: string[] = [getDefaultRelayUrl()];
+  private relayUrls: string[] = [getBootstrapRelayUrl()];
   private autoRelayUrls: string[] = []; // Cached relay URLs from kind:10002
   private filters: Filters = getDefaultFilters();
 

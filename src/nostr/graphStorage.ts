@@ -8,6 +8,7 @@ import { getPubkey, signEvent, isNip07Available } from './nip07';
 import type { UnsignedEvent } from './nip07';
 import type { NostrEvent, Profile } from './types';
 import type { GraphData, GraphVisibility } from '../graph/types';
+import { getBootstrapRelays } from './bootstrap';
 
 // Kind constants
 const KIND_RELAY_LIST = 10002;
@@ -16,15 +17,6 @@ const KIND_DELETE = 5;
 
 // Graph path prefix
 const GRAPH_PATH_PREFIX = 'mojimoji/graphs/';
-
-// Get bootstrap relay based on browser locale
-function getBootstrapRelay(): string[] {
-  const lang = typeof navigator !== 'undefined' ? navigator.language : 'en';
-  if (lang.startsWith('ja')) {
-    return ['wss://yabu.me'];
-  }
-  return ['wss://relay.damus.io'];
-}
 
 // Singleton rx-nostr instance for graph storage
 let rxNostr: RxNostr | null = null;
@@ -57,7 +49,7 @@ export interface NostrGraphItem {
 export async function fetchUserRelays(pubkey: string): Promise<string[]> {
   return new Promise((resolve) => {
     const client = getRxNostr();
-    client.setDefaultRelays(getBootstrapRelay());
+    client.setDefaultRelays(getBootstrapRelays());
 
     // Use backward strategy for one-shot queries
     const rxReq = createRxBackwardReq();
@@ -103,7 +95,7 @@ export async function fetchUserRelays(pubkey: string): Promise<string[]> {
       kinds: [KIND_RELAY_LIST],
       authors: [pubkey],
       limit: 1,
-    }, { relays: getBootstrapRelay() });
+    }, { relays: getBootstrapRelays() });
     rxReq.over();
 
     // Fallback timeout after 3 seconds
@@ -211,7 +203,7 @@ export async function loadGraphsFromNostr(
 
   // For 'public', use well-known relays if not specified
   if (filter === 'public' && (!relays || relays.length === 0)) {
-    relays = getBootstrapRelay();
+    relays = getBootstrapRelays();
   }
 
   // For 'mine' and 'by-author', require relays from user's relay list
@@ -300,7 +292,7 @@ export async function loadGraphByPath(
     relays = await fetchUserRelays(pubkey);
   }
   if (relays.length === 0) {
-    relays = getBootstrapRelay();
+    relays = getBootstrapRelays();
   }
 
   return new Promise((resolve) => {
@@ -742,7 +734,7 @@ export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<numbe
     }
   }
   if (!relays || relays.length === 0) {
-    relays = getBootstrapRelay();
+    relays = getBootstrapRelays();
   }
 
   return new Promise((resolve) => {
