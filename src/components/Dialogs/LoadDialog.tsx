@@ -8,7 +8,7 @@ import {
   deleteGraphFromNostr,
   getProfileFromCache,
   getAllCachedProfiles,
-  fetchUserRelays,
+  fetchUserRelayList,
   fetchAndCacheProfiles,
   type NostrGraphItem
 } from '../../nostr/graphStorage';
@@ -70,7 +70,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
             const pubkey = await getPubkey();
             setUserPubkey(pubkey);
             // Fetch user's relay list from kind:10002
-            relays = await fetchUserRelays(pubkey);
+            relays = await fetchUserRelayList();
             if (relays.length > 0) {
               setRelayUrls(relays.join('\n'));
             }
@@ -355,14 +355,16 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
     if (!selectedNostrGraph) return;
 
     try {
-      const permalink = generatePermalink(selectedNostrGraph.pubkey, selectedNostrGraph.path);
+      // Pass read relay hints for naddr
+      const readRelayHints = relayUrls.split('\n').filter(url => url.trim());
+      const permalink = generatePermalink(selectedNostrGraph.pubkey, selectedNostrGraph.path, readRelayHints);
       await navigator.clipboard.writeText(permalink);
       setUrlCopied(true);
       setTimeout(() => setUrlCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy URL to clipboard:', err);
     }
-  }, [selectedNostrGraph]);
+  }, [selectedNostrGraph, relayUrls]);
 
   if (!isOpen) return null;
 

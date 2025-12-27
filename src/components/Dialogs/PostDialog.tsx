@@ -4,7 +4,7 @@ import { createRxNostr } from 'rx-nostr';
 import { verifier } from '@rx-nostr/crypto';
 import { isNip07Available, getPubkey, signEvent } from '../../nostr/nip07';
 import type { UnsignedEvent } from '../../nostr/nip07';
-import { fetchUserRelays, getProfileFromCache } from '../../nostr/graphStorage';
+import { fetchUserRelayList, getProfileFromCache } from '../../nostr/graphStorage';
 import { formatNpub } from '../../nostr/types';
 import { RelaySettingsDialog } from './RelaySettingsDialog';
 import { Nip07ErrorMessage } from './Nip07ErrorMessage';
@@ -39,8 +39,8 @@ export function PostDialog({ isOpen, onClose }: PostDialogProps) {
           setError(null);
           const pubkey = await getPubkey();
           setUserPubkey(pubkey);
-          // Fetch user's relay list from kind:10002
-          const relays = await fetchUserRelays(pubkey);
+          // Fetch user's write relay list from kind:10002
+          const relays = await fetchUserRelayList('write');
           setKind10002Relays(relays);
           setRelayUrls(relays);
         } catch (e) {

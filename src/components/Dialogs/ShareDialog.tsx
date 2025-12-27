@@ -12,24 +12,26 @@ interface ShareDialogProps {
   onClose: () => void;
   pubkey: string;
   path: string;
+  relayHints?: string[];
 }
 
 // Generate permalink URL using naddr (addressable event reference)
 // This always points to the latest version of the graph
-export function generatePermalink(pubkey: string, path: string): string {
+// relayHints: include relay URLs in naddr for better discoverability
+export function generatePermalink(pubkey: string, path: string, relayHints?: string[]): string {
   const baseUrl = window.location.origin + window.location.pathname;
   const dTag = GRAPH_PATH_PREFIX + path;
-  const naddr = naddrEncode(KIND_APP_DATA, pubkey, dTag);
+  const naddr = naddrEncode(KIND_APP_DATA, pubkey, dTag, relayHints);
   return `${baseUrl}?a=${naddr}`;
 }
 
-export function ShareDialog({ isOpen, onClose, pubkey, path }: ShareDialogProps) {
+export function ShareDialog({ isOpen, onClose, pubkey, path, relayHints }: ShareDialogProps) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   // Track if mousedown started on overlay (for proper click-outside handling)
   const [mouseDownOnOverlay, setMouseDownOnOverlay] = useState(false);
 
-  const permalink = generatePermalink(pubkey, path);
+  const permalink = generatePermalink(pubkey, path, relayHints);
 
   const handleCopy = useCallback(async () => {
     try {

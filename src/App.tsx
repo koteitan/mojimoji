@@ -1,11 +1,12 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Timeline } from './components/Timeline';
 import { GraphEditor } from './components/Graph/GraphEditor';
+import { initUserRelayList, initAllGraphs, fetchAndCacheProfiles } from './nostr/graphStorage';
 import type { TimelineItem } from './nostr/types';
 import './App.css';
 
 // Version: Update this on each deployment
-export const APP_VERSION = '0.11.1';
+export const APP_VERSION = '0.11.3';
 
 const APP_NAME = '(.>_<)-(.>_<)-mojimoji: Nostr Modular Client';
 const LOADING_PREFIX = '(.>_<)-(.>_<)-loading ';
@@ -20,6 +21,17 @@ function App() {
   const [timelines, setTimelines] = useState<TimelineData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingDots, setLoadingDots] = useState('* * *');
+
+  // Initialize user's relay list, graphs, and profiles on app load
+  useEffect(() => {
+    const init = async () => {
+      await initUserRelayList();
+      // Fetch graphs and profiles in background (don't await to avoid blocking)
+      initAllGraphs();
+      fetchAndCacheProfiles();
+    };
+    init();
+  }, []);
 
   // Animate loading dots
   useEffect(() => {

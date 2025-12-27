@@ -8,8 +8,8 @@ import { eventSocket } from './types';
 import { TextAreaControl, SelectControl, FilterControl, type Filters } from './controls';
 import type { NostrEvent, Profile, EventSignal } from '../../../nostr/types';
 import { decodeBech32ToHex, isHex64, parseDateToTimestamp } from '../../../nostr/types';
-import { isNip07Available, getPubkey } from '../../../nostr/nip07';
-import { fetchUserRelays } from '../../../nostr/graphStorage';
+import { isNip07Available } from '../../../nostr/nip07';
+import { fetchUserRelayList } from '../../../nostr/graphStorage';
 import { ProfileFetcher } from '../../../nostr/ProfileFetcher';
 import { getBootstrapRelayUrl } from '../../../nostr/bootstrap';
 import {
@@ -247,8 +247,7 @@ export class RelayNode extends ClassicPreset.Node {
     }
 
     try {
-      const pubkey = await getPubkey();
-      const relays = await fetchUserRelays(pubkey);
+      const relays = await fetchUserRelayList();
       if (relays.length > 0) {
         this.autoRelayUrls = relays;
         if (DEBUG) console.log('Auto relays loaded:', relays);

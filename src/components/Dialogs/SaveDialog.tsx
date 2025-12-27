@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getGraphsInDirectory, deleteGraphAtPath, deleteGraphsInDirectory } from '../../utils/localStorage';
 import { isNip07Available, getPubkey } from '../../nostr/nip07';
-import { loadGraphsFromNostr, getNostrItemsInDirectory, deleteGraphFromNostr, getProfileFromCache, fetchUserRelays, fetchAndCacheProfiles, type NostrGraphItem } from '../../nostr/graphStorage';
+import { loadGraphsFromNostr, getNostrItemsInDirectory, deleteGraphFromNostr, getProfileFromCache, fetchUserRelayList, fetchAndCacheProfiles, type NostrGraphItem } from '../../nostr/graphStorage';
 import { formatNpub } from '../../nostr/types';
 import { Nip07ErrorMessage } from './Nip07ErrorMessage';
 import { ShareDialog } from './ShareDialog';
@@ -60,8 +60,8 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
           setError(null);
           const pubkey = await getPubkey();
           setUserPubkey(pubkey);
-          // Fetch user's relay list from kind:10002
-          const relays = await fetchUserRelays(pubkey);
+          // Fetch user's write relay list from kind:10002 (for publishing)
+          const relays = await fetchUserRelayList('write');
           if (relays.length > 0) {
             setRelayUrls(relays.join('\n'));
           }
@@ -260,12 +260,15 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
 
   // Show share dialog if we just saved to Nostr
   if (shareDialogOpen && savedPath && userPubkey) {
+    // Pass write relay hints for naddr
+    const writeRelayHints = relayUrls.split('\n').filter(url => url.trim());
     return (
       <ShareDialog
         isOpen={true}
         onClose={handleShareDialogClose}
         pubkey={userPubkey}
         path={savedPath}
+        relayHints={writeRelayHints}
       />
     );
   }

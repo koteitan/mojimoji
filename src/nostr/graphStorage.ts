@@ -45,11 +45,154 @@ export interface NostrGraphItem {
   event?: NostrEvent;
 }
 
-// Fetch user's relay list from kind:10002
-export async function fetchUserRelays(pubkey: string): Promise<string[]> {
+// Cache for user's relay list (fetched once on app load)
+// Separate caches for read and write relays per NIP-65
+let userReadRelayCache: string[] | null = null;
+let userWriteRelayCache: string[] | null = null;
+let userRelayListPromise: Promise<void> | null = null;
+
+// Cache for all mojimoji graphs (fetched once on app load)
+// This contains all graphs from user's relays, filtered by #client: ['mojimoji']
+let allGraphsCache: NostrGraphItem[] | null = null;
+let allGraphsPromise: Promise<NostrGraphItem[]> | null = null;
+
+// Initialize user's relay list cache (call on app load)
+// Fetches both read and write relays
+export async function initUserRelayList(): Promise<void> {
+  if (!isNip07Available()) {
+    return;
+  }
+  try {
+    const pubkey = await getPubkey();
+    // Fetch read and write relays in parallel
+    const [readRelays, writeRelays] = await Promise.all([
+      fetchRelayList(pubkey, 'read'),
+      fetchRelayList(pubkey, 'write'),
+    ]);
+    userReadRelayCache = readRelays;
+    userWriteRelayCache = writeRelays;
+  } catch {
+    // ignore
+  }
+}
+
+// Get cached user relay list (returns empty array if not initialized)
+export function getUserRelayList(mode: 'read' | 'write' = 'read'): string[] {
+  return (mode === 'read' ? userReadRelayCache : userWriteRelayCache) || [];
+}
+
+// Fetch relay list of the logged-in user via browser extension (uses cache)
+export async function fetchUserRelayList(mode: 'read' | 'write' = 'read'): Promise<string[]> {
+  const cache = mode === 'read' ? userReadRelayCache : userWriteRelayCache;
+  // Return cache if available and not empty
+  if (cache !== null && cache.length > 0) {
+    return cache;
+  }
+  // If already fetching, wait for that promise
+  if (userRelayListPromise !== null) {
+    await userRelayListPromise;
+    return (mode === 'read' ? userReadRelayCache : userWriteRelayCache) || [];
+  }
+  // Fetch and cache
+  userRelayListPromise = initUserRelayList();
+  await userRelayListPromise;
+  userRelayListPromise = null;
+  return (mode === 'read' ? userReadRelayCache : userWriteRelayCache) || [];
+}
+
+// Initialize all graphs cache (call on app load, after relay list is initialized)
+// Fetches all mojimoji graphs from user's relays with #client: ['mojimoji'] filter
+export async function initAllGraphs(): Promise<NostrGraphItem[]> {
+  try {
+    const graphs = await fetchAllGraphsFromRelays();
+    allGraphsCache = graphs;
+    return graphs;
+  } catch {
+    return [];
+  }
+}
+
+// Get cached graphs (returns empty array if not initialized)
+export function getAllGraphs(): NostrGraphItem[] {
+  return allGraphsCache || [];
+}
+
+// Invalidate graphs cache (call after save/delete)
+export function invalidateGraphsCache(): void {
+  allGraphsCache = null;
+}
+
+// Fetch all mojimoji graphs from user's relays (single subscription with #client filter)
+async function fetchAllGraphsFromRelays(): Promise<NostrGraphItem[]> {
+  let relays = await fetchUserRelayList();
+  if (relays.length === 0) {
+    relays = getBootstrapRelays();
+  }
+
   return new Promise((resolve) => {
     const client = getRxNostr();
-    client.setDefaultRelays(getBootstrapRelays());
+    client.setDefaultRelays(relays);
+
+    const rxReq = createRxBackwardReq();
+    const eventsMap = new Map<string, NostrEvent>();
+    let resolved = false;
+
+    const subscription = client.use(rxReq).subscribe({
+      next: (packet) => {
+        const event = packet.event as NostrEvent;
+        // Check if it's a mojimoji graph event by d-tag prefix
+        const dTag = event.tags.find(t => t[0] === 'd' && t[1]?.startsWith(GRAPH_PATH_PREFIX));
+        if (dTag) {
+          // Deduplicate by kind:pubkey:d-tag, keeping the newest event
+          const key = `${event.kind}:${event.pubkey}:${dTag[1]}`;
+          const existing = eventsMap.get(key);
+          if (!existing || event.created_at > existing.created_at) {
+            eventsMap.set(key, event);
+          }
+        }
+      },
+      error: (err) => {
+        console.error('Error loading graphs:', err);
+        if (!resolved) {
+          resolved = true;
+          resolve(parseGraphEvents(Array.from(eventsMap.values()), null));
+        }
+      },
+      complete: () => {
+        if (!resolved) {
+          resolved = true;
+          resolve(parseGraphEvents(Array.from(eventsMap.values()), null));
+        }
+      },
+    });
+
+    // Fetch all mojimoji graphs with #client filter
+    rxReq.emit({
+      kinds: [KIND_APP_DATA],
+      '#client': ['mojimoji'],
+      limit: 500,
+    }, { relays });
+    rxReq.over();
+
+    // Fallback timeout after 5 seconds
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        subscription.unsubscribe();
+        resolve(parseGraphEvents(Array.from(eventsMap.values()), null));
+      }
+    }, 5000);
+  });
+}
+
+// Relay mode for NIP-65 read/write distinction
+export type RelayMode = 'read' | 'write';
+
+// Fetch relay list of any user by pubkey with read/write mode
+export async function fetchRelayList(pubkey: string, mode: RelayMode = 'read'): Promise<string[]> {
+  return new Promise((resolve) => {
+    const client = getRxNostr();
+    client.setDefaultRelays(BOOTSTRAP_RELAYS);
 
     // Use backward strategy for one-shot queries
     const rxReq = createRxBackwardReq();
@@ -60,11 +203,14 @@ export async function fetchUserRelays(pubkey: string): Promise<string[]> {
       next: (packet) => {
         const event = packet.event as NostrEvent;
         if (event.kind === KIND_RELAY_LIST) {
-          // Extract relay URLs from 'r' tags
+          // Extract relay URLs from 'r' tags with read/write filtering
           for (const tag of event.tags) {
             if (tag[0] === 'r' && tag[1]) {
-              // tag[2] might be 'read' or 'write', but we want all for now
-              relays.push(tag[1]);
+              const marker = tag[2]; // 'read', 'write', or undefined (both)
+              // Include if: no marker (both), or marker matches mode
+              if (!marker || marker === mode) {
+                relays.push(tag[1]);
+              }
             }
           }
           // Resolve immediately when we get the relay list
@@ -123,13 +269,10 @@ export async function saveGraphToNostr(
     throw new Error('NIP-07 extension not available. Please install a Nostr signer extension like nos2x or Alby.');
   }
 
-  // Get user's pubkey
-  const pubkey = await getPubkey();
-
-  // Get relay URLs
+  // Get relay URLs (use write relays for publishing)
   let relayUrls = options.relayUrls?.filter(url => url.trim());
   if (!relayUrls || relayUrls.length === 0) {
-    relayUrls = await fetchUserRelays(pubkey);
+    relayUrls = await fetchUserRelayList('write');
     if (relayUrls.length === 0) {
       throw new Error('No relay URLs specified and no relay list found. Please specify relay URLs.');
     }
@@ -166,12 +309,53 @@ export async function saveGraphToNostr(
   // Wait a bit for the event to be sent
   await new Promise(resolve => setTimeout(resolve, 1000));
 
+  // Invalidate user graphs cache since we saved a new graph
+  invalidateGraphsCache();
+
   // Return the event ID
   return signedEvent.id;
 }
 
-// Load graphs from Nostr relay
+// Load graphs from Nostr relay (filters from cache for 'mine' and 'public')
 export async function loadGraphsFromNostr(
+  filter: 'public' | 'mine' | 'by-author',
+  authorPubkey?: string,
+  relayUrls?: string[]
+): Promise<NostrGraphItem[]> {
+  // For 'mine' and 'public' filters, use the all-graphs cache and filter in app
+  if (filter === 'mine' || filter === 'public') {
+    // Ensure cache is loaded
+    if (allGraphsCache === null) {
+      if (allGraphsPromise !== null) {
+        await allGraphsPromise;
+      } else {
+        allGraphsPromise = initAllGraphs();
+        await allGraphsPromise;
+        allGraphsPromise = null;
+      }
+    }
+
+    const graphs = allGraphsCache || [];
+
+    if (filter === 'mine') {
+      if (!isNip07Available()) {
+        throw new Error('NIP-07 extension not available');
+      }
+      const userPubkey = await getPubkey();
+      // Filter by user's pubkey (author's own graphs)
+      return graphs.filter(g => g.pubkey === userPubkey);
+    } else {
+      // Filter by public visibility
+      return graphs.filter(g => g.visibility === 'public');
+    }
+  }
+
+  // For 'by-author' filter, fetch from author's relays (not cached)
+  return loadGraphsFromNostrInternal(filter, authorPubkey, relayUrls);
+}
+
+// Internal implementation of loadGraphsFromNostr
+async function loadGraphsFromNostrInternal(
   filter: 'public' | 'mine' | 'by-author',
   authorPubkey?: string,
   relayUrls?: string[]
@@ -187,7 +371,7 @@ export async function loadGraphsFromNostr(
     }
     userPubkey = await getPubkey();
     if (!relays || relays.length === 0) {
-      relays = await fetchUserRelays(userPubkey);
+      relays = await fetchUserRelayList();
     }
   }
 
@@ -197,13 +381,16 @@ export async function loadGraphsFromNostr(
       throw new Error('Author pubkey is required for by-author filter');
     }
     if (!relays || relays.length === 0) {
-      relays = await fetchUserRelays(authorPubkey);
+      relays = await fetchRelayList(authorPubkey);
     }
   }
 
-  // For 'public', use well-known relays if not specified
+  // For 'public', use user's relay list if not specified
   if (filter === 'public' && (!relays || relays.length === 0)) {
-    relays = getBootstrapRelays();
+    relays = await fetchUserRelayList();
+    if (relays.length === 0) {
+      relays = getBootstrapRelays();
+    }
   }
 
   // For 'mine' and 'by-author', require relays from user's relay list
@@ -289,7 +476,7 @@ export async function loadGraphByPath(
 ): Promise<GraphData | null> {
   let relays = relayUrls?.filter(url => url.trim());
   if (!relays || relays.length === 0) {
-    relays = await fetchUserRelays(pubkey);
+    relays = await fetchRelayList(pubkey);
   }
   if (relays.length === 0) {
     relays = getBootstrapRelays();
@@ -355,20 +542,25 @@ export async function loadGraphByPath(
 }
 
 // Well-known relays for permalink loading (need broader coverage)
-const PERMALINK_RELAYS = [
-  'wss://relay.damus.io',
-  'wss://nos.lol',
-  'wss://relay.nostr.band',
-  'wss://yabu.me',
+const BOOTSTRAP_RELAYS = [
+  'wss://directory.yabu.me',
+  'wss://purplepag.es',
+  'wss://indexer.coracle.social'
 ];
 
 // Load a graph by event ID (for permalink loading)
 export async function loadGraphByEventId(
   eventId: string
 ): Promise<GraphData | null> {
+  // Use user's relay list (kind:30078 is not stored on bootstrap/indexer relays)
+  let relays = await fetchUserRelayList();
+  if (relays.length === 0) {
+    relays = getBootstrapRelays();
+  }
+
   return new Promise((resolve) => {
     const client = getRxNostr();
-    client.setDefaultRelays(PERMALINK_RELAYS);
+    client.setDefaultRelays(relays);
 
     // Use backward strategy for one-shot queries
     const rxReq = createRxBackwardReq();
@@ -409,7 +601,7 @@ export async function loadGraphByEventId(
       kinds: [KIND_APP_DATA],
       ids: [eventId],
       limit: 1,
-    }, { relays: PERMALINK_RELAYS });
+    }, { relays });
     rxReq.over();
 
     // Timeout after 7 seconds
@@ -434,10 +626,10 @@ export async function loadGraphByNaddr(
   // Use relay hints if provided, otherwise use user's relays or well-known
   let relays = relayHints?.filter(url => url.trim());
   if (!relays || relays.length === 0) {
-    relays = await fetchUserRelays(pubkey);
+    relays = await fetchRelayList(pubkey);
   }
   if (relays.length === 0) {
-    relays = PERMALINK_RELAYS;
+    relays = BOOTSTRAP_RELAYS;
   }
 
   return new Promise((resolve) => {
@@ -522,9 +714,10 @@ export async function deleteGraphFromNostr(
 
   const pubkey = await getPubkey();
 
+  // Use write relays for publishing deletion event
   let relays = relayUrls?.filter(url => url.trim());
   if (!relays || relays.length === 0) {
-    relays = await fetchUserRelays(pubkey);
+    relays = await fetchUserRelayList('write');
   }
   if (relays.length === 0) {
     throw new Error('No relay URLs available for deletion');
@@ -556,6 +749,9 @@ export async function deleteGraphFromNostr(
   client.send(signedEvent);
 
   await new Promise(resolve => setTimeout(resolve, 1000));
+
+  // Invalidate user graphs cache since we deleted a graph
+  invalidateGraphsCache();
 }
 
 // Extract visibility from event (check graph data first, then fall back to tag)
@@ -726,8 +922,7 @@ export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<numbe
     // Try to get user's relays from NIP-07
     if (isNip07Available()) {
       try {
-        const pubkey = await getPubkey();
-        relays = await fetchUserRelays(pubkey);
+        relays = await fetchUserRelayList();
       } catch {
         // ignore
       }
