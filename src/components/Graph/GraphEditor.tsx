@@ -1539,7 +1539,7 @@ export function GraphEditor({
         // Calculate vertical offset for bezier control points
         const yDistance = Math.abs(correctedEnd.y - correctedStart.y);
         const xDistance = Math.abs(correctedEnd.x - correctedStart.x);
-        const offset = Math.max(yDistance * 0.4, xDistance / 2, 30);
+        const offset = Math.max(yDistance * 0.12, xDistance / 5, 9);
 
         // Create vertical bezier: start -> control1 (below start) -> control2 (above end) -> end
         const control1 = { x: correctedStart.x, y: correctedStart.y + offset };
