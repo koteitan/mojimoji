@@ -9,9 +9,8 @@ import { TextAreaControl, SelectControl, FilterControl, type Filters } from './c
 import type { NostrEvent, Profile, EventSignal } from '../../../nostr/types';
 import { decodeBech32ToHex, isHex64, parseDateToTimestamp } from '../../../nostr/types';
 import { isNip07Available } from '../../../nostr/nip07';
-import { fetchUserRelayList } from '../../../nostr/graphStorage';
+import { fetchUserRelayList, getDefaultRelayUrl } from '../../../nostr/graphStorage';
 import { ProfileFetcher } from '../../../nostr/ProfileFetcher';
-import { getBootstrapRelayUrl } from '../../../nostr/bootstrap';
 import {
   getCachedProfile,
   findPubkeysByName,
@@ -150,7 +149,7 @@ export class RelayNode extends ClassicPreset.Node {
   height: number | undefined = undefined; // auto-calculated based on content
 
   private relaySource: RelaySourceType = 'auto';
-  private relayUrls: string[] = [getBootstrapRelayUrl()];
+  private relayUrls: string[] = [getDefaultRelayUrl()];
   private autoRelayUrls: string[] = []; // Cached relay URLs from kind:10002
   private filters: Filters = getDefaultFilters();
 

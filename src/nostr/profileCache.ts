@@ -63,13 +63,6 @@ export function saveProfileToCache(pubkey: string, profile: Profile): void {
 }
 
 /**
- * Check if a profile is cached
- */
-export function hasProfileCached(pubkey: string): boolean {
-  return profileCache.has(pubkey);
-}
-
-/**
  * Find pubkeys by name/display_name partial match (all matches)
  */
 export function findPubkeysByName(searchTerm: string): string[] {
@@ -107,4 +100,15 @@ export function getProfileCacheInfo(): { count: number; bytes: number } {
  */
 export function getProfileCache(): Map<string, Profile> {
   return profileCache;
+}
+
+/**
+ * Get all cached profiles as array (for autocomplete)
+ */
+export function getAllCachedProfiles(): Array<{ pubkey: string; profile: Profile }> {
+  const results: Array<{ pubkey: string; profile: Profile }> = [];
+  for (const [pubkey, profile] of profileCache) {
+    results.push({ pubkey, profile });
+  }
+  return results;
 }

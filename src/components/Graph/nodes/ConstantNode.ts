@@ -1,7 +1,7 @@
 import { ClassicPreset } from 'rete';
 import { ReplaySubject, Observable, shareReplay, defer, from } from 'rxjs';
 import i18next from 'i18next';
-import { getBootstrapRelayUrl } from '../../../nostr/bootstrap';
+import { getDefaultRelayUrl } from '../../../nostr/graphStorage';
 import {
   eventIdSocket,
   pubkeySocket,
@@ -46,7 +46,7 @@ function getDefaultValue(type: ConstantType): string {
     case 'datetime': return new Date().toISOString();
     case 'flag': return '1';
     case 'relayStatus': return 'EOSE';
-    case 'relay': return getBootstrapRelayUrl();
+    case 'relay': return getDefaultRelayUrl();
     default: return '';
   }
 }

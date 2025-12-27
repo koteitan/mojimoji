@@ -349,11 +349,6 @@ export function extractImageUrls(content: string): string[] {
   return matches ? [...new Set(matches)] : []; // Remove duplicates
 }
 
-// Check if URL is a valid HTTPS image URL
-export function isValidImageUrl(url: string): boolean {
-  return url.startsWith('https://') && IMAGE_URL_REGEX.test(url);
-}
-
 // Signal type for event flow through the graph
 // 'add' = event should be added/shown
 // 'remove' = event should be removed/hidden (used by A-B operator)

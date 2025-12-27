@@ -2,7 +2,8 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getGraphsInDirectory, deleteGraphAtPath, deleteGraphsInDirectory } from '../../utils/localStorage';
 import { isNip07Available, getPubkey } from '../../nostr/nip07';
-import { loadGraphsFromNostr, getNostrItemsInDirectory, deleteGraphFromNostr, getProfileFromCache, fetchUserRelayList, fetchAndCacheProfiles, type NostrGraphItem } from '../../nostr/graphStorage';
+import { loadGraphsFromNostr, getNostrItemsInDirectory, deleteGraphFromNostr, fetchUserRelayList, fetchAndCacheProfiles, type NostrGraphItem } from '../../nostr/graphStorage';
+import { getCachedProfile } from '../../nostr/profileCache';
 import { formatNpub } from '../../nostr/types';
 import { Nip07ErrorMessage } from './Nip07ErrorMessage';
 import { ShareDialog } from './ShareDialog';
@@ -371,7 +372,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                     {items.filter(item => !item.isDirectory).map(item => {
                       const timestamp = 'savedAt' in item ? item.savedAt : ('createdAt' in item ? (item as NostrGraphItem).createdAt * 1000 : 0);
                       const nostrItem = destination === 'nostr' ? item as NostrGraphItem : null;
-                      const profile = nostrItem ? getProfileFromCache(nostrItem.pubkey) : null;
+                      const profile = nostrItem ? getCachedProfile(nostrItem.pubkey) : null;
                       return (
                         <div
                           key={item.path}
@@ -468,7 +469,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
 
               {/* User's info display with as: caption */}
               {userPubkey && (() => {
-                const profile = getProfileFromCache(userPubkey);
+                const profile = getCachedProfile(userPubkey);
                 return (
                   <div className="dialog-user-info">
                     <span className="user-info-label">as:</span>

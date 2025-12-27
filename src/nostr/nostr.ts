@@ -6,10 +6,20 @@ import type { RxNostr } from 'rx-nostr';
 import { verifier } from '@rx-nostr/crypto';
 import { getPubkey, isNip07Available } from './nip07';
 import type { NostrEvent } from './types';
-import { getBootstrapRelays } from './bootstrap';
+import i18next from 'i18next';
 
 // Kind constant for relay list (NIP-65)
 const KIND_RELAY_LIST = 10002;
+
+// Get default relay URL based on locale
+// Japanese users -> yabu.me, others -> relay.damus.io
+export function getDefaultRelayUrl(): string {
+  const lang = i18next.language || (typeof navigator !== 'undefined' ? navigator.language : 'en');
+  if (lang.startsWith('ja')) {
+    return 'wss://yabu.me';
+  }
+  return 'wss://relay.damus.io';
+}
 
 // Indexer relays for fetching kind:10002 (not for kind:30078)
 export const INDEXER_RELAYS = [
@@ -60,11 +70,6 @@ export async function initUserRelayList(): Promise<void> {
   } catch {
     // ignore
   }
-}
-
-// Get cached user relay list (returns empty array if not initialized)
-export function getUserRelayList(mode: 'read' | 'write' = 'read'): string[] {
-  return (mode === 'read' ? userReadRelayCache : userWriteRelayCache) || [];
 }
 
 // Fetch relay list of the logged-in user via browser extension (uses cache)
@@ -139,7 +144,7 @@ export async function fetchRelayList(pubkey: string, mode: RelayMode = 'read'): 
       kinds: [KIND_RELAY_LIST],
       authors: [pubkey],
       limit: 1,
-    }, { relays: getBootstrapRelays() });
+    }, { relays: INDEXER_RELAYS });
     rxReq.over();
 
     // Fallback timeout after 3 seconds

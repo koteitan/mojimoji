@@ -5,10 +5,10 @@ import { createRxBackwardReq } from 'rx-nostr';
 import { getPubkey, signEvent, isNip07Available } from './nip07';
 import type { UnsignedEvent } from './nip07';
 import type { NostrEvent, Profile } from './types';
+import { saveProfileToCache } from './profileCache';
 import type { GraphData, GraphVisibility } from '../graph/types';
-import { getBootstrapRelays } from './bootstrap';
-import { fetchUserRelayList, fetchRelayList, getRxNostr, INDEXER_RELAYS } from './nostr';
-export { initUserRelayList, fetchUserRelayList, fetchRelayList, INDEXER_RELAYS } from './nostr';
+import { fetchUserRelayList, fetchRelayList, getRxNostr, getDefaultRelayUrl, INDEXER_RELAYS } from './nostr';
+export { initUserRelayList, fetchUserRelayList, fetchRelayList, getDefaultRelayUrl, INDEXER_RELAYS } from './nostr';
 export type { RelayMode } from './nostr';
 
 // Kind constants
@@ -46,13 +46,8 @@ export async function initAllGraphs(): Promise<NostrGraphItem[]> {
   }
 }
 
-// Get cached graphs (returns empty array if not initialized)
-export function getAllGraphs(): NostrGraphItem[] {
-  return allGraphsCache || [];
-}
-
 // Invalidate graphs cache (call after save/delete)
-export function invalidateGraphsCache(): void {
+function invalidateGraphsCache(): void {
   allGraphsCache = null;
 }
 
@@ -60,7 +55,7 @@ export function invalidateGraphsCache(): void {
 async function fetchAllGraphsFromRelays(): Promise<NostrGraphItem[]> {
   let relays = await fetchUserRelayList();
   if (relays.length === 0) {
-    relays = getBootstrapRelays();
+    relays = [getDefaultRelayUrl()];
   }
 
   return new Promise((resolve) => {
@@ -253,7 +248,7 @@ async function loadGraphsFromNostrInternal(
   if (filter === 'public' && (!relays || relays.length === 0)) {
     relays = await fetchUserRelayList();
     if (relays.length === 0) {
-      relays = getBootstrapRelays();
+      relays = [getDefaultRelayUrl()];
     }
   }
 
@@ -343,7 +338,7 @@ export async function loadGraphByPath(
     relays = await fetchRelayList(pubkey);
   }
   if (relays.length === 0) {
-    relays = getBootstrapRelays();
+    relays = [getDefaultRelayUrl()];
   }
 
   return new Promise((resolve) => {
@@ -412,7 +407,7 @@ export async function loadGraphByEventId(
   // Use user's relay list (kind:30078 is not stored on bootstrap/indexer relays)
   let relays = await fetchUserRelayList();
   if (relays.length === 0) {
-    relays = getBootstrapRelays();
+    relays = [getDefaultRelayUrl()];
   }
 
   return new Promise((resolve) => {
@@ -732,47 +727,7 @@ export function getNostrItemsInDirectory(
   return result;
 }
 
-// Profile utilities for author display
-export function getProfileFromCache(pubkey: string): Profile | undefined {
-  const cacheStr = localStorage.getItem('mojimoji-profile-cache');
-  if (!cacheStr) return undefined;
-  try {
-    const cache = JSON.parse(cacheStr) as Record<string, Profile>;
-    return cache[pubkey];
-  } catch {
-    return undefined;
-  }
-}
-
-// Get all cached profiles for autocomplete
-export function getAllCachedProfiles(): Array<{ pubkey: string; profile: Profile }> {
-  const cacheStr = localStorage.getItem('mojimoji-profile-cache');
-  if (!cacheStr) return [];
-  try {
-    const cache = JSON.parse(cacheStr) as Record<string, Profile>;
-    return Object.entries(cache).map(([pubkey, profile]) => ({ pubkey, profile }));
-  } catch {
-    return [];
-  }
-}
-
-// Update profile cache with new profiles
-function updateProfileCache(profiles: Record<string, Profile>): void {
-  const cacheStr = localStorage.getItem('mojimoji-profile-cache');
-  let cache: Record<string, Profile> = {};
-  if (cacheStr) {
-    try {
-      cache = JSON.parse(cacheStr) as Record<string, Profile>;
-    } catch {
-      // ignore
-    }
-  }
-  // Merge new profiles into cache
-  Object.assign(cache, profiles);
-  localStorage.setItem('mojimoji-profile-cache', JSON.stringify(cache));
-}
-
-// Fetch profiles from relays and update cache
+// Fetch profiles from relays and save to cache
 export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<number> {
   let relays = relayUrls?.filter(url => url.trim());
   if (!relays || relays.length === 0) {
@@ -786,7 +741,7 @@ export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<numbe
     }
   }
   if (!relays || relays.length === 0) {
-    relays = getBootstrapRelays();
+    relays = [getDefaultRelayUrl()];
   }
 
   return new Promise((resolve) => {
@@ -795,7 +750,7 @@ export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<numbe
 
     // Use backward strategy for one-shot queries
     const rxReq = createRxBackwardReq();
-    const profiles: Record<string, Profile> = {};
+    let profileCount = 0;
     let resolved = false;
 
     const subscription = client.use(rxReq).subscribe({
@@ -804,13 +759,15 @@ export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<numbe
         if (event.kind === 0) {
           try {
             const content = JSON.parse(event.content);
-            profiles[event.pubkey] = {
+            const profile: Profile = {
               name: content.name || '',
               display_name: content.display_name || '',
               picture: content.picture || '',
               about: content.about || '',
               nip05: content.nip05 || '',
             };
+            saveProfileToCache(event.pubkey, profile);
+            profileCount++;
           } catch {
             // ignore parse errors
           }
@@ -819,16 +776,14 @@ export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<numbe
       error: () => {
         if (!resolved) {
           resolved = true;
-          updateProfileCache(profiles);
-          resolve(Object.keys(profiles).length);
+          resolve(profileCount);
         }
       },
       complete: () => {
         // EOSE received - resolve with profiles collected
         if (!resolved) {
           resolved = true;
-          updateProfileCache(profiles);
-          resolve(Object.keys(profiles).length);
+          resolve(profileCount);
         }
       },
     });
@@ -845,8 +800,7 @@ export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<numbe
       if (!resolved) {
         resolved = true;
         subscription.unsubscribe();
-        updateProfileCache(profiles);
-        resolve(Object.keys(profiles).length);
+        resolve(profileCount);
       }
     }, 5000);
   });

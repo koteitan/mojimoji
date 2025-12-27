@@ -49,19 +49,3 @@ export async function signEvent(event: UnsignedEvent): Promise<NostrEvent> {
   }
   return window.nostr!.signEvent(event);
 }
-
-// Get relays from NIP-07 extension (if supported)
-export async function getRelaysFromExtension(): Promise<string[] | null> {
-  if (!isNip07Available() || !window.nostr?.getRelays) {
-    return null;
-  }
-  try {
-    const relays = await window.nostr.getRelays();
-    // Return write-enabled relays
-    return Object.entries(relays)
-      .filter(([, config]) => config.write)
-      .map(([url]) => url);
-  } catch {
-    return null;
-  }
-}

@@ -35,9 +35,75 @@ This document lists all Nostr subscriptions in the codebase, excluding RelayNode
 - **backward strategy**: One-shot query, completes on EOSE
 - **forward strategy**: Continuous subscription, receives real-time updates
 
+## Profile Caching Architecture
+
+```
+profileCache.ts (Core cache module)
+├── Map<pubkey, Profile> (in-memory)
+├── localStorage persistence (load on init, debounced save)
+├── getCachedProfile(pubkey) → Profile
+├── saveProfileToCache(pubkey, profile)
+├── getAllCachedProfiles() → Array<{pubkey, profile}>
+├── findPubkeysByName(searchTerm) → pubkey[]
+├── getProfileCache() → Map
+└── getProfileCacheInfo() → {count, bytes}
+
+ProfileFetcher.ts (Batching utility class)
+├── Uses profileCache internally
+├── Batches requests (50 items or 100ms timeout)
+├── Forward subscription for continuous fetching
+├── queueRequest(pubkey) - add to batch queue
+├── flushBatch() - emit batched request
+└── start(callback) / stop()
+
+graphStorage.ts
+└── fetchAndCacheProfiles() - bulk fetch profiles on app load (uses saveProfileToCache)
+
+Usage:
+├── profileCache.ts
+│   ├── getCachedProfile()
+│   │   ├── RelayNode.ts → console log (debug)
+│   │   ├── GraphEditor.tsx → Timeline (display author name/avatar)
+│   │   ├── LoadDialog.tsx → author display in graph list
+│   │   ├── PostDialog.tsx → user profile display
+│   │   └── SaveDialog.tsx → author display in graph list
+│   ├── saveProfileToCache()
+│   │   ├── ProfileFetcher.ts → on profile received from relay
+│   │   └── graphStorage.ts (fetchAndCacheProfiles) → bulk fetch on app load
+│   ├── getAllCachedProfiles()
+│   │   └── LoadDialog.tsx → author search autocomplete
+│   ├── findPubkeysByName()
+│   │   ├── RelayNode.ts → author filter autocomplete
+│   │   ├── MultiTypeRelayNode.ts → author filter autocomplete
+│   │   └── NostrFilterNode.ts → author filter autocomplete
+│   ├── getProfileCache()
+│   │   └── RelayNode.ts → identifier resolution (npub/name lookup)
+│   └── getProfileCacheInfo()
+│       └── GraphEditor.tsx → debug panel (cache count/size)
+└── ProfileFetcher.ts
+    ├── RelayNode.ts → profile$ → GraphEditor.tsx → Timeline (display author name/avatar)
+    └── MultiTypeRelayNode.ts → profile$ → GraphEditor.tsx → Timeline (display author name/avatar)
+```
+
+### Flow
+
+1. **On app load**:
+   - profileCache loads from localStorage
+   - `fetchAndCacheProfiles()` fetches profiles from relays (bulk, one-shot)
+2. **On RelayNode start**: ProfileFetcher starts forward subscription
+3. **On event received**:
+   - Check cache via `getCachedProfile()`
+   - If not cached, `queueRequest()` adds to batch
+   - After 100ms or 50 items, `flushBatch()` emits REQ
+4. **On profile received**:
+   - `saveProfileToCache()` stores in Map + localStorage
+   - Callback notifies RelayNode
+
 ## Source Files
 
+- `src/nostr/nostr.ts` - Relay list utilities, rx-nostr singleton
 - `src/nostr/graphStorage.ts` - Graph save/load operations
+- `src/nostr/profileCache.ts` - Profile cache with localStorage
 - `src/nostr/ProfileFetcher.ts` - Profile batching utility
-- `src/nostr/subscription.ts` - Generic subscription helper (used by nodes)
-- `src/nostr/client.ts` - Generic client helper
+- `src/nostr/nip07.ts` - NIP-07 browser extension support
+- `src/nostr/types.ts` - Type definitions and utilities

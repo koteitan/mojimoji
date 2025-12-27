@@ -6,12 +6,11 @@ import {
   loadGraphsFromNostr,
   getNostrItemsInDirectory,
   deleteGraphFromNostr,
-  getProfileFromCache,
-  getAllCachedProfiles,
   fetchUserRelayList,
   fetchAndCacheProfiles,
   type NostrGraphItem
 } from '../../nostr/graphStorage';
+import { getCachedProfile, getAllCachedProfiles } from '../../nostr/profileCache';
 import { formatNpub, decodeBech32ToHex, isHex64 } from '../../nostr/types';
 import { Nip07ErrorMessage } from './Nip07ErrorMessage';
 import { generatePermalink } from './ShareDialog';
@@ -271,7 +270,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
 
   const handleAuthorSelect = useCallback((pubkey: string) => {
     setAuthorPubkey(pubkey);
-    const profile = getProfileFromCache(pubkey);
+    const profile = getCachedProfile(pubkey);
     setAuthorInput(profile?.name || formatNpub(pubkey));
     setShowSuggestions(false);
   }, []);
@@ -535,7 +534,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                       </div>
                     ))}
                     {nostrItems.filter(item => !item.isDirectory).map(item => {
-                      const profile = getProfileFromCache(item.pubkey);
+                      const profile = getCachedProfile(item.pubkey);
                       const isOwn = item.pubkey === userPubkey;
                       return (
                         <div
