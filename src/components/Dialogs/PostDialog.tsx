@@ -11,6 +11,8 @@ import { RelaySettingsDialog } from './RelaySettingsDialog';
 import { Nip07ErrorMessage } from './Nip07ErrorMessage';
 import './Dialog.css';
 
+const DEFAULT_AVATAR = `${import.meta.env.BASE_URL}mojimoji-icon.png`;
+
 interface PostDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -203,11 +205,7 @@ export function PostDialog({ isOpen, onClose }: PostDialogProps) {
             {userPubkey && (
               <div className="dialog-user-info">
                 <span className="user-info-label">{t('dialogs.post.yourPubkey')}:</span>
-                {profile?.picture ? (
-                  <img src={profile.picture} alt="" className="user-icon" />
-                ) : (
-                  <span className="user-icon-placeholder">👤</span>
-                )}
+                <img src={profile?.picture || DEFAULT_AVATAR} alt="" className="user-icon" />
                 <span className="user-name">
                   {profile?.name || formatNpub(userPubkey)}
                 </span>

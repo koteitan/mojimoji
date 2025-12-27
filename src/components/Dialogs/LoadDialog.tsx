@@ -16,6 +16,8 @@ import { Nip07ErrorMessage } from './Nip07ErrorMessage';
 import { generatePermalink } from './ShareDialog';
 import './Dialog.css';
 
+const DEFAULT_AVATAR = `${import.meta.env.BASE_URL}mojimoji-icon.png`;
+
 type LoadSource = 'local' | 'nostr' | 'file';
 type NostrFilter = 'public' | 'mine' | 'by-author';
 
@@ -472,11 +474,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                             className="author-suggestion"
                             onClick={() => handleAuthorSelect(s.pubkey)}
                           >
-                            {s.picture ? (
-                              <img src={s.picture} alt="" className="author-picture" />
-                            ) : (
-                              <span className="author-picture-placeholder">👤</span>
-                            )}
+                            <img src={s.picture || DEFAULT_AVATAR} alt="" className="author-picture" />
                             <span className="author-name">{s.name}</span>
                           </div>
                         ))}
@@ -546,11 +544,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                           <span className="item-name">{item.name}</span>
                           {/* Author info */}
                           <span className="item-author-info">
-                            {profile?.picture ? (
-                              <img src={profile.picture} alt="" className="item-author-picture" />
-                            ) : (
-                              <span className="item-author-picture-placeholder">👤</span>
-                            )}
+                            <img src={profile?.picture || DEFAULT_AVATAR} alt="" className="item-author-picture" />
                             <span className="item-author-name">
                               {profile?.name || formatNpub(item.pubkey)}
                             </span>

@@ -9,6 +9,8 @@ import { Nip07ErrorMessage } from './Nip07ErrorMessage';
 import { ShareDialog } from './ShareDialog';
 import './Dialog.css';
 
+const DEFAULT_AVATAR = `${import.meta.env.BASE_URL}mojimoji-icon.png`;
+
 type SaveDestination = 'local' | 'nostr' | 'file';
 type NostrVisibility = 'public' | 'private';
 
@@ -384,11 +386,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                           {/* Author info (Nostr only) */}
                           {nostrItem && (
                             <span className="item-author-info">
-                              {profile?.picture ? (
-                                <img src={profile.picture} alt="" className="item-author-picture" />
-                              ) : (
-                                <span className="item-author-picture-placeholder">👤</span>
-                              )}
+                              <img src={profile?.picture || DEFAULT_AVATAR} alt="" className="item-author-picture" />
                               <span className="item-author-name">
                                 {profile?.name || formatNpub(nostrItem.pubkey)}
                               </span>
@@ -473,11 +471,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                 return (
                   <div className="dialog-user-info">
                     <span className="user-info-label">as:</span>
-                    {profile?.picture ? (
-                      <img src={profile.picture} alt="" className="user-icon" />
-                    ) : (
-                      <span className="user-icon-placeholder">👤</span>
-                    )}
+                    <img src={profile?.picture || DEFAULT_AVATAR} alt="" className="user-icon" />
                     <span className="user-name">
                       {profile?.name || formatNpub(userPubkey)}
                     </span>

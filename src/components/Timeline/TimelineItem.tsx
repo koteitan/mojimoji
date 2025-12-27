@@ -11,7 +11,7 @@ import {
 } from '../../nostr/types';
 import './Timeline.css';
 
-const DEFAULT_AVATAR = `${import.meta.env.BASE_URL}default-avatar.svg`;
+const DEFAULT_AVATAR = `${import.meta.env.BASE_URL}mojimoji-icon.png`;
 
 // Parse profile from kind 0 event content
 function parseProfileFromContent(content: string): Profile | null {
