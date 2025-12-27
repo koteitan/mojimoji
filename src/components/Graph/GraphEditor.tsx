@@ -1524,7 +1524,7 @@ export function GraphEditor({
       });
 
       // Configure connection path for vertical flow (top to bottom)
-      // Custom transformer that creates vertical bezier curves
+      // Custom transformer that creates orthogonal (Cartesian) paths
       // Also corrects for horizontal offset applied by classic preset
       const verticalTransformer = () => (points: { x: number; y: number }[]) => {
         if (points.length !== 2) throw new Error('need 2 points');
@@ -1536,16 +1536,18 @@ export function GraphEditor({
         const correctedStart = { x: start.x - horizontalCorrection, y: start.y };
         const correctedEnd = { x: end.x + horizontalCorrection, y: end.y };
 
-        // Calculate vertical offset for bezier control points
-        const yDistance = Math.abs(correctedEnd.y - correctedStart.y);
-        const xDistance = Math.abs(correctedEnd.x - correctedStart.x);
-        const offset = Math.max(yDistance * 0.12, xDistance / 5, 9);
+        // Create orthogonal path with vertical segments at both ends
+        // Add vertical offset so pipes go straight down/up before turning
+        const verticalOffset = 40;
+        const midY = (correctedStart.y + correctedEnd.y) / 2;
 
-        // Create vertical bezier: start -> control1 (below start) -> control2 (above end) -> end
-        const control1 = { x: correctedStart.x, y: correctedStart.y + offset };
-        const control2 = { x: correctedEnd.x, y: correctedEnd.y - offset };
+        // Ensure the horizontal segment is between the vertical offsets
+        const horizontalY = Math.max(correctedStart.y + verticalOffset, Math.min(correctedEnd.y - verticalOffset, midY));
+        const corner1 = { x: correctedStart.x, y: horizontalY };
+        const corner2 = { x: correctedEnd.x, y: horizontalY };
 
-        return [correctedStart, control1, control2, correctedEnd];
+        // Return 4 points - use corners as control points to create sharp turns
+        return [correctedStart, corner1, corner2, correctedEnd];
       };
 
       const pathPlugin = new ConnectionPathPlugin<Schemes, AreaExtra>({
