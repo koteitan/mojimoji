@@ -1,38 +1,22 @@
 // Nostr Graph Storage - Save/Load graphs to/from Nostr relays
 // Uses NIP-78 (kind:30078) for application-specific data
 
-import { createRxNostr, createRxBackwardReq } from 'rx-nostr';
-import type { RxNostr } from 'rx-nostr';
-import { verifier } from '@rx-nostr/crypto';
+import { createRxBackwardReq } from 'rx-nostr';
 import { getPubkey, signEvent, isNip07Available } from './nip07';
 import type { UnsignedEvent } from './nip07';
 import type { NostrEvent, Profile } from './types';
 import type { GraphData, GraphVisibility } from '../graph/types';
 import { getBootstrapRelays } from './bootstrap';
+import { fetchUserRelayList, fetchRelayList, getRxNostr, INDEXER_RELAYS } from './nostr';
+export { initUserRelayList, fetchUserRelayList, fetchRelayList, INDEXER_RELAYS } from './nostr';
+export type { RelayMode } from './nostr';
 
 // Kind constants
-const KIND_RELAY_LIST = 10002;
 const KIND_APP_DATA = 30078;
 const KIND_DELETE = 5;
 
 // Graph path prefix
 const GRAPH_PATH_PREFIX = 'mojimoji/graphs/';
-
-// Singleton rx-nostr instance for graph storage
-let rxNostr: RxNostr | null = null;
-
-function getRxNostr(): RxNostr {
-  if (!rxNostr) {
-    rxNostr = createRxNostr({
-      verifier,
-      // Performance optimizations
-      eoseTimeout: 3000,        // Wait max 3 seconds for EOSE (default is longer)
-      skipFetchNip11: true,     // Skip fetching relay information
-      skipExpirationCheck: true, // Skip NIP-40 expiration check for faster processing
-    });
-  }
-  return rxNostr;
-}
 
 // Nostr graph item for display in dialogs
 export interface NostrGraphItem {
@@ -45,60 +29,10 @@ export interface NostrGraphItem {
   event?: NostrEvent;
 }
 
-// Cache for user's relay list (fetched once on app load)
-// Separate caches for read and write relays per NIP-65
-let userReadRelayCache: string[] | null = null;
-let userWriteRelayCache: string[] | null = null;
-let userRelayListPromise: Promise<void> | null = null;
-
 // Cache for all mojimoji graphs (fetched once on app load)
 // This contains all graphs from user's relays, filtered by #client: ['mojimoji']
 let allGraphsCache: NostrGraphItem[] | null = null;
 let allGraphsPromise: Promise<NostrGraphItem[]> | null = null;
-
-// Initialize user's relay list cache (call on app load)
-// Fetches both read and write relays
-export async function initUserRelayList(): Promise<void> {
-  if (!isNip07Available()) {
-    return;
-  }
-  try {
-    const pubkey = await getPubkey();
-    // Fetch read and write relays in parallel
-    const [readRelays, writeRelays] = await Promise.all([
-      fetchRelayList(pubkey, 'read'),
-      fetchRelayList(pubkey, 'write'),
-    ]);
-    userReadRelayCache = readRelays;
-    userWriteRelayCache = writeRelays;
-  } catch {
-    // ignore
-  }
-}
-
-// Get cached user relay list (returns empty array if not initialized)
-export function getUserRelayList(mode: 'read' | 'write' = 'read'): string[] {
-  return (mode === 'read' ? userReadRelayCache : userWriteRelayCache) || [];
-}
-
-// Fetch relay list of the logged-in user via browser extension (uses cache)
-export async function fetchUserRelayList(mode: 'read' | 'write' = 'read'): Promise<string[]> {
-  const cache = mode === 'read' ? userReadRelayCache : userWriteRelayCache;
-  // Return cache if available and not empty
-  if (cache !== null && cache.length > 0) {
-    return cache;
-  }
-  // If already fetching, wait for that promise
-  if (userRelayListPromise !== null) {
-    await userRelayListPromise;
-    return (mode === 'read' ? userReadRelayCache : userWriteRelayCache) || [];
-  }
-  // Fetch and cache
-  userRelayListPromise = initUserRelayList();
-  await userRelayListPromise;
-  userRelayListPromise = null;
-  return (mode === 'read' ? userReadRelayCache : userWriteRelayCache) || [];
-}
 
 // Initialize all graphs cache (call on app load, after relay list is initialized)
 // Fetches all mojimoji graphs from user's relays with #client: ['mojimoji'] filter
@@ -182,76 +116,6 @@ async function fetchAllGraphsFromRelays(): Promise<NostrGraphItem[]> {
         resolve(parseGraphEvents(Array.from(eventsMap.values()), null));
       }
     }, 5000);
-  });
-}
-
-// Relay mode for NIP-65 read/write distinction
-export type RelayMode = 'read' | 'write';
-
-// Fetch relay list of any user by pubkey with read/write mode
-export async function fetchRelayList(pubkey: string, mode: RelayMode = 'read'): Promise<string[]> {
-  return new Promise((resolve) => {
-    const client = getRxNostr();
-    client.setDefaultRelays(BOOTSTRAP_RELAYS);
-
-    // Use backward strategy for one-shot queries
-    const rxReq = createRxBackwardReq();
-    const relays: string[] = [];
-    let resolved = false;
-
-    const subscription = client.use(rxReq).subscribe({
-      next: (packet) => {
-        const event = packet.event as NostrEvent;
-        if (event.kind === KIND_RELAY_LIST) {
-          // Extract relay URLs from 'r' tags with read/write filtering
-          for (const tag of event.tags) {
-            if (tag[0] === 'r' && tag[1]) {
-              const marker = tag[2]; // 'read', 'write', or undefined (both)
-              // Include if: no marker (both), or marker matches mode
-              if (!marker || marker === mode) {
-                relays.push(tag[1]);
-              }
-            }
-          }
-          // Resolve immediately when we get the relay list
-          if (!resolved) {
-            resolved = true;
-            subscription.unsubscribe();
-            resolve(relays);
-          }
-        }
-      },
-      error: () => {
-        if (!resolved) {
-          resolved = true;
-          resolve([]);
-        }
-      },
-      complete: () => {
-        // EOSE received - resolve with whatever relays we found
-        if (!resolved) {
-          resolved = true;
-          resolve(relays);
-        }
-      },
-    });
-
-    // Emit filter for relay list
-    rxReq.emit({
-      kinds: [KIND_RELAY_LIST],
-      authors: [pubkey],
-      limit: 1,
-    }, { relays: getBootstrapRelays() });
-    rxReq.over();
-
-    // Fallback timeout after 3 seconds
-    setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        subscription.unsubscribe();
-        resolve(relays);
-      }
-    }, 3000);
   });
 }
 
@@ -541,13 +405,6 @@ export async function loadGraphByPath(
   });
 }
 
-// Well-known relays for permalink loading (need broader coverage)
-const BOOTSTRAP_RELAYS = [
-  'wss://directory.yabu.me',
-  'wss://purplepag.es',
-  'wss://indexer.coracle.social'
-];
-
 // Load a graph by event ID (for permalink loading)
 export async function loadGraphByEventId(
   eventId: string
@@ -629,7 +486,7 @@ export async function loadGraphByNaddr(
     relays = await fetchRelayList(pubkey);
   }
   if (relays.length === 0) {
-    relays = BOOTSTRAP_RELAYS;
+    relays = INDEXER_RELAYS;
   }
 
   return new Promise((resolve) => {
