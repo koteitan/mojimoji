@@ -1141,7 +1141,7 @@ export function GraphEditor({
       onTimelineCreate(id, node.getTimelineName());
     }
 
-    // Create connections (skip cycles)
+    // Create connections (they may be displaced initially, will be fixed after view restore)
     const addedConnections: Array<{ source: string; target: string }> = [];
     for (const connData of graphData.connections as Array<{
       id: string;
@@ -1154,7 +1154,6 @@ export function GraphEditor({
       const targetNode = nodeMap.get(connData.target);
 
       if (sourceNode && targetNode) {
-        // Skip if this connection would create a cycle
         if (wouldCreateCycle(addedConnections, connData.source, connData.target)) {
           console.warn(`[loadGraphData] Skipping cyclic connection: ${connData.source} -> ${connData.target}`);
           continue;
@@ -1172,27 +1171,21 @@ export function GraphEditor({
 
     isLoadingRef.current = false;
 
-    // Rebuild the Observable pipeline after loading
-    setTimeout(() => rebuildPipelineRef.current?.(), 100);
-
     // Restore view transform if available, otherwise fit view to show all nodes
-    // Then update all nodes to recalculate connection positions
     setTimeout(async () => {
       if (graphData.viewTransform) {
-        // Restore saved view transform
         area.area.zoom(graphData.viewTransform.k, 0, 0);
         area.area.translate(graphData.viewTransform.x, graphData.viewTransform.y);
       } else {
-        // Fit view to show all nodes
         await AreaExtensions.zoomAt(area, editor.getNodes());
         const { x, y } = area.area.transform;
         area.area.translate(x, y + 30);
       }
-      // Update all nodes to recalculate connection positions after view is set
-      for (const node of editor.getNodes()) {
-        await area.update('node', node.id);
-      }
+
+      // Rebuild pipeline after graph is loaded
+      rebuildPipelineRef.current?.();
     }, 150);
+
 
     // Save to auto-save slot
     saveCurrentGraph();

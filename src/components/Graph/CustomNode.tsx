@@ -527,13 +527,21 @@ export function CustomNode(props: Props) {
     >
       {/* Input sockets at top */}
       <div className="custom-node-inputs">
-        {sortedInputs.map(({ key, input }) =>
-          input ? (
+        {sortedInputs.map(({ key, input }, index) => {
+          if (!input) return null;
+          // Calculate left edge position to prevent flex reflow
+          // Position the left edge so that socket center aligns with desired position
+          const totalCount = sortedInputs.length;
+          const socketWidth = 40; // matches CSS
+          const gap = 16; // matches CSS
+          const offsetFromCenter = (index - (totalCount - 1) / 2) * (socketWidth + gap);
+          return (
             <div
               className="custom-node-input"
               key={key}
               data-testid={`input-${key}`}
               title={input.label || key}
+              style={{ left: `calc(50% + ${offsetFromCenter - socketWidth / 2}px)` }}
             >
               {showInputLabels && (
                 <span className="socket-label socket-label-top">{input.label || key}</span>
@@ -547,8 +555,8 @@ export function CustomNode(props: Props) {
                 payload={input.socket}
               />
             </div>
-          ) : null
-        )}
+          );
+        })}
       </div>
 
       {/* Title */}
@@ -565,13 +573,21 @@ export function CustomNode(props: Props) {
 
       {/* Output sockets at bottom */}
       <div className="custom-node-outputs">
-        {sortedOutputs.map(({ key, output }) =>
-          output ? (
+        {sortedOutputs.map(({ key, output }, index) => {
+          if (!output) return null;
+          // Calculate left edge position to prevent flex reflow
+          // Position the left edge so that socket center aligns with desired position
+          const totalCount = sortedOutputs.length;
+          const socketWidth = 40; // matches CSS
+          const gap = 16; // matches CSS
+          const offsetFromCenter = (index - (totalCount - 1) / 2) * (socketWidth + gap);
+          return (
             <div
               className="custom-node-output"
               key={key}
               data-testid={`output-${key}`}
               title={output.label || key}
+              style={{ left: `calc(50% + ${offsetFromCenter - socketWidth / 2}px)` }}
             >
               <RefSocket
                 name="output-socket"
@@ -585,8 +601,8 @@ export function CustomNode(props: Props) {
                 <span className="socket-label">{output.label || key}</span>
               )}
             </div>
-          ) : null
-        )}
+          );
+        })}
       </div>
     </div>
   );
