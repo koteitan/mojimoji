@@ -1,8 +1,5 @@
 import { ClassicPreset } from 'rete';
 import { Subject, Observable, share } from 'rxjs';
-import { createRxNostr, createRxForwardReq } from 'rx-nostr';
-import type { RxNostr } from 'rx-nostr';
-import { verifier } from '@rx-nostr/crypto';
 import i18next from 'i18next';
 import { eventSocket } from './types';
 import { TextAreaControl, SelectControl, FilterControl, type Filters } from './controls';
@@ -11,6 +8,7 @@ import { decodeBech32ToHex, isHex64, parseDateToTimestamp } from '../../../nostr
 import { isNip07Available } from '../../../nostr/nip07';
 import { fetchUserRelayList, getDefaultRelayUrl } from '../../../nostr/graphStorage';
 import { ProfileFetcher } from '../../../nostr/ProfileFetcher';
+import { SharedSubscriptionManager } from '../../../nostr/SharedSubscriptionManager';
 import {
   getCachedProfile,
   findPubkeysByName,
@@ -22,9 +20,6 @@ import {
 export { getCachedProfile, findPubkeysByName, getProfileCacheInfo };
 
 const DEBUG = false;
-
-// Type for the result of createRxForwardReq with emit method
-type ForwardReq = ReturnType<typeof createRxForwardReq>;
 
 // Default filters: kinds=[1], limit=200
 const getDefaultFilters = (): Filters => [
@@ -155,13 +150,11 @@ export class RelayNode extends ClassicPreset.Node {
 
   // RxJS Observable for output events (with signal type)
   private eventSubject = new Subject<EventSignal>();
-  private rxNostr: RxNostr | null = null;
-  private rxReq: ForwardReq | null = null;
-  private subscription: { unsubscribe: () => void } | null = null;
+  private subscribedRelayUrls: string[] = [];  // Track which relays we're subscribed to
 
   // Profile updates - uses ProfileFetcher for batching
   private profileSubject = new Subject<{ pubkey: string; profile: Profile }>();
-  private profileFetcher: ProfileFetcher | null = null;
+  private profileFetchers: Map<string, ProfileFetcher> = new Map();  // Per-relay ProfileFetchers
 
   // Debug: event counters
   private eventCount = 0;
@@ -170,10 +163,6 @@ export class RelayNode extends ClassicPreset.Node {
 
   // Debug: monitoring flag (static so it applies to all instances)
   private static monitoring = false;
-
-  // Connection state and EOSE monitoring subscriptions
-  private messageSubscription: { unsubscribe: () => void } | null = null;
-  private connectionStateSubscription: { unsubscribe: () => void } | null = null;
 
   // Shared observable that can be subscribed to by multiple downstream nodes
   public output$: Observable<EventSignal> = this.eventSubject.asObservable().pipe(share());
@@ -338,104 +327,71 @@ export class RelayNode extends ClassicPreset.Node {
     this.lastEventTime = null;
     this.eoseReceived = false;
 
-    this.rxNostr = createRxNostr({ verifier });
-    this.rxNostr.setDefaultRelays(this.relayUrls);
-
-    // Use node ID as subscription ID to avoid conflicts when multiple nodes use the same relay
-    this.rxReq = createRxForwardReq(`relay-${this.id}`);
-
-    // Monitor all messages to detect EOSE and CLOSED
-    this.messageSubscription = this.rxNostr.createAllMessageObservable().subscribe({
-      next: (packet) => {
-        if (packet.type === 'EOSE') {
-          this.eoseReceived = true;
-        } else if (packet.type === 'CLOSED') {
-          console.warn(`[RelayNode ${this.id.slice(0, 8)}] CLOSED received from ${packet.from}: ${(packet as { notice?: string }).notice || 'no reason'}`);
-        }
-      },
-    });
-
-    // Monitor connection state changes
-    this.connectionStateSubscription = this.rxNostr.createConnectionStateObservable().subscribe({
-      next: (_packet) => {
-        // Connection state monitoring (no logging)
-      },
-    });
-
-    // Profile fetcher for batching profile requests
-    this.profileFetcher = new ProfileFetcher(this.rxNostr, this.id);
-    this.profileFetcher.start((pubkey, profile) => {
-      this.profileSubject.next({ pubkey, profile });
-    });
-
-    // Main event subscription (handles regular events only)
-    this.subscription = this.rxNostr.use(this.rxReq).subscribe({
-      next: (packet) => {
-        const event = packet.event as NostrEvent;
-
-        // Emit regular events with 'add' signal
-        this.eventCount++;
-        this.lastEventTime = Date.now();
-
-        // Monitor: log event with JST timestamp
-        if (RelayNode.monitoring) {
-          const jst = new Date(event.created_at * 1000).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
-          const profile = getCachedProfile(event.pubkey);
-          const name = profile?.name || profile?.display_name || event.pubkey.slice(0, 8);
-          const content = event.content.slice(0, 50).replace(/\n/g, ' ');
-          console.log(`[${jst}] ${name}: ${content}${event.content.length > 50 ? '...' : ''}`);
-        }
-
-        this.eventSubject.next({ event, signal: 'add' });
-
-        // Queue profile request (batched)
-        this.profileFetcher?.queueRequest(event.pubkey);
-      },
-      error: (err) => {
-        console.error(`[RelayNode ${this.id.slice(0, 8)}] Subscription error:`, err);
-      },
-      complete: () => {
-        console.warn(`[RelayNode ${this.id.slice(0, 8)}] Subscription completed unexpectedly`);
-      },
-    });
-
-    // Emit filters to start receiving events (multiple filters = OR logic)
-    // NOTE: emit() must be called once with all filters, not in a loop
-    // In forward strategy, each emit() overwrites the previous subscription
     const filters = this.getFilters();
-    if (filters.length > 0) {
-      this.rxReq.emit(filters as { kinds?: number[]; limit?: number }[]);
+    if (filters.length === 0) return;
+
+    // Subscribe to each relay via SharedSubscriptionManager
+    this.subscribedRelayUrls = [...this.relayUrls];
+    for (const relayUrl of this.subscribedRelayUrls) {
+      // Create ProfileFetcher for this relay using shared RxNostr
+      const rxNostr = SharedSubscriptionManager.getRxNostr(relayUrl);
+      const profileFetcher = new ProfileFetcher(rxNostr, `${this.id}-${relayUrl}`);
+      profileFetcher.start((pubkey, profile) => {
+        this.profileSubject.next({ pubkey, profile });
+      });
+      this.profileFetchers.set(relayUrl, profileFetcher);
+
+      // Subscribe via SharedSubscriptionManager
+      SharedSubscriptionManager.subscribe(
+        relayUrl,
+        this.id,
+        filters,
+        (event: NostrEvent) => {
+          // Emit regular events with 'add' signal
+          this.eventCount++;
+          this.lastEventTime = Date.now();
+
+          // Monitor: log event with JST timestamp
+          if (RelayNode.monitoring) {
+            const jst = new Date(event.created_at * 1000).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+            const profile = getCachedProfile(event.pubkey);
+            const name = profile?.name || profile?.display_name || event.pubkey.slice(0, 8);
+            const content = event.content.slice(0, 50).replace(/\n/g, ' ');
+            console.log(`[${jst}] ${name}: ${content}${event.content.length > 50 ? '...' : ''}`);
+          }
+
+          this.eventSubject.next({ event, signal: 'add' });
+
+          // Queue profile request (batched) - use any available ProfileFetcher
+          const pf = this.profileFetchers.get(relayUrl);
+          pf?.queueRequest(event.pubkey);
+        },
+        () => {
+          // EOSE callback
+          this.eoseReceived = true;
+        }
+      );
     }
   }
 
   // Stop the nostr subscription
   stopSubscription(): void {
-    if (this.subscription) {
-      this.subscription.unsubscribe();
-      this.subscription = null;
+    // Unsubscribe from all relays via SharedSubscriptionManager
+    for (const relayUrl of this.subscribedRelayUrls) {
+      SharedSubscriptionManager.unsubscribe(relayUrl, this.id);
     }
-    if (this.profileFetcher) {
-      this.profileFetcher.stop();
-      this.profileFetcher = null;
+    this.subscribedRelayUrls = [];
+
+    // Stop all ProfileFetchers
+    for (const profileFetcher of this.profileFetchers.values()) {
+      profileFetcher.stop();
     }
-    if (this.messageSubscription) {
-      this.messageSubscription.unsubscribe();
-      this.messageSubscription = null;
-    }
-    if (this.connectionStateSubscription) {
-      this.connectionStateSubscription.unsubscribe();
-      this.connectionStateSubscription = null;
-    }
-    if (this.rxNostr) {
-      this.rxNostr.dispose();
-      this.rxNostr = null;
-    }
-    this.rxReq = null;
+    this.profileFetchers.clear();
   }
 
   // Check if subscription is active
   isSubscribed(): boolean {
-    return this.subscription !== null;
+    return this.subscribedRelayUrls.length > 0;
   }
 
   // Force restart subscription (for debugging stuck connections)
@@ -446,12 +402,16 @@ export class RelayNode extends ClassicPreset.Node {
 
   // Check if profile subscription is active
   isProfileSubscribed(): boolean {
-    return this.profileFetcher !== null;
+    return this.profileFetchers.size > 0;
   }
 
   // Get pending profile count
   getPendingProfileCount(): number {
-    return this.profileFetcher?.getPendingCount() ?? 0;
+    let count = 0;
+    for (const pf of this.profileFetchers.values()) {
+      count += pf.getPendingCount();
+    }
+    return count;
   }
 
   // Get debug info for this node
@@ -464,14 +424,17 @@ export class RelayNode extends ClassicPreset.Node {
     lastEventAgo: string | null;
     eoseReceived: boolean;
   } {
+    // Get relay status from shared RxNostr instances
     let relayStatus: Record<string, string> | null = null;
-    if (this.rxNostr) {
+    if (this.subscribedRelayUrls.length > 0) {
       try {
-        const status = this.rxNostr.getAllRelayStatus();
         relayStatus = {};
-        for (const [url, state] of Object.entries(status)) {
-          // RelayStatus has a 'connection' property that is the ConnectionState string
-          relayStatus[url] = state.connection;
+        for (const relayUrl of this.subscribedRelayUrls) {
+          const rxNostr = SharedSubscriptionManager.getRxNostr(relayUrl);
+          const status = rxNostr.getAllRelayStatus();
+          for (const [url, state] of Object.entries(status)) {
+            relayStatus[url] = state.connection;
+          }
         }
       } catch {
         // Ignore errors
@@ -490,9 +453,9 @@ export class RelayNode extends ClassicPreset.Node {
     }
     return {
       nodeId: this.id.slice(0, 8),
-      subscribed: this.subscription !== null,
+      subscribed: this.subscribedRelayUrls.length > 0,
       relayStatus,
-      pendingProfiles: this.profileFetcher?.getPendingCount() ?? 0,
+      pendingProfiles: this.getPendingProfileCount(),
       eventCount: this.eventCount,
       lastEventAgo,
       eoseReceived: this.eoseReceived,

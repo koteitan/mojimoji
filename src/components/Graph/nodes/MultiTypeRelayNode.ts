@@ -1,8 +1,5 @@
 import { ClassicPreset } from 'rete';
 import { Subject, Observable, share } from 'rxjs';
-import { createRxNostr, createRxForwardReq } from 'rx-nostr';
-import type { RxNostr } from 'rx-nostr';
-import { verifier } from '@rx-nostr/crypto';
 import i18next from 'i18next';
 import {
   eventSocket,
@@ -21,9 +18,7 @@ import type { NostrEvent, Profile, EventSignal } from '../../../nostr/types';
 import { decodeBech32ToHex, isHex64 } from '../../../nostr/types';
 import { findPubkeysByName } from '../../../nostr/profileCache';
 import { ProfileFetcher } from '../../../nostr/ProfileFetcher';
-
-// Type for the result of createRxForwardReq with emit method
-type ForwardReq = ReturnType<typeof createRxForwardReq>;
+import { SharedSubscriptionManager } from '../../../nostr/SharedSubscriptionManager';
 
 // Signal type for relay status output
 export interface RelayStatusSignal {
@@ -98,17 +93,14 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
   // RxJS Observable for output events
   private eventSubject = new Subject<EventSignal>();
   private relayStatusSubject = new Subject<RelayStatusSignal>();
-  private rxNostr: RxNostr | null = null;
-  private rxReq: ForwardReq | null = null;
-  private subscription: { unsubscribe: () => void } | null = null;
+  private subscribedRelayUrls: string[] = [];  // Track which relays we're subscribed to
 
   // Profile updates - uses ProfileFetcher for batching
   private profileSubject = new Subject<{ pubkey: string; profile: Profile }>();
-  private profileFetcher: ProfileFetcher | null = null;
+  private profileFetchers: Map<string, ProfileFetcher> = new Map();  // Per-relay ProfileFetchers
 
-  // Connection monitoring
-  private messageSubscription: { unsubscribe: () => void } | null = null;
-  private connectionStateSubscription: { unsubscribe: () => void } | null = null;
+  // Connection monitoring (per relay)
+  private connectionStateSubscriptions: Map<string, { unsubscribe: () => void }> = new Map();
 
   // Debug counters
   private eventCount = 0;
@@ -520,98 +512,90 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
     this.eventCount = 0;
     this.eoseReceived = false;
 
-    this.rxNostr = createRxNostr({ verifier });
-    this.rxNostr.setDefaultRelays(relayUrls);
-
-    this.rxReq = createRxForwardReq(`multirelay-${this.id}`);
-
-    // Profile fetcher for batching profile requests
-    this.profileFetcher = new ProfileFetcher(this.rxNostr, this.id);
-    this.profileFetcher.start((pubkey, profile) => {
-      this.profileSubject.next({ pubkey, profile });
-    });
-
-    // Monitor messages
-    this.messageSubscription = this.rxNostr.createAllMessageObservable().subscribe({
-      next: (packet) => {
-        if (packet.type === 'EOSE') {
-          this.eoseReceived = true;
-          // Emit EOSE status
-          this.relayStatusSubject.next({ relay: packet.from, status: 'EOSE' });
-        }
-      },
-    });
-
-    // Monitor connection state changes and emit relay status
-    this.connectionStateSubscription = this.rxNostr.createConnectionStateObservable().subscribe({
-      next: (packet) => {
-        // Map rx-nostr connection state to our RelayStatusType
-        let status: RelayStatusType;
-        switch (packet.state) {
-          case 'initialized':
-            status = 'idle';
-            break;
-          case 'connecting':
-          case 'waiting-for-retrying':
-            status = 'connecting';
-            break;
-          case 'connected':
-            status = 'sub-stored';
-            break;
-          case 'dormant':
-          case 'terminated':
-            status = 'closed';
-            break;
-          case 'error':
-          case 'rejected':
-            status = 'error';
-            break;
-          default:
-            status = 'idle';
-        }
-        this.relayStatusSubject.next({ relay: packet.from, status });
-      },
-    });
-
-    // Main event subscription
-    this.subscription = this.rxNostr.use(this.rxReq).subscribe({
-      next: (packet) => {
-        const event = packet.event as NostrEvent;
-        this.eventCount++;
-        this.eventSubject.next({ event, signal: 'add' });
-        this.profileFetcher?.queueRequest(event.pubkey);
-      },
-    });
-
-    // Emit filters
     const filters = this.buildFilters();
-    if (filters.length > 0) {
-      this.rxReq.emit(filters as { kinds?: number[]; limit?: number }[]);
+    if (filters.length === 0) return;
+
+    // Subscribe to each relay via SharedSubscriptionManager
+    this.subscribedRelayUrls = [...relayUrls];
+    for (const relayUrl of this.subscribedRelayUrls) {
+      // Create ProfileFetcher for this relay using shared RxNostr
+      const rxNostr = SharedSubscriptionManager.getRxNostr(relayUrl);
+      const profileFetcher = new ProfileFetcher(rxNostr, `${this.id}-${relayUrl}`);
+      profileFetcher.start((pubkey, profile) => {
+        this.profileSubject.next({ pubkey, profile });
+      });
+      this.profileFetchers.set(relayUrl, profileFetcher);
+
+      // Monitor connection state changes and emit relay status
+      const connectionStateSub = rxNostr.createConnectionStateObservable().subscribe({
+        next: (packet) => {
+          // Map rx-nostr connection state to our RelayStatusType
+          let status: RelayStatusType;
+          switch (packet.state) {
+            case 'initialized':
+              status = 'idle';
+              break;
+            case 'connecting':
+            case 'waiting-for-retrying':
+              status = 'connecting';
+              break;
+            case 'connected':
+              status = 'sub-stored';
+              break;
+            case 'dormant':
+            case 'terminated':
+              status = 'closed';
+              break;
+            case 'error':
+            case 'rejected':
+              status = 'error';
+              break;
+            default:
+              status = 'idle';
+          }
+          this.relayStatusSubject.next({ relay: packet.from, status });
+        },
+      });
+      this.connectionStateSubscriptions.set(relayUrl, connectionStateSub);
+
+      // Subscribe via SharedSubscriptionManager
+      SharedSubscriptionManager.subscribe(
+        relayUrl,
+        this.id,
+        filters,
+        (event: NostrEvent) => {
+          this.eventCount++;
+          this.eventSubject.next({ event, signal: 'add' });
+          const pf = this.profileFetchers.get(relayUrl);
+          pf?.queueRequest(event.pubkey);
+        },
+        () => {
+          // EOSE callback
+          this.eoseReceived = true;
+          this.relayStatusSubject.next({ relay: relayUrl, status: 'EOSE' });
+        }
+      );
     }
   }
 
   stopSubscription(): void {
-    if (this.subscription) {
-      this.subscription.unsubscribe();
-      this.subscription = null;
+    // Unsubscribe from all relays via SharedSubscriptionManager
+    for (const relayUrl of this.subscribedRelayUrls) {
+      SharedSubscriptionManager.unsubscribe(relayUrl, this.id);
     }
-    if (this.profileFetcher) {
-      this.profileFetcher.stop();
-      this.profileFetcher = null;
+    this.subscribedRelayUrls = [];
+
+    // Stop all ProfileFetchers
+    for (const profileFetcher of this.profileFetchers.values()) {
+      profileFetcher.stop();
     }
-    if (this.messageSubscription) {
-      this.messageSubscription.unsubscribe();
-      this.messageSubscription = null;
+    this.profileFetchers.clear();
+
+    // Stop all connection state subscriptions
+    for (const sub of this.connectionStateSubscriptions.values()) {
+      sub.unsubscribe();
     }
-    if (this.connectionStateSubscription) {
-      this.connectionStateSubscription.unsubscribe();
-      this.connectionStateSubscription = null;
-    }
-    if (this.rxNostr) {
-      this.rxNostr.dispose();
-      this.rxNostr = null;
-    }
-    this.rxReq = null;
+    this.connectionStateSubscriptions.clear();
   }
 
   // Stop all subscriptions including trigger, relay input, and socket inputs
@@ -633,7 +617,7 @@ export class MultiTypeRelayNode extends ClassicPreset.Node {
   }
 
   isSubscribed(): boolean {
-    return this.subscription !== null;
+    return this.subscribedRelayUrls.length > 0;
   }
 
   serialize() {
