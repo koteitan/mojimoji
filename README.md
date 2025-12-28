@@ -154,8 +154,8 @@ src/
 |   |       +-- index.ts        # Node exports
 |   |       +-- types.ts        # Socket type definitions
 |   |       +-- controls.tsx    # Control classes (TextInput, Select, etc.)
-|   |       +-- RelayNode.ts    # Simple relay node (direct config)
-|   |       +-- MultiTypeRelayNode.ts  # Modular relay node (socket inputs)
+|   |       +-- SimpleRelayNode.ts    # Simple relay node (direct config)
+|   |       +-- ModularRelayNode.ts  # Modular relay node (socket inputs)
 |   |       +-- OperatorNode.ts # AND/OR/A-B set operations
 |   |       +-- SearchNode.ts   # Keyword/regex filter
 |   |       +-- LanguageNode.ts # Language detection filter

@@ -8,7 +8,7 @@ import { ReactPlugin, Presets } from 'rete-react-plugin';
 import { createRoot } from 'react-dom/client';
 
 import {
-  RelayNode,
+  SimpleRelayNode,
   OperatorNode,
   SearchNode,
   LanguageNode,
@@ -17,7 +17,7 @@ import {
   ConstantNode,
   Nip07Node,
   ExtractionNode,
-  MultiTypeRelayNode,
+  ModularRelayNode,
   IfNode,
   CountNode,
   getCachedProfile,
@@ -66,7 +66,7 @@ const formatBuildTimestamp = (): string => {
 
 const BUILD_TIMESTAMP = formatBuildTimestamp();
 
-type NodeTypes = RelayNode | OperatorNode | SearchNode | LanguageNode | NostrFilterNode | TimelineNode | ConstantNode | Nip07Node | ExtractionNode | MultiTypeRelayNode | IfNode | CountNode;
+type NodeTypes = SimpleRelayNode | OperatorNode | SearchNode | LanguageNode | NostrFilterNode | TimelineNode | ConstantNode | Nip07Node | ExtractionNode | ModularRelayNode | IfNode | CountNode;
 
 // Helper to get the internal node type
 const getNodeType = (node: NodeTypes): string => {
@@ -298,8 +298,8 @@ export function GraphEditor({
 
     for (const node of nodes) {
       const type = getNodeType(node);
-      if (type === 'Relay') {
-        const relayNode = node as RelayNode;
+      if (type === 'SimpleRelay') {
+        const relayNode = node as SimpleRelayNode;
         const isActive = relayNode.isSubscribed();
         const isProfileActive = relayNode.isProfileSubscribed();
         const pendingProfiles = relayNode.getPendingProfileCount();
@@ -346,10 +346,10 @@ export function GraphEditor({
 
   // Toggle timeline monitoring
   const monTimeline = useCallback(() => {
-    if (RelayNode.isMonitoring()) {
-      RelayNode.stopMonitoring();
+    if (SimpleRelayNode.isMonitoring()) {
+      SimpleRelayNode.stopMonitoring();
     } else {
-      RelayNode.startMonitoring();
+      SimpleRelayNode.startMonitoring();
     }
   }, []);
 
@@ -363,8 +363,8 @@ export function GraphEditor({
     const nodes = editor.getNodes();
     let count = 0;
     for (const node of nodes) {
-      if (getNodeType(node) === 'Relay') {
-        const relayNode = node as RelayNode;
+      if (getNodeType(node) === 'SimpleRelay') {
+        const relayNode = node as SimpleRelayNode;
         relayNode.restartSubscription();
         count++;
       }
@@ -502,15 +502,15 @@ export function GraphEditor({
     const node = editor.getNode(nodeId);
     if (!node) return null;
 
-    if (getNodeType(node) === 'Relay') {
-      return (node as RelayNode).output$;
-    } else if (getNodeType(node) === 'MultiTypeRelay') {
-      const multiRelayNode = node as MultiTypeRelayNode;
+    if (getNodeType(node) === 'SimpleRelay') {
+      return (node as SimpleRelayNode).output$;
+    } else if (getNodeType(node) === 'ModularRelay') {
+      const modularRelayNode = node as ModularRelayNode;
       // Return different output based on sourceOutput
       if (sourceOutput === 'relayStatus') {
-        return multiRelayNode.relayStatus$;
+        return modularRelayNode.relayStatus$;
       }
-      return multiRelayNode.output$;
+      return modularRelayNode.output$;
     } else if (getNodeType(node) === 'Operator') {
       return (node as OperatorNode).output$;
     } else if (getNodeType(node) === 'Search') {
@@ -550,8 +550,8 @@ export function GraphEditor({
 
     // First, stop all existing subscriptions
     for (const node of nodes) {
-      if (getNodeType(node) === 'Relay') {
-        (node as RelayNode).stopSubscription();
+      if (getNodeType(node) === 'SimpleRelay') {
+        (node as SimpleRelayNode).stopSubscription();
       } else if (getNodeType(node) === 'Operator') {
         (node as OperatorNode).stopSubscriptions();
       } else if (getNodeType(node) === 'Search') {
@@ -578,7 +578,7 @@ export function GraphEditor({
       const node = editor.getNode(nodeId);
       if (!node) return;
 
-      if (getNodeType(node) === 'Relay') {
+      if (getNodeType(node) === 'SimpleRelay') {
         activeRelayIds.add(nodeId);
         return;
       }
@@ -602,8 +602,8 @@ export function GraphEditor({
 
     // Start subscriptions on active Relay nodes and subscribe to profile updates
     for (const node of nodes) {
-      if (getNodeType(node) === 'Relay' && activeRelayIds.has(node.id)) {
-        const relayNode = node as RelayNode;
+      if (getNodeType(node) === 'SimpleRelay' && activeRelayIds.has(node.id)) {
+        const relayNode = node as SimpleRelayNode;
         relayNode.startSubscription();
 
         // Subscribe to profile updates from this relay
@@ -750,10 +750,10 @@ export function GraphEditor({
             return (sourceNode as IfNode).output$;
           } else if (sourceType === 'Count') {
             return (sourceNode as CountNode).output$;
-          } else if (sourceType === 'MultiTypeRelay') {
-            const multiRelayNode = sourceNode as MultiTypeRelayNode;
+          } else if (sourceType === 'ModularRelay') {
+            const modularRelayNode = sourceNode as ModularRelayNode;
             if (sourceOutput === 'relayStatus') {
-              return multiRelayNode.relayStatus$;
+              return modularRelayNode.relayStatus$;
             }
             return null; // Events are not valid for If node
           }
@@ -778,10 +778,10 @@ export function GraphEditor({
       }
     }
 
-    // Wire up MultiTypeRelay nodes
+    // Wire up ModularRelay nodes
     for (const node of nodes) {
-      if (getNodeType(node) === 'MultiTypeRelay') {
-        const multiRelayNode = node as MultiTypeRelayNode;
+      if (getNodeType(node) === 'ModularRelay') {
+        const modularRelayNode = node as ModularRelayNode;
 
         // Helper to get typed output from source node
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -806,14 +806,14 @@ export function GraphEditor({
         };
 
         // Wire up filter socket inputs FIRST (before trigger, so values are ready)
-        const socketKeys = multiRelayNode.getSocketKeys();
+        const socketKeys = modularRelayNode.getSocketKeys();
         for (const socketKey of socketKeys) {
           const socketConn = connections.find(
             (c: { target: string; targetInput: string }) =>
               c.target === node.id && c.targetInput === socketKey
           );
           const socket$ = socketConn ? getTypedOutput(socketConn.source) : null;
-          multiRelayNode.setSocketInput(socketKey, socket$);
+          modularRelayNode.setSocketInput(socketKey, socket$);
         }
 
         // Wire up relay input
@@ -822,7 +822,7 @@ export function GraphEditor({
             c.target === node.id && c.targetInput === 'relay'
         );
         const relay$ = relayConn ? getTypedOutput(relayConn.source) : null;
-        multiRelayNode.setRelayInput(relay$);
+        modularRelayNode.setRelayInput(relay$);
 
         // Wire up trigger input LAST (so all other inputs are ready when subscription starts)
         const triggerConn = connections.find(
@@ -830,7 +830,7 @@ export function GraphEditor({
             c.target === node.id && c.targetInput === 'trigger'
         );
         const trigger$ = triggerConn ? getTypedOutput(triggerConn.source) : null;
-        multiRelayNode.setTriggerInput(trigger$);
+        modularRelayNode.setTriggerInput(trigger$);
       }
     }
 
@@ -891,7 +891,7 @@ export function GraphEditor({
             case 'flag':
               return `flag:${data as boolean}`;
             case 'relayStatus': {
-              // Handle both string (from ConstantNode) and object (from MultiTypeRelayNode)
+              // Handle both string (from ConstantNode) and object (from ModularRelayNode)
               if (typeof data === 'string') {
                 return `relayStatus:${data}`;
               }
@@ -937,7 +937,7 @@ export function GraphEditor({
             case 'flag':
               return { id: itemId, type: 'flag', flag: data as boolean };
             case 'relayStatus': {
-              // Handle both string (from ConstantNode) and object (from MultiTypeRelayNode)
+              // Handle both string (from ConstantNode) and object (from ModularRelayNode)
               if (typeof data === 'string') {
                 return { id: itemId, type: 'relayStatus', status: data };
               }
@@ -1049,11 +1049,12 @@ export function GraphEditor({
       let node: NodeTypes;
 
       switch (nodeData.type) {
-        case 'Relay':
+        case 'SimpleRelay':
+        case 'Relay': // backward compatibility
         case 'Source': // backward compatibility
-          node = new RelayNode();
+          node = new SimpleRelayNode();
           if (nodeData.data) {
-            (node as RelayNode).deserialize(nodeData.data as { relayUrls: string[]; filterJson: string });
+            (node as SimpleRelayNode).deserialize(nodeData.data as { relayUrls: string[]; filterJson: string });
           }
           break;
         case 'Operator':
@@ -1107,10 +1108,11 @@ export function GraphEditor({
             (node as ExtractionNode).deserialize(nodeData.data as { extractionField: ExtractionField; relayFilterType: RelayFilterType });
           }
           break;
-        case 'MultiTypeRelay':
-          node = new MultiTypeRelayNode();
+        case 'ModularRelay':
+        case 'MultiTypeRelay': // backward compatibility
+          node = new ModularRelayNode();
           if (nodeData.data) {
-            (node as MultiTypeRelayNode).deserialize(nodeData.data as { filters?: Filters });
+            (node as ModularRelayNode).deserialize(nodeData.data as { filters?: Filters });
           }
           break;
         case 'If':
@@ -1243,7 +1245,7 @@ export function GraphEditor({
     }
   }, [loadGraphData]);
 
-  const addNode = useCallback(async (type: 'Relay' | 'Operator' | 'Search' | 'Language' | 'NostrFilter' | 'Timeline' | 'Constant' | 'Nip07' | 'Extraction' | 'MultiTypeRelay' | 'If' | 'Count') => {
+  const addNode = useCallback(async (type: 'SimpleRelay' | 'Operator' | 'Search' | 'Language' | 'NostrFilter' | 'Timeline' | 'Constant' | 'Nip07' | 'Extraction' | 'ModularRelay' | 'If' | 'Count') => {
     const editor = editorRef.current;
     const area = areaRef.current;
     if (!editor || !area) return;
@@ -1251,8 +1253,8 @@ export function GraphEditor({
     let node: NodeTypes;
 
     switch (type) {
-      case 'Relay':
-        node = new RelayNode();
+      case 'SimpleRelay':
+        node = new SimpleRelayNode();
         break;
       case 'Operator':
         node = new OperatorNode();
@@ -1279,8 +1281,8 @@ export function GraphEditor({
       case 'Extraction':
         node = new ExtractionNode();
         break;
-      case 'MultiTypeRelay':
-        node = new MultiTypeRelayNode();
+      case 'ModularRelay':
+        node = new ModularRelayNode();
         break;
       case 'If':
         node = new IfNode();
@@ -1323,7 +1325,7 @@ export function GraphEditor({
         const maxX = Math.max(...positions.map(p => p.x + p.width));
         const maxY = Math.max(...positions.map(p => p.y + p.height));
 
-        if (type === 'Relay') {
+        if (type === 'SimpleRelay') {
           // Relay nodes: same Y as uppermost, right of rightmost
           newX = maxX + nodeSpacing;
           newY = minY;
@@ -2336,7 +2338,7 @@ export function GraphEditor({
           isLoadingRef.current = true;
 
           // Create default Relay node (at top)
-          const relayNode = new RelayNode();
+          const relayNode = new SimpleRelayNode();
           await editor.addNode(relayNode);
           await area.translate(relayNode.id, { x: 100, y: 100 });
 
@@ -2449,7 +2451,7 @@ export function GraphEditor({
       // r = add Relay node
       if (key === 'r') {
         e.preventDefault();
-        addNode('Relay');
+        addNode('SimpleRelay');
         return;
       }
 
@@ -2522,8 +2524,8 @@ export function GraphEditor({
           </button>
           {inputDropdownOpen && (
             <div className="filter-dropdown-menu">
-              <button onClick={() => { addNode('Relay'); setInputDropdownOpen(false); }}>{t('toolbar.simpleRelay', 'Relay (Simple)')}</button>
-              <button onClick={() => { addNode('MultiTypeRelay'); setInputDropdownOpen(false); }}>{t('toolbar.modularRelay', 'Relay (Modular)')}</button>
+              <button onClick={() => { addNode('SimpleRelay'); setInputDropdownOpen(false); }}>{t('toolbar.simpleRelay', 'Relay (Simple)')}</button>
+              <button onClick={() => { addNode('ModularRelay'); setInputDropdownOpen(false); }}>{t('toolbar.modularRelay', 'Relay (Modular)')}</button>
               <button onClick={() => { addNode('Constant'); setInputDropdownOpen(false); }}>{t('toolbar.constant', 'Constant')}</button>
               <button onClick={() => { addNode('Nip07'); setInputDropdownOpen(false); }}>{t('toolbar.nip07', 'NIP-07')}</button>
             </div>

@@ -154,8 +154,8 @@ src/
 |   |       +-- index.ts        # ノードエクスポート
 |   |       +-- types.ts        # ソケット型定義
 |   |       +-- controls.tsx    # コントロールクラス（TextInput, Select等）
-|   |       +-- RelayNode.ts    # シンプルリレーノード（直接設定）
-|   |       +-- MultiTypeRelayNode.ts  # モジュラーリレーノード（ソケット入力）
+|   |       +-- SimpleRelayNode.ts    # シンプルリレーノード（直接設定）
+|   |       +-- ModularRelayNode.ts  # モジュラーリレーノード（ソケット入力）
 |   |       +-- OperatorNode.ts # AND/OR/A-B 集合演算
 |   |       +-- SearchNode.ts   # キーワード/正規表現フィルタ
 |   |       +-- LanguageNode.ts # 言語検出フィルタ

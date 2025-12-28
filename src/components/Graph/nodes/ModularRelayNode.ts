@@ -65,9 +65,9 @@ function parseSocketKey(key: string): { filterIndex: number; elementIndex: numbe
   return { filterIndex: parseInt(match[1], 10), elementIndex: parseInt(match[2], 10) };
 }
 
-export class MultiTypeRelayNode extends ClassicPreset.Node {
-  static readonly nodeType = 'MultiTypeRelay';
-  readonly nodeType = 'MultiTypeRelay';
+export class ModularRelayNode extends ClassicPreset.Node {
+  static readonly nodeType = 'ModularRelay';
+  readonly nodeType = 'ModularRelay';
   width = 300;
   height: number | undefined = undefined;
 

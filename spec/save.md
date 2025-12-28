@@ -94,7 +94,7 @@ For manual saving, we will add:
   "nodes": [
     {
       "id": "[node-id]",
-      "type": "Relay" | "MultiTypeRelay" | "Operator" | "Search" | "Language" | "NostrFilter" | "Timeline" | "Constant" | "Nip07" | "Extraction" | "If" | "Count",
+      "type": "SimpleRelay" | "ModularRelay" | "Operator" | "Search" | "Language" | "NostrFilter" | "Timeline" | "Constant" | "Nip07" | "Extraction" | "If" | "Count",
       "position": { "x": number, "y": number },
       "data": { ... }
     },
@@ -122,9 +122,9 @@ For manual saving, we will add:
   - Version 1: Initial version
   - Version 2: Added visibility field to graph data (moved from Nostr tag)
 - node data formats by type:
-  - Relay: `{ relaySource?: "auto" | "manual", relayUrls: string[], filters: Filters }`
+  - SimpleRelay: `{ relaySource?: "auto" | "manual", relayUrls: string[], filters: Filters }`
     - relaySource: optional, defaults to "manual" for backward compatibility
-  - MultiTypeRelay: `{ filters: Filters }`
+  - ModularRelay: `{ filters: Filters }`
     - filters: array of filter elements with field and value
   - Operator: `{ operation: "and" | "or" | "a-b", dataType?: string }`
     - dataType: optional, socket type for typed operations

@@ -94,7 +94,7 @@ mojimoji が使用する localStorage キー:
   "nodes": [
     {
       "id": "[node-id]",
-      "type": "Relay" | "MultiTypeRelay" | "Operator" | "Search" | "Language" | "NostrFilter" | "Timeline" | "Constant" | "Nip07" | "Extraction" | "If" | "Count",
+      "type": "SimpleRelay" | "ModularRelay" | "Operator" | "Search" | "Language" | "NostrFilter" | "Timeline" | "Constant" | "Nip07" | "Extraction" | "If" | "Count",
       "position": { "x": number, "y": number },
       "data": { ... }
     },
@@ -122,9 +122,9 @@ mojimoji が使用する localStorage キー:
   - バージョン 1: 初期バージョン
   - バージョン 2: visibility フィールドを graph data に追加（Nostr タグから移動）
 - ノードタイプ別のデータ形式:
-  - Relay: `{ relaySource?: "auto" | "manual", relayUrls: string[], filters: Filters }`
+  - SimpleRelay: `{ relaySource?: "auto" | "manual", relayUrls: string[], filters: Filters }`
     - relaySource: オプション、後方互換性のためデフォルトは "manual"
-  - MultiTypeRelay: `{ filters: Filters }`
+  - ModularRelay: `{ filters: Filters }`
     - filters: フィールドと値を持つフィルタ要素の配列
   - Operator: `{ operation: "and" | "or" | "a-b", dataType?: string }`
     - dataType: オプション、型付き操作用のソケットタイプ

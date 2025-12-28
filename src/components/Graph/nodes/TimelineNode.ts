@@ -116,7 +116,7 @@ function extractData(rawSignal: unknown, detectedType: TimelineDataType): unknow
     return rawSignal;
   }
 
-  // For relay status from MultiTypeRelayNode, return the signal
+  // For relay status from ModularRelayNode, return the signal
   if (detectedType === 'relayStatus' && typeof rawSignal === 'object' && rawSignal !== null && 'relay' in rawSignal && 'status' in rawSignal) {
     return rawSignal;
   }

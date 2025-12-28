@@ -1,6 +1,6 @@
 # Nostr Subscriptions
 
-This document lists all Nostr subscriptions in the codebase, excluding RelayNode and MultiTypeRelayNode (which are user-configurable).
+This document lists all Nostr subscriptions in the codebase, excluding SimpleRelayNode and ModularRelayNode (which are user-configurable).
 
 ## Subscriptions Table
 
@@ -50,8 +50,8 @@ profileCache.ts (Core cache module)
 
 ProfileFetcher.ts (Batching utility class)
 ├── Uses profileCache internally
-├── Batches requests (50 items or 100ms timeout)
-├── Forward subscription for continuous fetching
+├── Batches requests (50 items or 1000ms timeout)
+├── Backward subscription (EOSE ends subscription)
 ├── queueRequest(pubkey) - add to batch queue
 ├── flushBatch() - emit batched request
 └── start(callback) / stop()
@@ -62,7 +62,7 @@ graphStorage.ts
 Usage:
 ├── profileCache.ts
 │   ├── getCachedProfile()
-│   │   ├── RelayNode.ts → console log (debug)
+│   │   ├── SimpleRelayNode.ts → console log (debug)
 │   │   ├── GraphEditor.tsx → Timeline (display author name/avatar)
 │   │   ├── LoadDialog.tsx → author display in graph list
 │   │   ├── PostDialog.tsx → user profile display
@@ -73,16 +73,16 @@ Usage:
 │   ├── getAllCachedProfiles()
 │   │   └── LoadDialog.tsx → author search autocomplete
 │   ├── findPubkeysByName()
-│   │   ├── RelayNode.ts → author filter autocomplete
-│   │   ├── MultiTypeRelayNode.ts → author filter autocomplete
+│   │   ├── SimpleRelayNode.ts → author filter autocomplete
+│   │   ├── ModularRelayNode.ts → author filter autocomplete
 │   │   └── NostrFilterNode.ts → author filter autocomplete
 │   ├── getProfileCache()
-│   │   └── RelayNode.ts → identifier resolution (npub/name lookup)
+│   │   └── SimpleRelayNode.ts → identifier resolution (npub/name lookup)
 │   └── getProfileCacheInfo()
 │       └── GraphEditor.tsx → debug panel (cache count/size)
 └── ProfileFetcher.ts
-    ├── RelayNode.ts → profile$ → GraphEditor.tsx → Timeline (display author name/avatar)
-    └── MultiTypeRelayNode.ts → profile$ → GraphEditor.tsx → Timeline (display author name/avatar)
+    ├── SimpleRelayNode.ts → profile$ → GraphEditor.tsx → Timeline (display author name/avatar)
+    └── ModularRelayNode.ts → profile$ → GraphEditor.tsx → Timeline (display author name/avatar)
 ```
 
 ### Flow
@@ -90,14 +90,14 @@ Usage:
 1. **On app load**:
    - profileCache loads from localStorage
    - `fetchAndCacheProfiles()` fetches profiles from relays (bulk, one-shot)
-2. **On RelayNode start**: ProfileFetcher starts forward subscription
+2. **On SimpleRelayNode start**: ProfileFetcher starts backward subscription
 3. **On event received**:
    - Check cache via `getCachedProfile()`
    - If not cached, `queueRequest()` adds to batch
-   - After 100ms or 50 items, `flushBatch()` emits REQ
+   - After 1000ms or 50 items, `flushBatch()` emits REQ
 4. **On profile received**:
    - `saveProfileToCache()` stores in Map + localStorage
-   - Callback notifies RelayNode
+   - Callback notifies SimpleRelayNode
 
 ## Source Files
 

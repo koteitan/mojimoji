@@ -6,7 +6,7 @@ import { getCachedProfile, saveProfileToCache } from './profileCache';
 /**
  * ProfileFetcher - Shared utility for batching profile (kind:0) requests
  *
- * Used by RelayNode and MultiTypeRelayNode to efficiently fetch user profiles.
+ * Used by SimpleRelayNode and ModularRelayNode to efficiently fetch user profiles.
  * Uses backward strategy (EOSE ends subscription) to avoid subscription accumulation.
  * Batches multiple pubkey requests and flushes them either when:
  * - Batch size reaches 50, or

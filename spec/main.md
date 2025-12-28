@@ -248,7 +248,7 @@ User Inrterface is as follows.
           - behavior:
             - extracts specified field from input events
             - for #e/#p/#r: extracts from event tags
-        - multi type relay node (modular relay):
+        - modular relay node:
           - input terminals:
             - trigger (trigger type)
             - relay (relay type)
@@ -523,7 +523,7 @@ User Inrterface is as follows.
   │   │           ├── index.ts
   │   │           ├── types.ts
   │   │           ├── controls.tsx
-  │   │           ├── RelayNode.ts
+  │   │           ├── SimpleRelayNode.ts
   │   │           ├── OperatorNode.ts
   │   │           ├── SearchNode.ts
   │   │           ├── LanguageNode.ts
@@ -532,7 +532,7 @@ User Inrterface is as follows.
   │   │           ├── ConstantNode.ts
   │   │           ├── Nip07Node.ts
   │   │           ├── ExtractionNode.ts
-  │   │           ├── MultiTypeRelayNode.ts
+  │   │           ├── ModularRelayNode.ts
   │   │           ├── IfNode.ts
   │   │           └── CountNode.ts
   │   ├── i18n/

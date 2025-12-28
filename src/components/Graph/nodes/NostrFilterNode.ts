@@ -3,7 +3,7 @@ import { Observable, Subject, share, filter } from 'rxjs';
 import i18next from 'i18next';
 import { eventSocket } from './types';
 import { SimpleFilterControl, type FilterElement } from './controls';
-import { findPubkeysByName } from './RelayNode';
+import { findPubkeysByName } from './SimpleRelayNode';
 import type { EventSignal, NostrEvent } from '../../../nostr/types';
 import { decodeBech32ToHex, isHex64, parseDateToTimestamp } from '../../../nostr/types';
 

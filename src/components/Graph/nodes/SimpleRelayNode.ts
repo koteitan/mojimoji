@@ -137,9 +137,9 @@ const filtersToNostrFilters = (filters: Filters): Record<string, unknown>[] => {
 // Relay source type: auto (from kind:10002) or manual (from textarea)
 export type RelaySourceType = 'auto' | 'manual';
 
-export class RelayNode extends ClassicPreset.Node {
-  static readonly nodeType = 'Relay';
-  readonly nodeType = 'Relay';
+export class SimpleRelayNode extends ClassicPreset.Node {
+  static readonly nodeType = 'SimpleRelay';
+  readonly nodeType = 'SimpleRelay';
   width = 280;
   height: number | undefined = undefined; // auto-calculated based on content
 
@@ -352,7 +352,7 @@ export class RelayNode extends ClassicPreset.Node {
           this.lastEventTime = Date.now();
 
           // Monitor: log event with JST timestamp
-          if (RelayNode.monitoring) {
+          if (SimpleRelayNode.monitoring) {
             const jst = new Date(event.created_at * 1000).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
             const profile = getCachedProfile(event.pubkey);
             const name = profile?.name || profile?.display_name || event.pubkey.slice(0, 8);
@@ -396,7 +396,7 @@ export class RelayNode extends ClassicPreset.Node {
 
   // Force restart subscription (for debugging stuck connections)
   restartSubscription(): void {
-    console.log(`[RelayNode ${this.id.slice(0, 8)}] Restarting subscription...`);
+    console.log(`[SimpleRelayNode ${this.id.slice(0, 8)}] Restarting subscription...`);
     this.startSubscription();
   }
 
@@ -464,16 +464,16 @@ export class RelayNode extends ClassicPreset.Node {
 
   // Toggle monitoring mode
   static startMonitoring(): void {
-    RelayNode.monitoring = true;
+    SimpleRelayNode.monitoring = true;
     console.log('📡 Timeline monitoring started. Events will be logged in real-time.');
   }
 
   static stopMonitoring(): void {
-    RelayNode.monitoring = false;
+    SimpleRelayNode.monitoring = false;
     console.log('📡 Timeline monitoring stopped.');
   }
 
   static isMonitoring(): boolean {
-    return RelayNode.monitoring;
+    return SimpleRelayNode.monitoring;
   }
 }

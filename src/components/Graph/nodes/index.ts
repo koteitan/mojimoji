@@ -1,5 +1,5 @@
-export { RelayNode, getCachedProfile, getProfileCacheInfo, findPubkeysByName } from './RelayNode';
-export type { RelaySourceType } from './RelayNode';
+export { SimpleRelayNode, getCachedProfile, getProfileCacheInfo, findPubkeysByName } from './SimpleRelayNode';
+export type { RelaySourceType } from './SimpleRelayNode';
 export { OperatorNode } from './OperatorNode';
 export type { OperatorDataType } from './OperatorNode';
 export { SearchNode } from './SearchNode';
@@ -15,7 +15,7 @@ export { Nip07Node } from './Nip07Node';
 export type { PubkeySignal } from './Nip07Node';
 export { ExtractionNode } from './ExtractionNode';
 export type { ExtractionField, RelayFilterType, ExtractionSignal } from './ExtractionNode';
-export { MultiTypeRelayNode } from './MultiTypeRelayNode';
+export { ModularRelayNode } from './ModularRelayNode';
 export { IfNode } from './IfNode';
 export type { ComparisonOperator, FlagSignal } from './IfNode';
 export { CountNode } from './CountNode';
