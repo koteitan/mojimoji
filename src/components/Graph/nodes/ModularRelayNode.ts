@@ -323,7 +323,20 @@ export class ModularRelayNode extends ClassicPreset.Node {
         filter[field] = num;
       }
     } else if (field === 'ids' || field === 'authors' || field.startsWith('#')) {
-      filter[field] = values.filter((v): v is string => typeof v === 'string');
+      // Convert bech32 (npub, nevent, note) to hex
+      const hexValues = values
+        .filter((v): v is string => typeof v === 'string')
+        .map((v) => {
+          const decoded = decodeBech32ToHex(v);
+          if (decoded) {
+            return decoded.hex;
+          }
+          if (isHex64(v)) {
+            return v.toLowerCase();
+          }
+          return v;
+        });
+      filter[field] = hexValues;
     }
   }
 
