@@ -22,6 +22,39 @@ export const FILTER_FIELDS = [
   { value: 'limit', label: 'limit' },
 ];
 
+// Filter fields for ModularRelayNode (includes both UI and socket options)
+export const MODULAR_FILTER_FIELDS = [
+  // UI fields (value input)
+  { value: 'kinds', label: 'kinds' },
+  { value: 'ids', label: 'ids' },
+  { value: 'authors', label: 'authors' },
+  { value: '#e', label: '#e' },
+  { value: '#p', label: '#p' },
+  { value: '#t', label: '#t' },
+  { value: 'since', label: 'since' },
+  { value: 'until', label: 'until' },
+  { value: 'limit', label: 'limit' },
+  // Socket fields (input socket)
+  { value: 'kinds (socket)', label: 'kinds (socket)' },
+  { value: 'ids (socket)', label: 'ids (socket)' },
+  { value: 'authors (socket)', label: 'authors (socket)' },
+  { value: '#e (socket)', label: '#e (socket)' },
+  { value: '#p (socket)', label: '#p (socket)' },
+  { value: 'since (socket)', label: 'since (socket)' },
+  { value: 'until (socket)', label: 'until (socket)' },
+  { value: 'limit (socket)', label: 'limit (socket)' },
+];
+
+// Helper to check if a field is a socket field
+export function isSocketField(field: string): boolean {
+  return field.endsWith(' (socket)');
+}
+
+// Helper to get the base field name from a socket field
+export function getBaseField(field: string): string {
+  return field.replace(' (socket)', '');
+}
+
 // Filter fields for NostrFilter node (pass-through filter, no ids/limit)
 export const NOSTR_FILTER_FIELDS = [
   { value: 'kinds', label: 'kinds' },
@@ -39,18 +72,21 @@ export class FilterControl extends ClassicPreset.Control {
   label: string;
   onChange: (filters: Filters) => void;
   hideValues: boolean; // Hide value input (for modular relay where values come from sockets)
+  useModularFields: boolean; // Use MODULAR_FILTER_FIELDS (includes socket options)
 
   constructor(
     filters: Filters,
     label: string,
     onChange: (filters: Filters) => void,
-    hideValues: boolean = false
+    hideValues: boolean = false,
+    useModularFields: boolean = false
   ) {
     super();
     this.filters = filters;
     this.label = label;
     this.onChange = onChange;
     this.hideValues = hideValues;
+    this.useModularFields = useModularFields;
   }
 }
 

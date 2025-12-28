@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Presets } from 'rete-react-plugin';
-import { TextInputControl, TextAreaControl, SelectControl, CheckboxControl, CheckboxGroupControl, FilterControl, SimpleFilterControl, ToggleControl, FILTER_FIELDS, NOSTR_FILTER_FIELDS, type Filters, type FilterElement } from './nodes/controls';
+import { TextInputControl, TextAreaControl, SelectControl, CheckboxControl, CheckboxGroupControl, FilterControl, SimpleFilterControl, ToggleControl, FILTER_FIELDS, MODULAR_FILTER_FIELDS, NOSTR_FILTER_FIELDS, isSocketField, type Filters, type FilterElement } from './nodes/controls';
 import './CustomNode.css';
 
 const { RefSocket } = Presets.classic;
@@ -241,7 +241,7 @@ function FilterControlComponent({ control, nodeId }: { control: FilterControl; n
     updateFilters(newFilters);
   };
 
-  const updateElement = (filterIndex: number, elementIndex: number, field: string, value: string) => {
+  const updateElement = (filterIndex: number, elementIndex: number, field: string, value: string, commit: boolean = false) => {
     const newFilters = filters.map((filter, i) =>
       i === filterIndex
         ? filter.map((el, j) =>
@@ -250,6 +250,12 @@ function FilterControlComponent({ control, nodeId }: { control: FilterControl; n
         : filter
     );
     setFilters(newFilters);
+    if (commit) {
+      // Immediately commit for select changes (socket field changes need to update sockets)
+      control.filters = newFilters;
+      control.onChange(newFilters);
+      dispatchControlChange(nodeId);
+    }
   };
 
   const commitChanges = () => {
@@ -275,52 +281,55 @@ function FilterControlComponent({ control, nodeId }: { control: FilterControl; n
               </button>
             )}
           </div>
-          {filter.map((element, elementIndex) => (
-            <div key={elementIndex} className="filter-element">
-              <select
-                className={control.hideValues ? "filter-field-select-wide" : "filter-field-select"}
-                value={element.field}
-                onChange={(e) => updateElement(filterIndex, elementIndex, e.target.value, element.value)}
-                onBlur={commitChanges}
-                onPointerDown={(e) => e.stopPropagation()}
-              >
-                {FILTER_FIELDS.map((f) => (
-                  <option key={f.value} value={f.value}>
-                    {f.label}
-                  </option>
-                ))}
-              </select>
-              {!control.hideValues && (
-                <input
-                  type="text"
-                  className="filter-value-input"
-                  value={element.value}
-                  placeholder="value"
-                  onChange={(e) => updateElement(filterIndex, elementIndex, element.field, e.target.value)}
-                  onBlur={commitChanges}
-                  onPointerDown={(e) => e.stopPropagation()}
-                />
-              )}
-              {filter.length > 1 && (
-                <button
-                  className="filter-element-remove-btn"
-                  onClick={() => removeElement(filterIndex, elementIndex)}
+          {filter.map((element, elementIndex) => {
+            const fieldOptions = control.useModularFields ? MODULAR_FILTER_FIELDS : FILTER_FIELDS;
+            const hideValueInput = control.hideValues || isSocketField(element.field);
+            return (
+              <div key={elementIndex} className="filter-element">
+                <select
+                  className={hideValueInput ? "filter-field-select-wide" : "filter-field-select"}
+                  value={element.field}
+                  onChange={(e) => updateElement(filterIndex, elementIndex, e.target.value, element.value, true)}
                   onPointerDown={(e) => e.stopPropagation()}
                 >
-                  ×
-                </button>
-              )}
-              {elementIndex === filter.length - 1 && (
-                <button
-                  className="filter-element-add-btn"
-                  onClick={() => addElement(filterIndex)}
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  +
-                </button>
-              )}
-            </div>
-          ))}
+                  {fieldOptions.map((f) => (
+                    <option key={f.value} value={f.value}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+                {!hideValueInput && (
+                  <input
+                    type="text"
+                    className="filter-value-input"
+                    value={element.value}
+                    placeholder="value"
+                    onChange={(e) => updateElement(filterIndex, elementIndex, element.field, e.target.value)}
+                    onBlur={commitChanges}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  />
+                )}
+                {elementIndex === filter.length - 1 && (
+                  <button
+                    className="filter-element-add-btn"
+                    onClick={() => addElement(filterIndex)}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    +
+                  </button>
+                )}
+                {filter.length > 1 && (
+                  <button
+                    className="filter-element-remove-btn"
+                    onClick={() => removeElement(filterIndex, elementIndex)}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       ))}
       <button

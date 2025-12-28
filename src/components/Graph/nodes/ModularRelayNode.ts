@@ -12,10 +12,10 @@ import {
   relayStatusSocket,
 } from './types';
 import type { RelayStatusType } from './types';
-import { FilterControl } from './controls';
+import { FilterControl, isSocketField, getBaseField } from './controls';
 import type { Filters } from './controls';
 import type { NostrEvent, Profile, EventSignal } from '../../../nostr/types';
-import { decodeBech32ToHex, isHex64 } from '../../../nostr/types';
+import { decodeBech32ToHex, isHex64, parseDateToTimestamp } from '../../../nostr/types';
 import { findPubkeysByName } from '../../../nostr/profileCache';
 import { ProfileFetcher } from '../../../nostr/ProfileFetcher';
 import { SharedSubscriptionManager } from '../../../nostr/SharedSubscriptionManager';
@@ -26,16 +26,18 @@ export interface RelayStatusSignal {
   status: RelayStatusType;
 }
 
-// Default filters: empty (single element for UI)
+// Default filters for UI (same as SimpleRelayNode)
 const getDefaultFilters = (): Filters => [
   [
-    { field: 'kinds', value: '' },
+    { field: 'kinds', value: '1' },
+    { field: 'limit', value: '200' },
   ],
 ];
 
 // Get socket type for a filter field
 function getSocketForField(field: string): ClassicPreset.Socket {
-  switch (field) {
+  const baseField = getBaseField(field);
+  switch (baseField) {
     case 'kinds':
     case 'limit':
       return integerSocket;
@@ -49,7 +51,7 @@ function getSocketForField(field: string): ClassicPreset.Socket {
     case '#p':
       return pubkeySocket;
     default:
-      return eventIdSocket; // Default for unknown tag fields
+      return eventIdSocket;
   }
 }
 
@@ -71,12 +73,13 @@ export class ModularRelayNode extends ClassicPreset.Node {
   width = 300;
   height: number | undefined = undefined;
 
+  // UI filter values
   private filters: Filters = getDefaultFilters();
 
-  // Track current input sockets (key -> field type)
+  // Track current dynamic input sockets (key -> field type)
   private currentSockets: Map<string, string> = new Map();
 
-  // Input values from sockets (key -> values)
+  // Socket input values (key -> values)
   private socketValues: Map<string, unknown[]> = new Map();
 
   // Socket input subscriptions (key -> subscription)
@@ -93,13 +96,13 @@ export class ModularRelayNode extends ClassicPreset.Node {
   // RxJS Observable for output events
   private eventSubject = new Subject<EventSignal>();
   private relayStatusSubject = new Subject<RelayStatusSignal>();
-  private subscribedRelayUrls: string[] = [];  // Track which relays we're subscribed to
+  private subscribedRelayUrls: string[] = [];
 
-  // Profile updates - uses ProfileFetcher for batching
+  // Profile updates
   private profileSubject = new Subject<{ pubkey: string; profile: Profile }>();
-  private profileFetchers: Map<string, ProfileFetcher> = new Map();  // Per-relay ProfileFetchers
+  private profileFetchers: Map<string, ProfileFetcher> = new Map();
 
-  // Connection monitoring (per relay)
+  // Connection monitoring
   private connectionStateSubscriptions: Map<string, { unsubscribe: () => void }> = new Map();
 
   // Debug counters
@@ -114,7 +117,7 @@ export class ModularRelayNode extends ClassicPreset.Node {
   constructor() {
     super(i18next.t('nodes.modularRelay.title', 'Modular Relay'));
 
-    // Trigger input socket (uses flagSocket for compatibility with Flag type)
+    // Trigger input socket
     this.addInput('trigger', new ClassicPreset.Input(flagSocket, 'Trigger'));
 
     // Relay input socket
@@ -124,8 +127,7 @@ export class ModularRelayNode extends ClassicPreset.Node {
     this.addOutput('output', new ClassicPreset.Output(eventSocket, 'Events'));
     this.addOutput('relayStatus', new ClassicPreset.Output(relayStatusSocket, 'Relay Status'));
 
-    // Filter control - sockets are generated based on filter elements
-    // hideValues=true because values come from input sockets
+    // Filter control with modular fields (includes socket options)
     this.addControl(
       'filter',
       new FilterControl(
@@ -135,7 +137,8 @@ export class ModularRelayNode extends ClassicPreset.Node {
           this.filters = filters;
           this.updateSocketsFromFilters();
         },
-        true // hideValues
+        false, // hideValues
+        true   // useModularFields - show socket options in dropdown
       )
     );
 
@@ -143,17 +146,19 @@ export class ModularRelayNode extends ClassicPreset.Node {
     this.updateSocketsFromFilters();
   }
 
-  // Update input sockets based on current filter elements
+  // Update input sockets based on socket fields in filters
   private updateSocketsFromFilters(): void {
     const newSockets = new Map<string, string>();
 
-    // Collect all filter elements that need sockets
+    // Collect all socket fields from filter elements
     for (let fi = 0; fi < this.filters.length; fi++) {
       const filter = this.filters[fi];
       for (let ei = 0; ei < filter.length; ei++) {
         const element = filter[ei];
-        const key = makeSocketKey(fi, ei);
-        newSockets.set(key, element.field);
+        if (isSocketField(element.field)) {
+          const key = makeSocketKey(fi, ei);
+          newSockets.set(key, element.field);
+        }
       }
     }
 
@@ -169,24 +174,22 @@ export class ModularRelayNode extends ClassicPreset.Node {
     for (const [key, field] of newSockets) {
       const existingField = this.currentSockets.get(key);
       if (existingField !== field) {
-        // Field type changed or new socket - remove old and add new
         if (existingField !== undefined) {
           this.removeInput(key);
           this.socketValues.delete(key);
         }
         const socket = getSocketForField(field);
-        const label = `${field}`;
+        const label = getBaseField(field); // e.g., "kinds"
         this.addInput(key, new ClassicPreset.Input(socket, label));
       }
     }
 
     this.currentSockets = newSockets;
 
-    // Notify that sockets changed via custom event
+    // Notify that sockets changed
     window.dispatchEvent(new CustomEvent('graph-sockets-change', { detail: { nodeId: this.id } }));
   }
 
-  // Get socket key for a filter element
   getSocketKey(filterIndex: number, elementIndex: number): string {
     return makeSocketKey(filterIndex, elementIndex);
   }
@@ -195,11 +198,8 @@ export class ModularRelayNode extends ClassicPreset.Node {
     return this.relayUrls;
   }
 
-  // Set relay input from connected node
-  // Accepts both ConstantNode format { type: 'relay', value: string[] } and direct { relays: string[] }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setRelayInput(input: Observable<any> | null): void {
-    // Cleanup existing subscription
     if (this.relayInputSubscription) {
       this.relayInputSubscription.unsubscribe();
       this.relayInputSubscription = null;
@@ -207,58 +207,41 @@ export class ModularRelayNode extends ClassicPreset.Node {
 
     this.relayUrls = [];
 
-    if (!input) {
-      return;
-    }
+    if (!input) return;
 
     this.relayInputSubscription = input.subscribe({
       next: (signal) => {
-        // Handle various relay signal formats:
-        // - ConstantNode: { type: 'relay', value: string | string[] }
-        // - ExtractionNode: { relay: string, signal: 'add' | 'remove' }
-        // - Direct: { relays: string[] }
         let relayArray: string[] = [];
 
         if (typeof signal === 'string') {
-          // Direct string URL
           relayArray = [signal];
         } else if (signal.relay && typeof signal.relay === 'string') {
-          // ExtractionNode format: { relay: string }
           relayArray = [signal.relay];
         } else if (signal.value !== undefined) {
-          // ConstantNode format: { value: string | string[] }
           relayArray = Array.isArray(signal.value) ? signal.value : [signal.value];
         } else if (signal.relays) {
-          // Direct format: { relays: string[] }
           relayArray = Array.isArray(signal.relays) ? signal.relays : [signal.relays];
         }
 
-        // Accumulate relay URLs from input
         for (const url of relayArray) {
           if (typeof url === 'string' && url.trim() && !this.relayUrls.includes(url)) {
             this.relayUrls.push(url);
-            // Emit idle status for newly added relay if subscription not yet started
             if (!this.isSubscribed()) {
               this.relayStatusSubject.next({ relay: url, status: 'idle' });
             }
           }
         }
 
-        // Try to start subscription if trigger is already true
         this.tryStartSubscription();
       },
     });
   }
 
-  // Check if all required inputs are connected
-  private areAllInputsConnected(): boolean {
-    // Check trigger input is connected
+  private areRequiredInputsConnected(): boolean {
     if (!this.triggerSubscription) return false;
-
-    // Check relay input is connected
     if (!this.relayInputSubscription) return false;
 
-    // Check all filter socket inputs are connected
+    // Check all socket fields have connected sockets
     for (const socketKey of this.currentSockets.keys()) {
       if (!this.socketSubscriptions.has(socketKey)) return false;
     }
@@ -266,10 +249,8 @@ export class ModularRelayNode extends ClassicPreset.Node {
     return true;
   }
 
-  // Check if all connected socket inputs have received values
   private areAllSocketValuesReceived(): boolean {
     for (const socketKey of this.currentSockets.keys()) {
-      // Only check sockets that are connected
       if (this.socketSubscriptions.has(socketKey)) {
         const values = this.socketValues.get(socketKey);
         if (!values || values.length === 0) {
@@ -280,14 +261,13 @@ export class ModularRelayNode extends ClassicPreset.Node {
     return true;
   }
 
-  // Try to start subscription if conditions are met
   private tryStartSubscription(): void {
-    if (this.triggerState && this.relayUrls.length > 0 && this.areAllInputsConnected() && this.areAllSocketValuesReceived() && !this.isSubscribed()) {
+    if (this.triggerState && this.relayUrls.length > 0 && this.areRequiredInputsConnected() && this.areAllSocketValuesReceived() && !this.isSubscribed()) {
       this.startSubscription();
     }
   }
 
-  // Build filters combining attribute values and input socket values
+  // Build filters combining UI values and socket values
   private buildFilters(): Record<string, unknown>[] {
     const result: Record<string, unknown>[] = [];
 
@@ -298,18 +278,26 @@ export class ModularRelayNode extends ClassicPreset.Node {
       for (let ei = 0; ei < filter.length; ei++) {
         const element = filter[ei];
         const { field, value } = element;
-        const socketKey = makeSocketKey(fi, ei);
-        const socketValue = this.socketValues.get(socketKey);
-        const isSocketConnected = this.socketSubscriptions.has(socketKey);
 
-        // Use socket value if connected, otherwise use attribute value
-        if (socketValue && socketValue.length > 0) {
-          this.applySocketValueToFilter(nostrFilter, field, socketValue);
-        } else if (isSocketConnected && (field === 'kinds' || field === 'authors' || field === 'ids' || field.startsWith('#'))) {
-          // Socket is connected but no value yet - include empty array to prevent matching all
-          nostrFilter[field] = [];
-        } else if (value.trim()) {
-          this.applyAttributeValueToFilter(nostrFilter, field, value);
+        if (isSocketField(field)) {
+          // Socket field - get value from socket
+          const socketKey = makeSocketKey(fi, ei);
+          const socketValue = this.socketValues.get(socketKey);
+          const baseField = getBaseField(field);
+
+          if (socketValue && socketValue.length > 0) {
+            this.applySocketValueToFilter(nostrFilter, baseField, socketValue);
+          } else if (this.socketSubscriptions.has(socketKey)) {
+            // Socket connected but no value yet
+            if (baseField === 'kinds' || baseField === 'authors' || baseField === 'ids' || baseField.startsWith('#')) {
+              nostrFilter[baseField] = [];
+            }
+          }
+        } else {
+          // UI field - get value from text input
+          if (value.trim()) {
+            this.applyAttributeValueToFilter(nostrFilter, field, value);
+          }
         }
       }
 
@@ -321,7 +309,6 @@ export class ModularRelayNode extends ClassicPreset.Node {
     return result.length > 0 ? result : [{}];
   }
 
-  // Apply socket value to filter
   private applySocketValueToFilter(filter: Record<string, unknown>, field: string, values: unknown[]): void {
     if (field === 'kinds') {
       filter[field] = values.filter((v): v is number => typeof v === 'number');
@@ -340,7 +327,6 @@ export class ModularRelayNode extends ClassicPreset.Node {
     }
   }
 
-  // Apply attribute value to filter
   private applyAttributeValueToFilter(filter: Record<string, unknown>, field: string, value: string): void {
     if (field === 'kinds') {
       filter[field] = value.split(',').map((v) => parseInt(v.trim(), 10)).filter((n) => !isNaN(n));
@@ -350,9 +336,9 @@ export class ModularRelayNode extends ClassicPreset.Node {
         filter[field] = num;
       }
     } else if (field === 'since' || field === 'until') {
-      const num = parseInt(value.trim(), 10);
-      if (!isNaN(num)) {
-        filter[field] = num;
+      const ts = parseDateToTimestamp(value.trim());
+      if (ts !== null) {
+        filter[field] = ts;
       }
     } else if (field === 'ids' || field === 'authors' || field.startsWith('#')) {
       const resolved = value.split(',').flatMap((v) => this.resolveIdentifier(v, field));
@@ -375,7 +361,6 @@ export class ModularRelayNode extends ClassicPreset.Node {
       return [trimmed.toLowerCase()];
     }
 
-    // For pubkey fields, try name lookup
     if (_field === 'authors' || _field === '#p') {
       const matches = findPubkeysByName(trimmed);
       if (matches.length > 0) {
@@ -386,9 +371,7 @@ export class ModularRelayNode extends ClassicPreset.Node {
     return [trimmed];
   }
 
-  // Set trigger input (accepts flag signal: { type: 'flag', value: boolean } or { flag: boolean })
   setTriggerInput(input: Observable<{ value?: boolean; flag?: boolean }> | null): void {
-    // Cleanup existing trigger subscription
     if (this.triggerSubscription) {
       this.triggerSubscription.unsubscribe();
       this.triggerSubscription = null;
@@ -399,15 +382,11 @@ export class ModularRelayNode extends ClassicPreset.Node {
       return;
     }
 
-    // Subscribe and store reference
     this.triggerSubscription = input.subscribe({
       next: (signal) => {
-        // Handle both ConstantNode format { value: boolean } and FlagSignal format { flag: boolean }
         const flagValue = signal.value ?? signal.flag ?? false;
         this.triggerState = flagValue;
 
-        // Simply try to start when true, stop when false
-        // tryStartSubscription() already checks !isSubscribed(), so it's safe to call multiple times
         if (flagValue) {
           this.tryStartSubscription();
         } else {
@@ -417,10 +396,8 @@ export class ModularRelayNode extends ClassicPreset.Node {
     });
   }
 
-  // Set input for a socket by key
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setSocketInput(socketKey: string, input: Observable<any> | null): void {
-    // Unsubscribe existing subscription for this socket
     const existingSubscription = this.socketSubscriptions.get(socketKey);
     if (existingSubscription) {
       existingSubscription.unsubscribe();
@@ -432,7 +409,6 @@ export class ModularRelayNode extends ClassicPreset.Node {
       return;
     }
 
-    // Get the field type for this socket
     const parsed = parseSocketKey(socketKey);
     if (!parsed) return;
 
@@ -442,18 +418,13 @@ export class ModularRelayNode extends ClassicPreset.Node {
     const element = filter[elementIndex];
     if (!element) return;
 
-    const field = element.field;
+    const baseField = getBaseField(element.field);
     this.socketValues.set(socketKey, []);
 
     const subscription = input.subscribe({
       next: (signal) => {
         const values = this.socketValues.get(socketKey) || [];
 
-        // Extract value based on signal format
-        // ConstantNode emits { type: string, value: unknown }
-        // Nip07Node emits { pubkey: string }
-        // IfNode emits { flag: boolean }
-        // Other nodes may emit the value directly
         let value: unknown;
         if (typeof signal === 'object' && signal !== null) {
           if ('value' in signal) {
@@ -473,8 +444,7 @@ export class ModularRelayNode extends ClassicPreset.Node {
           value = signal;
         }
 
-        // For array fields, accumulate values; for scalar fields, replace
-        if (field === 'limit' || field === 'since' || field === 'until') {
+        if (baseField === 'limit' || baseField === 'since' || baseField === 'until') {
           this.socketValues.set(socketKey, [value]);
         } else {
           if (!values.includes(value)) {
@@ -483,26 +453,21 @@ export class ModularRelayNode extends ClassicPreset.Node {
           }
         }
 
-        // Try to start subscription when socket value is received
         this.tryStartSubscription();
       },
     });
 
-    // Store the subscription for later cleanup
     this.socketSubscriptions.set(socketKey, subscription);
   }
 
-  // Check if this node has input sockets
   hasInputSockets(): boolean {
     return this.currentSockets.size > 0;
   }
 
-  // Get all socket keys
   getSocketKeys(): string[] {
     return Array.from(this.currentSockets.keys());
   }
 
-  // Start the nostr subscription
   startSubscription(): void {
     this.stopSubscription();
 
@@ -515,10 +480,8 @@ export class ModularRelayNode extends ClassicPreset.Node {
     const filters = this.buildFilters();
     if (filters.length === 0) return;
 
-    // Subscribe to each relay via SharedSubscriptionManager
     this.subscribedRelayUrls = [...relayUrls];
     for (const relayUrl of this.subscribedRelayUrls) {
-      // Create ProfileFetcher for this relay using shared RxNostr
       const rxNostr = SharedSubscriptionManager.getRxNostr(relayUrl);
       const profileFetcher = new ProfileFetcher(rxNostr, `${this.id}-${relayUrl}`);
       profileFetcher.start((pubkey, profile) => {
@@ -526,10 +489,8 @@ export class ModularRelayNode extends ClassicPreset.Node {
       });
       this.profileFetchers.set(relayUrl, profileFetcher);
 
-      // Monitor connection state changes and emit relay status
       const connectionStateSub = rxNostr.createConnectionStateObservable().subscribe({
         next: (packet) => {
-          // Map rx-nostr connection state to our RelayStatusType
           let status: RelayStatusType;
           switch (packet.state) {
             case 'initialized':
@@ -558,7 +519,6 @@ export class ModularRelayNode extends ClassicPreset.Node {
       });
       this.connectionStateSubscriptions.set(relayUrl, connectionStateSub);
 
-      // Subscribe via SharedSubscriptionManager
       SharedSubscriptionManager.subscribe(
         relayUrl,
         this.id,
@@ -570,7 +530,6 @@ export class ModularRelayNode extends ClassicPreset.Node {
           pf?.queueRequest(event.pubkey);
         },
         () => {
-          // EOSE callback
           this.eoseReceived = true;
           this.relayStatusSubject.next({ relay: relayUrl, status: 'EOSE' });
         }
@@ -579,26 +538,22 @@ export class ModularRelayNode extends ClassicPreset.Node {
   }
 
   stopSubscription(): void {
-    // Unsubscribe from all relays via SharedSubscriptionManager
     for (const relayUrl of this.subscribedRelayUrls) {
       SharedSubscriptionManager.unsubscribe(relayUrl, this.id);
     }
     this.subscribedRelayUrls = [];
 
-    // Stop all ProfileFetchers
     for (const profileFetcher of this.profileFetchers.values()) {
       profileFetcher.stop();
     }
     this.profileFetchers.clear();
 
-    // Stop all connection state subscriptions
     for (const sub of this.connectionStateSubscriptions.values()) {
       sub.unsubscribe();
     }
     this.connectionStateSubscriptions.clear();
   }
 
-  // Stop all subscriptions including trigger, relay input, and socket inputs
   stopAllSubscriptions(): void {
     this.stopSubscription();
     if (this.triggerSubscription) {
@@ -609,7 +564,6 @@ export class ModularRelayNode extends ClassicPreset.Node {
       this.relayInputSubscription.unsubscribe();
       this.relayInputSubscription = null;
     }
-    // Unsubscribe all socket input subscriptions
     for (const subscription of this.socketSubscriptions.values()) {
       subscription.unsubscribe();
     }
@@ -636,7 +590,6 @@ export class ModularRelayNode extends ClassicPreset.Node {
       filterControl.filters = this.filters;
     }
 
-    // Update sockets based on restored filters
     this.updateSocketsFromFilters();
   }
 }
