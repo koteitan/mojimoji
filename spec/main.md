@@ -30,7 +30,7 @@ User Inrterface is as follows.
             - text: event.content
 - center: Graph view: modular connectors of nostr filter by rete.js.
   - top line: toolbars:
-    - +Relay button: add a Relay node.
+    - +Relay button: add a Simple Relay node.
     - +Filter button: dropdown menu with filter node options (same button style):
       - +Operator: add an Operator node.
       - +Search: add a Search node.
@@ -61,12 +61,12 @@ User Inrterface is as follows.
           - input terminals are placed at the top center of the node
           - output terminals are placed at the bottom center of the node
         - node placement on add:
-          - Relay node: placed at the same Y as the uppermost node, to the right of the rightmost node.
+          - Simple Relay node: placed at the same Y as the uppermost node, to the right of the rightmost node.
           - Other nodes (Operator, Search, Timeline): placed at the same X as the rightmost node, below the lowermost node.
           - spacing: 50px gap from existing nodes.
         - view centering:
           - after adding a new node, the view is centered on the new node without changing the zoom level.
-      - Relay node:
+      - Simple Relay node:
         - output terminal:
           - output (nostr event)
         - attributes:
@@ -371,7 +371,7 @@ User Inrterface is as follows.
   - Delete/Backspace/d key: delete selected nodes and connections
   - Delete button (red styled): delete selected nodes and connections
 - keyboard shortcuts:
-  - r: add Relay node
+  - r: add Simple Relay node
   - f: toggle Filter dropdown
   - o: add Operator node
   - s: add Search node
@@ -399,10 +399,10 @@ User Inrterface is as follows.
   3. Default graph
      - when no permalink and localStorage is empty:
        - create a default graph:
-         - one Relay node: default settings, position (100, 100)
+         - one Simple Relay node: default settings, position (100, 100)
          - one Timeline node: position (120, 650)
          - arrangement: vertical (Relay on top, Timeline below)
-         - one edge: connect the Relay node output to the Timeline node input.
+         - one edge: connect the Simple Relay node output to the Timeline node input.
 - centering: fit all nodes in view (same as Center button)
 
 ### control input behavior
@@ -424,7 +424,7 @@ User Inrterface is as follows.
 - exception: display-only attributes (e.g., timeline name) do not trigger pipeline rebuild
 
 ### subscription
-- When Timeline nodes are connected from Relay nodes, the subscription is started.
+- When Timeline nodes are connected from Simple Relay nodes or Modular Relay nodes, the subscription is started.
 - The subscription is implemented by rx-nostr observable.
 - When the subscription receives new nostr events, the events are shown in the timelines.
 - After the EOSE(End Of Stored Events) is received, the subscription continues to listen to new events.

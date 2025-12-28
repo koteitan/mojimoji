@@ -4,7 +4,7 @@ A modular filter previewer for Nostr. modular + moderation = mojimoji
 
 ## Usage
 
-- **Relay Node**: Connect to Nostr relays and fetch events
+- **Simple Relay Node**: Connect to Nostr relays and fetch events
 - **Filter Nodes**: Filter events by criteria (Operator, Search, Language)
 - **Timeline Node**: Display filtered events
 
@@ -48,7 +48,7 @@ A modular filter previewer for Nostr. modular + moderation = mojimoji
 
 | Key | Action |
 |-----|--------|
-| r | Add Relay node |
+| r | Add Simple Relay node |
 | f | Toggle Filter dropdown |
 | o | Add Operator node |
 | s | Add Search node |
@@ -61,7 +61,7 @@ A modular filter previewer for Nostr. modular + moderation = mojimoji
 
 ### Node Types
 
-#### Relay Node
+#### Simple Relay Node
 - **Relay URLs**: Enter relay WebSocket URLs (one per line)
 - **Filters**: Configure NIP-01 filters (kinds, authors, etc.)
 
