@@ -57,6 +57,7 @@
     },
     "modularRelay": {
       "title": "Modular Relay",
+      "externalTrigger": "External Trigger",
       "inputs": "Inputs",
       "source": "Source",
       "sourceAuto": "auto (NIP-07→kind:10002)",

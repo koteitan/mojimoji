@@ -1112,7 +1112,19 @@ export function GraphEditor({
         case 'MultiTypeRelay': // backward compatibility
           node = new ModularRelayNode();
           if (nodeData.data) {
-            (node as ModularRelayNode).deserialize(nodeData.data as { filters?: Filters });
+            // Check for backward compatibility: if there's a trigger connection but no externalTrigger field
+            const data = nodeData.data as { filters?: Filters; externalTrigger?: boolean };
+            if (data.externalTrigger === undefined) {
+              // Check if there's a trigger connection to this node
+              const savedConnections = graphData.connections as Array<{ target: string; targetInput: string }>;
+              const hasTriggerConnection = savedConnections.some(
+                (c) => c.target === nodeData.id && c.targetInput === 'trigger'
+              );
+              if (hasTriggerConnection) {
+                data.externalTrigger = true;
+              }
+            }
+            (node as ModularRelayNode).deserialize(data);
           }
           break;
         case 'If':
@@ -1158,6 +1170,15 @@ export function GraphEditor({
       if (sourceNode && targetNode) {
         if (wouldCreateCycle(addedConnections, connData.source, connData.target)) {
           console.warn(`[loadGraphData] Skipping cyclic connection: ${connData.source} -> ${connData.target}`);
+          continue;
+        }
+        // Check if source output and target input exist
+        if (!sourceNode.outputs[connData.sourceOutput]) {
+          console.warn(`[loadGraphData] Skipping connection: source node doesn't have output "${connData.sourceOutput}"`);
+          continue;
+        }
+        if (!targetNode.inputs[connData.targetInput]) {
+          console.warn(`[loadGraphData] Skipping connection: target node doesn't have input "${connData.targetInput}"`);
           continue;
         }
         const conn = new ClassicPreset.Connection(

@@ -12,7 +12,7 @@ import {
   relayStatusSocket,
 } from './types';
 import type { RelayStatusType } from './types';
-import { FilterControl, isSocketField, getBaseField } from './controls';
+import { FilterControl, ToggleControl, isSocketField, getBaseField } from './controls';
 import type { Filters } from './controls';
 import type { NostrEvent, Profile, EventSignal } from '../../../nostr/types';
 import { decodeBech32ToHex, isHex64, parseDateToTimestamp } from '../../../nostr/types';
@@ -89,9 +89,12 @@ export class ModularRelayNode extends ClassicPreset.Node {
   private relayUrls: string[] = [];
   private relayInputSubscription: { unsubscribe: () => void } | null = null;
 
+  // External trigger setting
+  private externalTrigger: boolean = false;
+
   // Trigger input
   private triggerSubscription: { unsubscribe: () => void } | null = null;
-  private triggerState: boolean = false;
+  private triggerState: boolean = true; // default true when no external trigger
 
   // RxJS Observable for output events
   private eventSubject = new Subject<EventSignal>();
@@ -117,15 +120,25 @@ export class ModularRelayNode extends ClassicPreset.Node {
   constructor() {
     super(i18next.t('nodes.modularRelay.title', 'Modular Relay'));
 
-    // Trigger input socket
-    this.addInput('trigger', new ClassicPreset.Input(flagSocket, 'Trigger'));
-
     // Relay input socket
     this.addInput('relay', new ClassicPreset.Input(relaySocket, 'Relay'));
 
     // Output sockets
     this.addOutput('output', new ClassicPreset.Output(eventSocket, 'Events'));
     this.addOutput('relayStatus', new ClassicPreset.Output(relayStatusSocket, 'Relay Status'));
+
+    // External trigger toggle (when ON, shows trigger socket)
+    this.addControl(
+      'externalTrigger',
+      new ToggleControl(
+        this.externalTrigger,
+        i18next.t('nodes.modularRelay.externalTrigger', 'External Trigger'),
+        (value) => {
+          this.externalTrigger = value;
+          this.updateTriggerSocket();
+        }
+      )
+    );
 
     // Filter control with modular fields (includes socket options)
     this.addControl(
@@ -190,6 +203,31 @@ export class ModularRelayNode extends ClassicPreset.Node {
     window.dispatchEvent(new CustomEvent('graph-sockets-change', { detail: { nodeId: this.id } }));
   }
 
+  // Update trigger socket based on externalTrigger setting
+  private updateTriggerSocket(): void {
+    if (this.externalTrigger) {
+      // Add trigger socket if not exists
+      if (!this.inputs['trigger']) {
+        this.addInput('trigger', new ClassicPreset.Input(flagSocket, 'Trigger'));
+        this.triggerState = false; // need external trigger input
+      }
+    } else {
+      // Remove trigger socket if exists
+      if (this.inputs['trigger']) {
+        if (this.triggerSubscription) {
+          this.triggerSubscription.unsubscribe();
+          this.triggerSubscription = null;
+        }
+        this.removeInput('trigger');
+        this.triggerState = true; // auto-trigger when no external
+        this.tryStartSubscription();
+      }
+    }
+
+    // Notify that sockets changed
+    window.dispatchEvent(new CustomEvent('graph-sockets-change', { detail: { nodeId: this.id } }));
+  }
+
   getSocketKey(filterIndex: number, elementIndex: number): string {
     return makeSocketKey(filterIndex, elementIndex);
   }
@@ -238,7 +276,8 @@ export class ModularRelayNode extends ClassicPreset.Node {
   }
 
   private areRequiredInputsConnected(): boolean {
-    if (!this.triggerSubscription) return false;
+    // Only check trigger if external trigger is enabled
+    if (this.externalTrigger && !this.triggerSubscription) return false;
     if (!this.relayInputSubscription) return false;
 
     // Check all socket fields have connected sockets
@@ -391,7 +430,12 @@ export class ModularRelayNode extends ClassicPreset.Node {
     }
 
     if (!input) {
-      this.triggerState = false;
+      // If external trigger is disabled, auto-trigger (triggerState = true)
+      // If external trigger is enabled but no input, wait for trigger (triggerState = false)
+      this.triggerState = !this.externalTrigger;
+      if (this.triggerState) {
+        this.tryStartSubscription();
+      }
       return;
     }
 
@@ -590,12 +634,22 @@ export class ModularRelayNode extends ClassicPreset.Node {
   serialize() {
     return {
       filters: this.filters,
+      externalTrigger: this.externalTrigger,
     };
   }
 
-  deserialize(data: { filters?: Filters }) {
+  deserialize(data: { filters?: Filters; externalTrigger?: boolean }) {
     if (data.filters) {
       this.filters = data.filters;
+    }
+
+    if (data.externalTrigger !== undefined) {
+      this.externalTrigger = data.externalTrigger;
+      const toggleControl = this.controls['externalTrigger'] as ToggleControl;
+      if (toggleControl) {
+        toggleControl.value = this.externalTrigger;
+      }
+      this.updateTriggerSocket();
     }
 
     const filterControl = this.controls['filter'] as FilterControl;
