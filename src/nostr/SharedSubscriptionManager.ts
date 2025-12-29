@@ -158,9 +158,11 @@ class SharedSubscriptionManagerClass {
       relaySub.subscription = relaySub.rxNostr.use(relaySub.rxReq).subscribe({
         next: (packet) => {
           const event = packet.event as NostrEvent;
-          // Broadcast to all subscribers
+          // Only send to subscribers whose filters match
           for (const subscriber of relaySub.subscribers.values()) {
-            subscriber.onEvent(event);
+            if (this.eventMatchesFilters(event, subscriber.filters)) {
+              subscriber.onEvent(event);
+            }
           }
         },
         error: (err) => {
@@ -250,6 +252,72 @@ class SharedSubscriptionManagerClass {
       hash = hash & hash;
     }
     return Math.abs(hash).toString(36);
+  }
+
+  /**
+   * Check if an event matches any of the subscriber's filters
+   */
+  private eventMatchesFilters(event: NostrEvent, filters: Filter[]): boolean {
+    // If no filters, match everything
+    if (filters.length === 0) return true;
+
+    // Event matches if it matches ANY filter (OR logic)
+    return filters.some((filter) => this.eventMatchesFilter(event, filter));
+  }
+
+  /**
+   * Check if an event matches a single filter
+   */
+  private eventMatchesFilter(event: NostrEvent, filter: Filter): boolean {
+    // Check kinds
+    if (filter.kinds !== undefined) {
+      const kinds = filter.kinds as number[];
+      if (!kinds.includes(event.kind)) return false;
+    }
+
+    // Check ids
+    if (filter.ids !== undefined) {
+      const ids = filter.ids as string[];
+      if (!ids.includes(event.id)) return false;
+    }
+
+    // Check authors
+    if (filter.authors !== undefined) {
+      const authors = filter.authors as string[];
+      if (!authors.includes(event.pubkey)) return false;
+    }
+
+    // Check since
+    if (filter.since !== undefined) {
+      const since = filter.since as number;
+      if (event.created_at < since) return false;
+    }
+
+    // Check until
+    if (filter.until !== undefined) {
+      const until = filter.until as number;
+      if (event.created_at > until) return false;
+    }
+
+    // Check tag filters (#e, #p, #t, etc.)
+    for (const key of Object.keys(filter)) {
+      if (key.startsWith('#')) {
+        const tagName = key.slice(1);
+        const filterValues = filter[key] as string[];
+        const eventTagValues = event.tags
+          .filter((t) => t[0] === tagName)
+          .map((t) => t[1]);
+
+        // Event must have at least one matching tag value
+        if (!filterValues.some((v) => eventTagValues.includes(v))) {
+          return false;
+        }
+      }
+    }
+
+    // limit is not a matching criterion (it's a count limit)
+    // All criteria passed
+    return true;
   }
 }
 
