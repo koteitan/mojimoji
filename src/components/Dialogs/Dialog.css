@@ -222,6 +222,26 @@
   border-radius: 3px;
 }
 
+/* Visibility badge */
+.item-visibility {
+  font-size: 9px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  margin-left: 6px;
+  background: transparent;
+  border: 1px solid;
+}
+
+.item-visibility.public {
+  color: #fa6;
+  border-color: #fa6;
+}
+
+.item-visibility.private {
+  color: #6c8;
+  border-color: #6c8;
+}
+
 .browser-empty {
   padding: 20px;
   text-align: center;

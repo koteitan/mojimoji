@@ -383,6 +383,12 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                         >
                           <span className="item-icon">📄</span>
                           <span className="item-name">{item.name}</span>
+                          {/* Visibility badge (Nostr only) */}
+                          {nostrItem && nostrItem.visibility && (
+                            <span className={`item-visibility ${nostrItem.visibility}`}>
+                              {nostrItem.visibility === 'public' ? 'public' : 'for yourself'}
+                            </span>
+                          )}
                           {/* Author info (Nostr only) */}
                           {nostrItem && (
                             <span className="item-author-info">

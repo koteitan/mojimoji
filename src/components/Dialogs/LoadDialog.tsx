@@ -19,7 +19,7 @@ import './Dialog.css';
 const DEFAULT_AVATAR = `${import.meta.env.BASE_URL}mojimoji-icon.png`;
 
 type LoadSource = 'local' | 'nostr' | 'file';
-type NostrFilter = 'public' | 'mine' | 'by-author';
+type NostrFilter = 'public' | 'mine' | 'both' | 'by-author';
 
 interface LoadDialogProps {
   isOpen: boolean;
@@ -96,7 +96,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
         setCurrentPath([]);
 
         try {
-          if (nostrFilter === 'mine') {
+          if (nostrFilter === 'mine' || nostrFilter === 'both') {
             if (!isNip07Available()) {
               setIsNip07Error(true);
               setNostrGraphs([]);
@@ -111,8 +111,10 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
 
           // Pass relay URLs from the textarea to the query
           const relays = relayUrls.split('\n').filter(url => url.trim());
+          // 'both' uses 'mine' to fetch all user's graphs, then filters in UI
+          const apiFilter = nostrFilter === 'both' ? 'mine' : nostrFilter;
           const graphs = await loadGraphsFromNostr(
-            nostrFilter,
+            apiFilter,
             nostrFilter === 'by-author' ? authorPubkey! : undefined,
             relays.length > 0 ? relays : undefined
           );
@@ -195,7 +197,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
       });
     }
 
-    // 'by-author' filter shows all items (both public and private)
+    // 'both' and 'by-author' filters show all items (both public and private)
     return items;
   }, [source, nostrGraphs, fullPath, userPubkey, nostrFilter, authorPubkey]);
 
@@ -242,7 +244,8 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
       try {
         await deleteGraphFromNostr(item.path, undefined, item.event?.id);
         // Reload graphs
-        const graphs = await loadGraphsFromNostr(nostrFilter, nostrFilter === 'by-author' ? authorPubkey! : undefined);
+        const apiFilter = nostrFilter === 'both' ? 'mine' : nostrFilter;
+        const graphs = await loadGraphsFromNostr(apiFilter, nostrFilter === 'by-author' ? authorPubkey! : undefined);
         setNostrGraphs(graphs);
         setSelectedNostrGraph(null);
       } catch (err) {
@@ -445,10 +448,19 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                     <input
                       type="radio"
                       name="nostrFilter"
+                      checked={nostrFilter === 'both'}
+                      onChange={() => setNostrFilter('both')}
+                    />
+                    Both
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="nostrFilter"
                       checked={nostrFilter === 'by-author'}
                       onChange={() => setNostrFilter('by-author')}
                     />
-                    By author
+                    Both by author
                   </label>
                 </div>
               </div>
@@ -542,6 +554,12 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                         >
                           <span className="item-icon">📄</span>
                           <span className="item-name">{item.name}</span>
+                          {/* Visibility badge */}
+                          {item.visibility && (
+                            <span className={`item-visibility ${item.visibility}`}>
+                              {item.visibility === 'public' ? 'public' : 'for yourself'}
+                            </span>
+                          )}
                           {/* Author info */}
                           <span className="item-author-info">
                             <img src={profile?.picture || DEFAULT_AVATAR} alt="" className="item-author-picture" />

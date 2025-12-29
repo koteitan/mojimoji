@@ -6,7 +6,7 @@ import type { TimelineItem } from './nostr/types';
 import './App.css';
 
 // Version: Update this on each deployment
-export const APP_VERSION = '0.13.0';
+export const APP_VERSION = '0.13.1';
 
 const APP_NAME = '(.>_<)-(.>_<)-mojimoji: Nostr Modular Client';
 const LOADING_PREFIX = '(.>_<)-(.>_<)-loading ';
