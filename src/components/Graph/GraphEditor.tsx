@@ -1114,9 +1114,10 @@ export function GraphEditor({
           if (nodeData.data) {
             // Check for backward compatibility: if there's a trigger connection but no externalTrigger field
             const data = nodeData.data as { filters?: Filters; externalTrigger?: boolean };
+            const savedConnections = graphData.connections as Array<{ target: string; targetInput: string }>;
+
             if (data.externalTrigger === undefined) {
               // Check if there's a trigger connection to this node
-              const savedConnections = graphData.connections as Array<{ target: string; targetInput: string }>;
               const hasTriggerConnection = savedConnections.some(
                 (c) => c.target === nodeData.id && c.targetInput === 'trigger'
               );
@@ -1124,6 +1125,28 @@ export function GraphEditor({
                 data.externalTrigger = true;
               }
             }
+
+            // Backward compatibility: convert UI fields to socket fields if there are socket connections
+            if (data.filters) {
+              const socketConnections = savedConnections.filter(
+                (c) => c.target === nodeData.id && /^f\d+_e\d+$/.test(c.targetInput)
+              );
+              for (const conn of socketConnections) {
+                const match = conn.targetInput.match(/^f(\d+)_e(\d+)$/);
+                if (match) {
+                  const filterIndex = parseInt(match[1], 10);
+                  const elementIndex = parseInt(match[2], 10);
+                  if (data.filters[filterIndex] && data.filters[filterIndex][elementIndex]) {
+                    const element = data.filters[filterIndex][elementIndex];
+                    // Convert to socket field if not already
+                    if (!element.field.endsWith(' (socket)')) {
+                      element.field = element.field + ' (socket)';
+                    }
+                  }
+                }
+              }
+            }
+
             (node as ModularRelayNode).deserialize(data);
           }
           break;
