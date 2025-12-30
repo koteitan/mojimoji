@@ -17,7 +17,6 @@ import type { Filters } from './controls';
 import type { NostrEvent, Profile, EventSignal } from '../../../nostr/types';
 import { decodeBech32ToHex, isHex64, parseDateToTimestamp } from '../../../nostr/types';
 import { findPubkeysByName } from '../../../nostr/profileCache';
-import { ProfileFetcher } from '../../../nostr/ProfileFetcher';
 import { SharedSubscriptionManager } from '../../../nostr/SharedSubscriptionManager';
 
 // Signal type for relay status output
@@ -101,9 +100,8 @@ export class ModularRelayNode extends ClassicPreset.Node {
   private relayStatusSubject = new Subject<RelayStatusSignal>();
   private subscribedRelayUrls: string[] = [];
 
-  // Profile updates
+  // Profile updates (kept for backward compatibility, but no longer actively used)
   private profileSubject = new Subject<{ pubkey: string; profile: Profile }>();
-  private profileFetchers: Map<string, ProfileFetcher> = new Map();
 
   // Connection monitoring
   private connectionStateSubscriptions: Map<string, { unsubscribe: () => void }> = new Map();
@@ -540,11 +538,6 @@ export class ModularRelayNode extends ClassicPreset.Node {
     this.subscribedRelayUrls = [...relayUrls];
     for (const relayUrl of this.subscribedRelayUrls) {
       const rxNostr = SharedSubscriptionManager.getRxNostr(relayUrl);
-      const profileFetcher = new ProfileFetcher(rxNostr, `${this.id}-${relayUrl}`);
-      profileFetcher.start((pubkey, profile) => {
-        this.profileSubject.next({ pubkey, profile });
-      });
-      this.profileFetchers.set(relayUrl, profileFetcher);
 
       const connectionStateSub = rxNostr.createConnectionStateObservable().subscribe({
         next: (packet) => {
@@ -583,8 +576,6 @@ export class ModularRelayNode extends ClassicPreset.Node {
         (event: NostrEvent) => {
           this.eventCount++;
           this.eventSubject.next({ event, signal: 'add' });
-          const pf = this.profileFetchers.get(relayUrl);
-          pf?.queueRequest(event.pubkey);
         },
         () => {
           this.eoseReceived = true;
@@ -599,11 +590,6 @@ export class ModularRelayNode extends ClassicPreset.Node {
       SharedSubscriptionManager.unsubscribe(relayUrl, this.id);
     }
     this.subscribedRelayUrls = [];
-
-    for (const profileFetcher of this.profileFetchers.values()) {
-      profileFetcher.stop();
-    }
-    this.profileFetchers.clear();
 
     for (const sub of this.connectionStateSubscriptions.values()) {
       sub.unsubscribe();

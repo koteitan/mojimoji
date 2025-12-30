@@ -4,6 +4,7 @@ import i18next from 'i18next';
 import { anySocket } from './types';
 import { TextInputControl } from './controls';
 import type { EventSignal } from '../../../nostr/types';
+import { GlobalProfileFetcher } from '../../../nostr/ProfileFetcher';
 
 // Data types that Timeline can display
 export type TimelineDataType = 'event' | 'eventId' | 'pubkey' | 'relay' | 'flag' | 'integer' | 'datetime' | 'relayStatus';
@@ -252,6 +253,12 @@ export class TimelineNode extends ClassicPreset.Node {
         // For backward compatibility, call onEventSignal for event type
         if (detectedType === 'event' && this.onEventSignal) {
           this.onEventSignal(rawSignal as EventSignal);
+        }
+
+        // Queue profile fetch for events that reach the timeline
+        if (detectedType === 'event') {
+          const eventSignal = rawSignal as EventSignal;
+          GlobalProfileFetcher.queueRequest(eventSignal.event.pubkey);
         }
 
         // Call the generic onSignal callback

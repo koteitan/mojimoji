@@ -7,7 +7,6 @@ import type { NostrEvent, Profile, EventSignal } from '../../../nostr/types';
 import { decodeBech32ToHex, isHex64, parseDateToTimestamp } from '../../../nostr/types';
 import { isNip07Available } from '../../../nostr/nip07';
 import { fetchUserRelayList, getDefaultRelayUrl } from '../../../nostr/graphStorage';
-import { ProfileFetcher } from '../../../nostr/ProfileFetcher';
 import { SharedSubscriptionManager } from '../../../nostr/SharedSubscriptionManager';
 import {
   getCachedProfile,
@@ -152,9 +151,8 @@ export class SimpleRelayNode extends ClassicPreset.Node {
   private eventSubject = new Subject<EventSignal>();
   private subscribedRelayUrls: string[] = [];  // Track which relays we're subscribed to
 
-  // Profile updates - uses ProfileFetcher for batching
+  // Profile updates (kept for backward compatibility, but no longer actively used)
   private profileSubject = new Subject<{ pubkey: string; profile: Profile }>();
-  private profileFetchers: Map<string, ProfileFetcher> = new Map();  // Per-relay ProfileFetchers
 
   // Debug: event counters
   private eventCount = 0;
@@ -333,14 +331,6 @@ export class SimpleRelayNode extends ClassicPreset.Node {
     // Subscribe to each relay via SharedSubscriptionManager
     this.subscribedRelayUrls = [...this.relayUrls];
     for (const relayUrl of this.subscribedRelayUrls) {
-      // Create ProfileFetcher for this relay using shared RxNostr
-      const rxNostr = SharedSubscriptionManager.getRxNostr(relayUrl);
-      const profileFetcher = new ProfileFetcher(rxNostr, `${this.id}-${relayUrl}`);
-      profileFetcher.start((pubkey, profile) => {
-        this.profileSubject.next({ pubkey, profile });
-      });
-      this.profileFetchers.set(relayUrl, profileFetcher);
-
       // Subscribe via SharedSubscriptionManager
       SharedSubscriptionManager.subscribe(
         relayUrl,
@@ -361,10 +351,6 @@ export class SimpleRelayNode extends ClassicPreset.Node {
           }
 
           this.eventSubject.next({ event, signal: 'add' });
-
-          // Queue profile request (batched) - use any available ProfileFetcher
-          const pf = this.profileFetchers.get(relayUrl);
-          pf?.queueRequest(event.pubkey);
         },
         () => {
           // EOSE callback
@@ -381,12 +367,6 @@ export class SimpleRelayNode extends ClassicPreset.Node {
       SharedSubscriptionManager.unsubscribe(relayUrl, this.id);
     }
     this.subscribedRelayUrls = [];
-
-    // Stop all ProfileFetchers
-    for (const profileFetcher of this.profileFetchers.values()) {
-      profileFetcher.stop();
-    }
-    this.profileFetchers.clear();
   }
 
   // Check if subscription is active
@@ -400,26 +380,11 @@ export class SimpleRelayNode extends ClassicPreset.Node {
     this.startSubscription();
   }
 
-  // Check if profile subscription is active
-  isProfileSubscribed(): boolean {
-    return this.profileFetchers.size > 0;
-  }
-
-  // Get pending profile count
-  getPendingProfileCount(): number {
-    let count = 0;
-    for (const pf of this.profileFetchers.values()) {
-      count += pf.getPendingCount();
-    }
-    return count;
-  }
-
   // Get debug info for this node
   getDebugInfo(): {
     nodeId: string;
     subscribed: boolean;
     relayStatus: Record<string, string> | null;
-    pendingProfiles: number;
     eventCount: number;
     lastEventAgo: string | null;
     eoseReceived: boolean;
@@ -455,7 +420,6 @@ export class SimpleRelayNode extends ClassicPreset.Node {
       nodeId: this.id.slice(0, 8),
       subscribed: this.subscribedRelayUrls.length > 0,
       relayStatus,
-      pendingProfiles: this.getPendingProfileCount(),
       eventCount: this.eventCount,
       lastEventAgo,
       eoseReceived: this.eoseReceived,

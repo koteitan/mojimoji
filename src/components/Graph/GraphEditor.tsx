@@ -301,16 +301,12 @@ export function GraphEditor({
       if (type === 'SimpleRelay') {
         const relayNode = node as SimpleRelayNode;
         const isActive = relayNode.isSubscribed();
-        const isProfileActive = relayNode.isProfileSubscribed();
-        const pendingProfiles = relayNode.getPendingProfileCount();
         const relays = relayNode.getRelayUrls();
         const filters = relayNode.getFilters();
         const status = isActive ? 'ON' : 'OFF';
-        const profileStatus = isProfileActive ? 'ON' : 'OFF';
 
         const debugInfo = relayNode.getDebugInfo();
         lines.push(`[Relay ${status}] ${node.id} | ${relays.join(', ')} | ${JSON.stringify(filters)}`);
-        lines.push(`  └─ [profile: ${profileStatus}] pending: ${pendingProfiles}`);
         lines.push(`  └─ [events] count: ${debugInfo.eventCount}, last: ${debugInfo.lastEventAgo || 'never'}, eose: ${debugInfo.eoseReceived ? 'yes' : 'no'}`);
         if (debugInfo.relayStatus) {
           for (const [url, state] of Object.entries(debugInfo.relayStatus)) {

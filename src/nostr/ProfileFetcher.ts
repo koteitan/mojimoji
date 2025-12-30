@@ -2,6 +2,7 @@ import type { RxNostr } from 'rx-nostr';
 import { createRxBackwardReq } from 'rx-nostr';
 import type { NostrEvent, Profile } from './types';
 import { getCachedProfile, saveProfileToCache } from './profileCache';
+import { getRxNostr, getDefaultRelayUrl } from './nostr';
 
 /**
  * ProfileFetcher - Shared utility for batching profile (kind:0) requests
@@ -117,3 +118,53 @@ export class ProfileFetcher {
     return this.pendingProfiles.size;
   }
 }
+
+/**
+ * GlobalProfileFetcher - Singleton ProfileFetcher for use by TimelineNode
+ *
+ * Uses the default relay for fetching profiles. This allows TimelineNode
+ * to fetch profiles only for events that actually reach the timeline,
+ * rather than fetching for all events at the relay level.
+ */
+class GlobalProfileFetcherClass {
+  private profileFetcher: ProfileFetcher | null = null;
+  private initialized = false;
+
+  /**
+   * Initialize the global profile fetcher
+   * Should be called once on app startup
+   */
+  init(): void {
+    if (this.initialized) return;
+    this.initialized = true;
+
+    const rxNostr = getRxNostr();
+    rxNostr.setDefaultRelays([getDefaultRelayUrl()]);
+
+    this.profileFetcher = new ProfileFetcher(rxNostr, 'global');
+    this.profileFetcher.start(() => {
+      // No-op callback - profiles are saved to cache by ProfileFetcher
+    });
+  }
+
+  /**
+   * Queue a profile request
+   * Initializes the fetcher if not already done
+   */
+  queueRequest(pubkey: string): void {
+    if (!this.initialized) {
+      this.init();
+    }
+    this.profileFetcher?.queueRequest(pubkey);
+  }
+
+  /**
+   * Get pending profile count
+   */
+  getPendingCount(): number {
+    return this.profileFetcher?.getPendingCount() ?? 0;
+  }
+}
+
+// Singleton instance
+export const GlobalProfileFetcher = new GlobalProfileFetcherClass();
