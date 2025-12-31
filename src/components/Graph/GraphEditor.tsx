@@ -274,7 +274,7 @@ export function GraphEditor({
     const nodes = editor.getNodes();
     const connections = editor.getConnections();
 
-    const lines: string[] = ['=== Graph Dump ===', '', 'Nodes:'];
+    const lines: string[] = ['Nodes:'];
     for (const node of nodes) {
       const pos = areaRef.current?.nodeViews.get(node.id)?.position || { x: 0, y: 0 };
       const type = (node as NodeTypes & { nodeType: string }).nodeType;
@@ -285,8 +285,6 @@ export function GraphEditor({
     for (const conn of connections) {
       lines.push(`  ${conn.source}.${conn.sourceOutput} -> ${conn.target}.${conn.targetInput}`);
     }
-
-    lines.push('', '==================');
     console.log(lines.join('\n'));
   }, []);
 
@@ -299,7 +297,7 @@ export function GraphEditor({
     }
 
     const nodes = editor.getNodes();
-    const lines: string[] = ['=== Subscription Dump ===', ''];
+    const lines: string[] = [];
 
     for (const node of nodes) {
       const type = getNodeType(node);
@@ -327,8 +325,6 @@ export function GraphEditor({
         lines.push(`  └─ [events] count: ${debugInfo.eventCount}, last: ${debugInfo.lastEventAgo || 'never'}`);
       }
     }
-
-    lines.push('========================');
     console.log(lines.join('\n'));
   }, []);
 
