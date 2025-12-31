@@ -21,6 +21,13 @@ export type { ComparisonOperator, FlagSignal } from './IfNode';
 export { CountNode } from './CountNode';
 export type { IntegerSignal } from './CountNode';
 
+// Function nodes
+export { FuncDefInNode, SocketListControl, SOCKET_TYPES } from './FuncDefInNode';
+export type { SocketDefinition, FuncDefSignal } from './FuncDefInNode';
+export { FuncDefOutNode } from './FuncDefOutNode';
+export { FunctionNode } from './FunctionNode';
+export type { FunctionDefinition } from './FunctionNode';
+
 // Socket types
 export {
   eventSocket,
@@ -38,4 +45,5 @@ export {
 } from './types';
 export type { RelayStatusType } from './types';
 export type { FilterItem, RelayNodeControls, OperatorNodeControls, SearchNodeControls } from './types';
-export { TextInputControl, TextAreaControl, SelectControl, CheckboxControl } from './controls';
+export { TextInputControl, TextAreaControl, SelectControl, CheckboxControl, StatusLampControl } from './controls';
+export type { StatusLampState } from './controls';

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Presets } from 'rete-react-plugin';
-import { TextInputControl, TextAreaControl, SelectControl, CheckboxControl, CheckboxGroupControl, FilterControl, SimpleFilterControl, ToggleControl, FILTER_FIELDS, MODULAR_FILTER_FIELDS, NOSTR_FILTER_FIELDS, isSocketField, type Filters, type FilterElement } from './nodes/controls';
+import { TextInputControl, TextAreaControl, SelectControl, CheckboxControl, CheckboxGroupControl, FilterControl, SimpleFilterControl, ToggleControl, StatusLampControl, FILTER_FIELDS, MODULAR_FILTER_FIELDS, NOSTR_FILTER_FIELDS, isSocketField, type Filters, type FilterElement } from './nodes/controls';
+import { SocketListControl, SOCKET_TYPES, type SocketDefinition } from './nodes/FuncDefInNode';
 import './CustomNode.css';
 
 const { RefSocket } = Presets.classic;
@@ -465,9 +466,135 @@ function SimpleFilterControlComponent({ control, nodeId }: { control: SimpleFilt
   );
 }
 
+// Socket list control component for FuncDefIn/Out nodes
+function SocketListControlComponent({ control, nodeId }: { control: SocketListControl; nodeId: string }) {
+  const [sockets, setSockets] = useState<SocketDefinition[]>(control.sockets);
+
+  const updateSockets = (newSockets: SocketDefinition[]) => {
+    setSockets(newSockets);
+    control.sockets = newSockets;
+    control.onChange(newSockets);
+    dispatchControlChange(nodeId);
+  };
+
+  const addSocket = () => {
+    const newSockets = [...sockets, { name: `in ${sockets.length}`, type: 'Any' }];
+    updateSockets(newSockets);
+  };
+
+  const removeSocket = (index: number) => {
+    if (sockets.length <= 1) return; // Keep at least one socket
+    const newSockets = sockets.filter((_, i) => i !== index);
+    updateSockets(newSockets);
+  };
+
+  const updateSocket = (index: number, name: string, type: string) => {
+    const newSockets = sockets.map((s, i) =>
+      i === index ? { name, type } : s
+    );
+    setSockets(newSockets);
+  };
+
+  const commitChanges = () => {
+    control.sockets = sockets;
+    control.onChange(sockets);
+    dispatchControlChange(nodeId);
+  };
+
+  return (
+    <div className="control-wrapper socket-list-control">
+      <label className="control-label">{control.label}</label>
+      {sockets.map((socket, index) => (
+        <div key={index} className="socket-list-item">
+          <input
+            type="text"
+            className="socket-name-input"
+            value={socket.name}
+            placeholder="name"
+            onChange={(e) => updateSocket(index, e.target.value, socket.type)}
+            onBlur={commitChanges}
+            onPointerDown={(e) => e.stopPropagation()}
+          />
+          <select
+            className="socket-type-select"
+            value={socket.type}
+            onChange={(e) => {
+              updateSocket(index, socket.name, e.target.value);
+              // Commit immediately for type changes
+              const newSockets = sockets.map((s, i) =>
+                i === index ? { name: socket.name, type: e.target.value } : s
+              );
+              control.sockets = newSockets;
+              control.onChange(newSockets);
+              dispatchControlChange(nodeId);
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {SOCKET_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+          {sockets.length > 1 && (
+            <button
+              className="socket-remove-btn"
+              onClick={() => removeSocket(index)}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      ))}
+      <button
+        className="socket-add-btn"
+        onClick={addSocket}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        + Add Socket
+      </button>
+    </div>
+  );
+}
+
+// Status lamp control component for FunctionNode
+function StatusLampControlComponent({ control, nodeId }: { control: StatusLampControl; nodeId: string }) {
+  const [state, setState] = useState(control.state);
+  const [caption, setCaption] = useState(control.caption);
+
+  // Listen for control changes to update state
+  useEffect(() => {
+    const handleControlChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.nodeId === nodeId) {
+        setState(control.state);
+        setCaption(control.caption);
+      }
+    };
+    window.addEventListener('graph-control-change', handleControlChange);
+    return () => {
+      window.removeEventListener('graph-control-change', handleControlChange);
+    };
+  }, [control, nodeId]);
+
+  return (
+    <div className="control-wrapper status-lamp-control">
+      <div className={`status-lamp-circle ${state}`} />
+      <span className="status-lamp-caption">{caption}</span>
+    </div>
+  );
+}
+
 // Custom control renderer
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function CustomControl({ data, nodeId }: { data: any; nodeId: string }) {
+  if (data instanceof StatusLampControl) {
+    return <StatusLampControlComponent control={data} nodeId={nodeId} />;
+  }
+  if (data instanceof SocketListControl) {
+    return <SocketListControlComponent control={data} nodeId={nodeId} />;
+  }
   if (data instanceof SimpleFilterControl) {
     return <SimpleFilterControlComponent control={data} nodeId={nodeId} />;
   }

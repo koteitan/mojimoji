@@ -402,6 +402,109 @@
   border-color: #4ade80;
 }
 
+/* Socket list control styles (for FuncDefIn/Out nodes) */
+.socket-list-control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.socket-list-item {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.socket-name-input {
+  flex: 1;
+  padding: 4px 6px !important;
+  font-size: 12px !important;
+  min-width: 0;
+}
+
+.socket-type-select {
+  flex: 0 0 80px;
+  padding: 4px 6px !important;
+  font-size: 12px !important;
+}
+
+.socket-remove-btn {
+  background: #666;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  width: 22px;
+  height: 22px;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.socket-remove-btn:hover {
+  background: #ef4444;
+}
+
+.socket-add-btn {
+  background: #333;
+  color: #ccc;
+  border: 1px dashed #555;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.socket-add-btn:hover {
+  background: #444;
+  border-color: #666;
+  color: #fff;
+}
+
+/* Status lamp styles (for FunctionNode) */
+.status-lamp-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.status-lamp-circle {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid #666;
+  flex-shrink: 0;
+}
+
+.status-lamp-circle.idle {
+  background: #333;
+}
+
+.status-lamp-circle.loading {
+  background: #eab308;
+}
+
+.status-lamp-circle.working {
+  background: #22c55e;
+}
+
+.status-lamp-circle.error {
+  background: #ef4444;
+}
+
+.status-lamp-caption {
+  font-size: 11px;
+  color: #888;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Mobile touch support */
 @media (max-width: 768px) {
   .custom-node {

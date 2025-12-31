@@ -20,9 +20,13 @@ import {
   ModularRelayNode,
   IfNode,
   CountNode,
+  FuncDefInNode,
+  FuncDefOutNode,
+  FunctionNode,
   getCachedProfile,
   getProfileCacheInfo,
 } from './nodes';
+import type { SocketDefinition } from './nodes';
 import type { ConstantType } from './nodes';
 import type { ExtractionField, RelayFilterType } from './nodes';
 import type { TimelineSignal } from './nodes';
@@ -42,7 +46,8 @@ import {
   GRAPH_DATA_VERSION,
   type GraphData,
 } from '../../utils/localStorage';
-import { saveGraphToNostr, loadGraphByPath, loadGraphByEventId, loadGraphByNaddr } from '../../nostr/graphStorage';
+import { saveGraphToNostr, loadGraphByPath, loadGraphByEventId, loadGraphByNaddr, loadFunctionGraph } from '../../nostr/graphStorage';
+import { getPubkey, isNip07Available } from '../../nostr/nip07';
 import { extractContentWarning, decodeBech32ToHex, isHex64, naddrDecode, type EventSignal, type TimelineItem } from '../../nostr/types';
 import { merge, type Observable, type Subscription } from 'rxjs';
 import { APP_VERSION } from '../../App';
@@ -66,7 +71,7 @@ const formatBuildTimestamp = (): string => {
 
 const BUILD_TIMESTAMP = formatBuildTimestamp();
 
-type NodeTypes = SimpleRelayNode | OperatorNode | SearchNode | LanguageNode | NostrFilterNode | TimelineNode | ConstantNode | Nip07Node | ExtractionNode | ModularRelayNode | IfNode | CountNode;
+type NodeTypes = SimpleRelayNode | OperatorNode | SearchNode | LanguageNode | NostrFilterNode | TimelineNode | ConstantNode | Nip07Node | ExtractionNode | ModularRelayNode | IfNode | CountNode | FuncDefInNode | FuncDefOutNode | FunctionNode;
 
 // Helper to get the internal node type
 const getNodeType = (node: NodeTypes): string => {
@@ -525,6 +530,30 @@ export function GraphEditor({
       return (node as IfNode).output$;
     } else if (getNodeType(node) === 'Count') {
       return (node as CountNode).output$;
+    } else if (getNodeType(node) === 'FuncDefIn') {
+      const funcDefInNode = node as FuncDefInNode;
+      // sourceOutput is like 'out_0', 'out_1', etc.
+      if (sourceOutput) {
+        return funcDefInNode.getOutput$(sourceOutput);
+      }
+      // Default to first output
+      return funcDefInNode.getOutputByIndex$(0);
+    } else if (getNodeType(node) === 'FuncDefOut') {
+      const funcDefOutNode = node as FuncDefOutNode;
+      // sourceOutput is like 'in_0', 'in_1', etc.
+      if (sourceOutput) {
+        return funcDefOutNode.getOutput$(sourceOutput);
+      }
+      // Default to first output
+      return funcDefOutNode.getOutputByIndex$(0);
+    } else if (getNodeType(node) === 'Function') {
+      const functionNode = node as FunctionNode;
+      // sourceOutput is like 'out_0', 'out_1', etc.
+      if (sourceOutput) {
+        return functionNode.getOutput$(sourceOutput);
+      }
+      // Default to first output
+      return functionNode.getOutputByIndex$(0);
     }
 
     return null;
@@ -562,6 +591,12 @@ export function GraphEditor({
         (node as CountNode).stopSubscription();
       } else if (getNodeType(node) === 'If') {
         (node as IfNode).stopSubscriptions();
+      } else if (getNodeType(node) === 'FuncDefIn') {
+        (node as FuncDefInNode).stopSubscription();
+      } else if (getNodeType(node) === 'FuncDefOut') {
+        (node as FuncDefOutNode).stopSubscription();
+      } else if (getNodeType(node) === 'Function') {
+        (node as FunctionNode).stopSubscription();
       }
     }
 
@@ -594,6 +629,31 @@ export function GraphEditor({
       if (getNodeType(node) === 'Timeline') {
         findActiveRelays(node.id, new Set());
       }
+    }
+
+    // Load functions for FunctionNodes that have paths but aren't loaded yet
+    const loadFunctionPromises: Promise<void>[] = [];
+    for (const node of nodes) {
+      if (getNodeType(node) === 'Function') {
+        const functionNode = node as FunctionNode;
+        const path = functionNode.getFunctionPath();
+        const def = functionNode.getFunctionDefinition();
+        // Load if path is set but definition is not loaded or path changed
+        if (path && (!def || def.path !== path)) {
+          loadFunctionPromises.push(functionNode.loadFunction());
+        }
+      }
+    }
+    // Wait for all function loads to complete (async but don't block)
+    if (loadFunctionPromises.length > 0) {
+      Promise.all(loadFunctionPromises).then(() => {
+        // Re-render nodes after loading
+        for (const node of nodes) {
+          if (getNodeType(node) === 'Function') {
+            window.dispatchEvent(new CustomEvent('graph-sockets-change', { detail: { nodeId: node.id } }));
+          }
+        }
+      });
     }
 
     // Start subscriptions on active Relay nodes and subscribe to profile updates
@@ -827,6 +887,43 @@ export function GraphEditor({
         );
         const trigger$ = triggerConn ? getTypedOutput(triggerConn.source) : null;
         modularRelayNode.setTriggerInput(trigger$);
+      }
+    }
+
+    // Wire up FuncDefOut nodes
+    for (const node of nodes) {
+      if (getNodeType(node) === 'FuncDefOut') {
+        const funcDefOutNode = node as FuncDefOutNode;
+        const socketCount = funcDefOutNode.getSocketCount();
+
+        // Wire each input socket
+        for (let i = 0; i < socketCount; i++) {
+          const socketKey = `in_${i}`;
+          const inputConn = connections.find(
+            (c: { target: string; targetInput: string }) =>
+              c.target === node.id && c.targetInput === socketKey
+          );
+          const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+          funcDefOutNode.setInputByIndex(i, input$);
+        }
+      }
+    }
+
+    // Wire up FunctionNode inputs
+    for (const node of nodes) {
+      if (getNodeType(node) === 'Function') {
+        const functionNode = node as FunctionNode;
+        const inputKeys = functionNode.getInputKeys();
+
+        // Wire each input socket
+        for (const inputKey of inputKeys) {
+          const inputConn = connections.find(
+            (c: { target: string; targetInput: string }) =>
+              c.target === node.id && c.targetInput === inputKey
+          );
+          const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+          functionNode.setInput(inputKey, input$);
+        }
       }
     }
 
@@ -1158,6 +1255,37 @@ export function GraphEditor({
             (node as CountNode).deserialize(nodeData.data as { count?: number });
           }
           break;
+        case 'FuncDefIn':
+          node = new FuncDefInNode();
+          if (nodeData.data) {
+            (node as FuncDefInNode).deserialize(nodeData.data as { socketList: SocketDefinition[] });
+          }
+          break;
+        case 'FuncDefOut':
+          node = new FuncDefOutNode();
+          if (nodeData.data) {
+            (node as FuncDefOutNode).deserialize(nodeData.data as { socketList: SocketDefinition[] });
+          }
+          break;
+        case 'Function':
+          node = new FunctionNode();
+          // Set up function loading callback
+          (node as FunctionNode).setLoadFunctionCallback(async (path: string) => {
+            const userPubkey = isNip07Available() ? await getPubkey() : undefined;
+            const result = await loadFunctionGraph(path, userPubkey);
+            if (!result) return null;
+            return {
+              path: result.path,
+              pubkey: result.pubkey,
+              graphData: result.graphData,
+              inputSockets: result.inputSockets,
+              outputSockets: result.outputSockets,
+            };
+          });
+          if (nodeData.data) {
+            (node as FunctionNode).deserialize(nodeData.data as { functionPath: string; inputSockets?: SocketDefinition[]; outputSockets?: SocketDefinition[] });
+          }
+          break;
         default:
           continue;
       }
@@ -1285,7 +1413,7 @@ export function GraphEditor({
     }
   }, [loadGraphData]);
 
-  const addNode = useCallback(async (type: 'SimpleRelay' | 'Operator' | 'Search' | 'Language' | 'NostrFilter' | 'Timeline' | 'Constant' | 'Nip07' | 'Extraction' | 'ModularRelay' | 'If' | 'Count') => {
+  const addNode = useCallback(async (type: 'SimpleRelay' | 'Operator' | 'Search' | 'Language' | 'NostrFilter' | 'Timeline' | 'Constant' | 'Nip07' | 'Extraction' | 'ModularRelay' | 'If' | 'Count' | 'FuncDefIn' | 'FuncDefOut' | 'Function') => {
     const editor = editorRef.current;
     const area = areaRef.current;
     if (!editor || !area) return;
@@ -1329,6 +1457,28 @@ export function GraphEditor({
         break;
       case 'Count':
         node = new CountNode();
+        break;
+      case 'FuncDefIn':
+        node = new FuncDefInNode();
+        break;
+      case 'FuncDefOut':
+        node = new FuncDefOutNode();
+        break;
+      case 'Function':
+        node = new FunctionNode();
+        // Set up function loading callback
+        (node as FunctionNode).setLoadFunctionCallback(async (path: string) => {
+          const userPubkey = isNip07Available() ? await getPubkey() : undefined;
+          const result = await loadFunctionGraph(path, userPubkey);
+          if (!result) return null;
+          return {
+            path: result.path,
+            pubkey: result.pubkey,
+            graphData: result.graphData,
+            inputSockets: result.inputSockets,
+            outputSockets: result.outputSockets,
+          };
+        });
         break;
       default:
         return;
@@ -2584,6 +2734,10 @@ export function GraphEditor({
               <button onClick={() => { addNode('Extraction'); setFilterDropdownOpen(false); }}>{t('toolbar.extraction', 'Extraction')}</button>
               <button onClick={() => { addNode('If'); setFilterDropdownOpen(false); }}>{t('toolbar.if', 'If')}</button>
               <button onClick={() => { addNode('Count'); setFilterDropdownOpen(false); }}>{t('toolbar.count', 'Count')}</button>
+              <div className="dropdown-separator" />
+              <button onClick={() => { addNode('FuncDefIn'); setFilterDropdownOpen(false); }}>{t('toolbar.funcDefIn', 'Func In')}</button>
+              <button onClick={() => { addNode('FuncDefOut'); setFilterDropdownOpen(false); }}>{t('toolbar.funcDefOut', 'Func Out')}</button>
+              <button onClick={() => { addNode('Function'); setFilterDropdownOpen(false); }}>{t('toolbar.function', 'Function')}</button>
             </div>
           )}
         </div>

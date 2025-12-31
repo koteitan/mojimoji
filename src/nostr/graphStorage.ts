@@ -727,6 +727,67 @@ export function getNostrItemsInDirectory(
   return result;
 }
 
+// Function definition extracted from a function graph
+export interface FunctionDefinitionFromGraph {
+  path: string;
+  pubkey: string;
+  graphData: GraphData;
+  inputSockets: Array<{ name: string; type: string }>;
+  outputSockets: Array<{ name: string; type: string }>;
+}
+
+// Load a function graph and extract socket definitions
+// Path format: "pubkey/path" or just "path" (uses user's own pubkey)
+export async function loadFunctionGraph(
+  functionPath: string,
+  userPubkey?: string,
+  relayUrls?: string[]
+): Promise<FunctionDefinitionFromGraph | null> {
+  // Parse the function path to extract pubkey and path
+  let targetPubkey: string;
+  let targetPath: string;
+
+  const slashIndex = functionPath.indexOf('/');
+  if (slashIndex > 0 && functionPath.substring(0, slashIndex).length === 64) {
+    // Path starts with a 64-char hex pubkey
+    targetPubkey = functionPath.substring(0, slashIndex);
+    targetPath = functionPath.substring(slashIndex + 1);
+  } else if (userPubkey) {
+    // Use user's own pubkey
+    targetPubkey = userPubkey;
+    targetPath = functionPath;
+  } else {
+    // No pubkey available
+    return null;
+  }
+
+  // Load the graph
+  const graphData = await loadGraphByPath(targetPath, targetPubkey, relayUrls);
+  if (!graphData) {
+    return null;
+  }
+
+  // Extract socket definitions from FuncDefIn and FuncDefOut nodes
+  const inputSockets: Array<{ name: string; type: string }> = [];
+  const outputSockets: Array<{ name: string; type: string }> = [];
+
+  for (const nodeData of graphData.nodes as Array<{ type: string; data?: { socketList?: Array<{ name: string; type: string }> } }>) {
+    if (nodeData.type === 'FuncDefIn' && nodeData.data?.socketList) {
+      inputSockets.push(...nodeData.data.socketList);
+    } else if (nodeData.type === 'FuncDefOut' && nodeData.data?.socketList) {
+      outputSockets.push(...nodeData.data.socketList);
+    }
+  }
+
+  return {
+    path: functionPath,
+    pubkey: targetPubkey,
+    graphData,
+    inputSockets,
+    outputSockets,
+  };
+}
+
 // Fetch profiles from relays and save to cache
 export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<number> {
   let relays = relayUrls?.filter(url => url.trim());

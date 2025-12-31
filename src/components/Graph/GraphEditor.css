@@ -63,6 +63,13 @@
   align-self: stretch;
 }
 
+/* Dropdown separator */
+.dropdown-separator {
+  height: 1px;
+  background: #444;
+  margin: 4px 0;
+}
+
 /* Filter dropdown */
 .filter-dropdown {
   position: relative;

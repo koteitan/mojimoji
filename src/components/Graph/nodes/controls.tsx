@@ -239,3 +239,22 @@ export class ToggleControl extends ClassicPreset.Control {
     this.onChange = onChange;
   }
 }
+
+// Status lamp control for FunctionNode
+export type StatusLampState = 'idle' | 'loading' | 'working' | 'error';
+
+export class StatusLampControl extends ClassicPreset.Control {
+  state: StatusLampState;
+  caption: string;
+
+  constructor(state: StatusLampState = 'idle', caption: string = 'idle') {
+    super();
+    this.state = state;
+    this.caption = caption;
+  }
+
+  setState(state: StatusLampState, caption: string): void {
+    this.state = state;
+    this.caption = caption;
+  }
+}
