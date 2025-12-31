@@ -59,7 +59,7 @@ async function fetchAllGraphsFromRelays(): Promise<NostrGraphItem[]> {
   }
 
   return new Promise((resolve) => {
-    const { rxNostr: client, trackingId } = createTrackedRxNostr('load all graphs', relays);
+    const { rxNostr: client, trackingId } = createTrackedRxNostr('load all graphs', relays, [KIND_APP_DATA]);
 
     const rxReq = createRxBackwardReq();
     const eventsMap = new Map<string, NostrEvent>();
@@ -264,7 +264,7 @@ async function loadGraphsFromNostrInternal(
   }
 
   return new Promise((resolve) => {
-    const { rxNostr: client, trackingId } = createTrackedRxNostr('find graphs', relays!);
+    const { rxNostr: client, trackingId } = createTrackedRxNostr('find graphs', relays!, [KIND_APP_DATA]);
 
     // Use backward strategy - completes on EOSE instead of waiting for timeout
     const rxReq = createRxBackwardReq();
@@ -354,7 +354,7 @@ export async function loadGraphByPath(
   }
 
   return new Promise((resolve) => {
-    const { rxNostr: client, trackingId } = createTrackedRxNostr('find graphs', relays!);
+    const { rxNostr: client, trackingId } = createTrackedRxNostr('find graphs', relays!, [KIND_APP_DATA]);
 
     // Use backward strategy for one-shot queries
     const rxReq = createRxBackwardReq();
@@ -430,7 +430,7 @@ export async function loadGraphByEventId(
   }
 
   return new Promise((resolve) => {
-    const { rxNostr: client, trackingId } = createTrackedRxNostr('load graph by nevent', relays);
+    const { rxNostr: client, trackingId } = createTrackedRxNostr('load graph by nevent', relays, [KIND_APP_DATA]);
 
     // Use backward strategy for one-shot queries
     const rxReq = createRxBackwardReq();
@@ -511,7 +511,7 @@ export async function loadGraphByNaddr(
   }
 
   return new Promise((resolve) => {
-    const { rxNostr: client, trackingId } = createTrackedRxNostr('load graph by naddr', relays!);
+    const { rxNostr: client, trackingId } = createTrackedRxNostr('load graph by naddr', relays!, [kind]);
 
     // Use backward strategy for one-shot queries
     const rxReq = createRxBackwardReq();
@@ -838,7 +838,7 @@ export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<numbe
   }
 
   return new Promise((resolve) => {
-    const { rxNostr: client, trackingId } = createTrackedRxNostr('cache profiles for UI', relays!);
+    const { rxNostr: client, trackingId } = createTrackedRxNostr('cache profiles for UI', relays!, [0]);
 
     // Use backward strategy for one-shot queries
     const rxReq = createRxBackwardReq();

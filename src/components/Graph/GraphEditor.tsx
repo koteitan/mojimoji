@@ -319,31 +319,36 @@ export function GraphEditor({
     // Calculate column widths for alignment
     const maxIndex = String(allEntries.length).length;
     const maxRelay = Math.max(...allEntries.map(e => e.relay.length));
+    const formatKinds = (kinds: number[]) => kinds.length > 0 ? kinds.join(',') : '*';
+    const maxKinds = Math.max(...allEntries.map(e => formatKinds(e.kinds).length));
     const maxPurpose = Math.max(...allEntries.map(e => e.purpose.length));
 
     // Status color mapping
-    const statusColors: Record<string, string> = {
-      'connected': 'color: green',
-      'connecting': 'color: yellow',
-      'disconnected': 'color: red',
-      'dormant': 'color: gray',
-      'error': 'color: red',
-      'unknown': 'color: gray',
+    const getStatusColor = (status: string): string => {
+      const baseStatus = status.replace(/ \(completed\)$/, '');
+      switch (baseStatus) {
+        case 'connected': return '#00ff00';  // green
+        case 'connecting': return '#ffff00'; // yellow
+        case 'disconnected': return '#ff0000'; // red
+        case 'dormant': return '#888888'; // gray
+        case 'error': return '#ff0000'; // red
+        default: return '#888888'; // gray for unknown
+      }
     };
 
-    // Print entries
+    // Print entries - format: [index]: [relay] -> kind:[kinds] -> [receiver]: [status]
     for (let i = 0; i < allEntries.length; i++) {
       const entry = allEntries[i];
       const idx = String(i + 1).padStart(maxIndex);
       const relay = entry.relay.padEnd(maxRelay);
+      const kinds = `kind:${formatKinds(entry.kinds).padEnd(maxKinds)}`;
       const purpose = entry.purpose.padEnd(maxPurpose);
-      const statusColor = statusColors[entry.status] || 'color: white';
+      const statusColor = getStatusColor(entry.status);
       const errorSuffix = entry.error ? ` (${entry.error})` : '';
 
       console.log(
-        `%c${idx}: ${relay} -> ${purpose}: %c${entry.status}${errorSuffix}`,
-        'color: inherit',
-        statusColor
+        `${idx}: ${relay} -> ${kinds} -> ${purpose}: %c${entry.status}${errorSuffix}`,
+        `color: ${statusColor}; font-weight: bold`
       );
     }
   }, []);

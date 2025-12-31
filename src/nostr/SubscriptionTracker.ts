@@ -21,6 +21,7 @@ interface TrackedSubscription {
   rxNostr: RxNostr;
   purpose: SubscriptionPurpose;
   relayUrls: string[];
+  kinds: number[];  // Nostr event kinds being subscribed
   lastStatus: Map<string, string>;  // relay -> connection status
   lastError: string | null;
   createdAt: Date;
@@ -31,6 +32,7 @@ interface TrackedSubscription {
 export interface StatusEntry {
   index: number;
   relay: string;
+  kinds: number[];
   purpose: string;
   status: string;
   error: string | null;
@@ -42,7 +44,7 @@ class SubscriptionTrackerClass {
   /**
    * Register a new subscription
    */
-  register(id: string, rxNostr: RxNostr, purpose: SubscriptionPurpose, relayUrls: string[]): void {
+  register(id: string, rxNostr: RxNostr, purpose: SubscriptionPurpose, relayUrls: string[], kinds: number[] = []): void {
     // Get initial status
     const lastStatus = new Map<string, string>();
     try {
@@ -62,6 +64,7 @@ class SubscriptionTrackerClass {
       rxNostr,
       purpose,
       relayUrls,
+      kinds,
       lastStatus,
       lastError: null,
       createdAt: new Date(),
@@ -135,6 +138,7 @@ class SubscriptionTrackerClass {
         entries.push({
           index: index++,
           relay,
+          kinds: sub.kinds,
           purpose: sub.purpose,
           status: sub.completedAt ? `${status} (completed)` : status,
           error: sub.lastError,
@@ -164,6 +168,7 @@ class SubscriptionTrackerClass {
           entries.push({
             index: index++,
             relay,
+            kinds: sub.kinds,
             purpose: sub.purpose,
             status: sub.completedAt ? `${status} (completed)` : status,
             error: sub.lastError,

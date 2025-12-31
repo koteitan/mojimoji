@@ -51,7 +51,7 @@ let subscriptionIdCounter = 0;
  * Create a tracked RxNostr instance for a specific purpose
  * The instance is registered with SubscriptionTracker for monitoring
  */
-export function createTrackedRxNostr(purpose: SubscriptionPurpose, relayUrls: string[]): { rxNostr: RxNostr; trackingId: string } {
+export function createTrackedRxNostr(purpose: SubscriptionPurpose, relayUrls: string[], kinds: number[] = []): { rxNostr: RxNostr; trackingId: string } {
   const rxNostr = createRxNostr({
     verifier,
     eoseTimeout: 3000,
@@ -61,7 +61,7 @@ export function createTrackedRxNostr(purpose: SubscriptionPurpose, relayUrls: st
   rxNostr.setDefaultRelays(relayUrls);
 
   const trackingId = `${purpose}-${++subscriptionIdCounter}`;
-  SubscriptionTracker.register(trackingId, rxNostr, purpose, relayUrls);
+  SubscriptionTracker.register(trackingId, rxNostr, purpose, relayUrls, kinds);
 
   return { rxNostr, trackingId };
 }
@@ -124,7 +124,7 @@ export async function fetchUserRelayList(mode: 'read' | 'write' = 'read'): Promi
 // Fetch relay list of any user by pubkey with read/write mode
 export async function fetchRelayList(pubkey: string, mode: RelayMode = 'read'): Promise<string[]> {
   return new Promise((resolve) => {
-    const { rxNostr: client, trackingId } = createTrackedRxNostr('get user relays', INDEXER_RELAYS);
+    const { rxNostr: client, trackingId } = createTrackedRxNostr('get user relays', INDEXER_RELAYS, [KIND_RELAY_LIST]);
 
     // Use backward strategy for one-shot queries
     const rxReq = createRxBackwardReq();

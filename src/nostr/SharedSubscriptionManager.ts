@@ -244,15 +244,17 @@ class SharedSubscriptionManagerClass {
   /**
    * Get relay status entries for dumpSub() - returns all relay/node combinations with status
    */
-  getRelayStatusEntries(): { relay: string; purpose: string; status: string; error: string | null }[] {
-    const entries: { relay: string; purpose: string; status: string; error: string | null }[] = [];
+  getRelayStatusEntries(): { relay: string; kinds: number[]; purpose: string; status: string; error: string | null }[] {
+    const entries: { relay: string; kinds: number[]; purpose: string; status: string; error: string | null }[] = [];
 
     for (const [relayUrl, relaySub] of this.relaySubscriptions) {
       // Get relay status from rxNostr
       let status = 'unknown';
       try {
         const allStatus = relaySub.rxNostr.getAllRelayStatus();
-        const relayState = allStatus[relayUrl];
+        // Try both with and without trailing slash
+        const normalizedUrl = relayUrl.replace(/\/$/, '');
+        const relayState = allStatus[relayUrl] || allStatus[normalizedUrl] || allStatus[normalizedUrl + '/'];
         if (relayState) {
           status = relayState.connection;
         }
@@ -263,8 +265,18 @@ class SharedSubscriptionManagerClass {
       // Create entry for each subscriber node
       for (const subscriber of relaySub.subscribers.values()) {
         const truncatedId = subscriber.nodeId.slice(0, 8);
+        // Extract unique kinds from subscriber's filters
+        const kindsSet = new Set<number>();
+        for (const filter of subscriber.filters) {
+          if (filter.kinds && Array.isArray(filter.kinds)) {
+            for (const k of filter.kinds as number[]) {
+              kindsSet.add(k);
+            }
+          }
+        }
         entries.push({
           relay: relayUrl,
+          kinds: Array.from(kindsSet).sort((a, b) => a - b),
           purpose: `node-${truncatedId}`,
           status,
           error: null,
