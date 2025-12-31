@@ -272,7 +272,7 @@ export interface TimelineEvent {
 }
 
 // Timeline item types for different data types
-export type TimelineItemType = 'event' | 'eventId' | 'pubkey' | 'datetime' | 'relay' | 'integer' | 'flag' | 'relayStatus';
+export type TimelineItemType = 'event' | 'eventId' | 'pubkey' | 'datetime' | 'relay' | 'integer' | 'flag' | 'relayStatus' | 'complete';
 
 export interface TimelineItemBase {
   id: string;
@@ -322,6 +322,10 @@ export interface TimelineRelayStatusItem extends TimelineItemBase {
   status: string;
 }
 
+export interface TimelineCompleteItem extends TimelineItemBase {
+  type: 'complete';
+}
+
 export type TimelineItem =
   | TimelineEventItem
   | TimelineEventIdItem
@@ -330,7 +334,8 @@ export type TimelineItem =
   | TimelineRelayItem
   | TimelineIntegerItem
   | TimelineFlagItem
-  | TimelineRelayStatusItem;
+  | TimelineRelayStatusItem
+  | TimelineCompleteItem;
 
 // Extract content warning from event tags (NIP-36)
 // Returns: string (reason), null (warning with no reason), undefined (no warning)

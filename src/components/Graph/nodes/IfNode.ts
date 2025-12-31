@@ -77,6 +77,10 @@ export class IfNode extends ClassicPreset.Node {
   private valueA: unknown = null;
   private valueB: unknown = null;
 
+  // Completion tracking for inputs
+  private inputACompleted: boolean = false;
+  private inputBCompleted: boolean = false;
+
   // Output observable
   private outputSubject = new Subject<FlagSignal>();
   public output$: Observable<FlagSignal> = this.outputSubject.asObservable().pipe(shareReplay(1));
@@ -199,6 +203,11 @@ export class IfNode extends ClassicPreset.Node {
     this.stopSubscriptions();
     this.valueA = null;
     this.valueB = null;
+    this.inputACompleted = false;
+    this.inputBCompleted = false;
+    // Recreate output subject to allow re-emission after completion
+    this.outputSubject = new Subject<FlagSignal>();
+    this.output$ = this.outputSubject.asObservable().pipe(shareReplay(1));
 
     if (this.inputA$) {
       const sub = this.inputA$.subscribe({
@@ -206,8 +215,15 @@ export class IfNode extends ClassicPreset.Node {
           this.valueA = this.extractValue(signal);
           this.evaluate();
         },
+        complete: () => {
+          this.inputACompleted = true;
+          this.tryCompleteOutput();
+        },
       });
       this.subscriptions.push(sub);
+    } else {
+      // No input connected, treat as completed
+      this.inputACompleted = true;
     }
 
     if (this.inputB$) {
@@ -216,8 +232,24 @@ export class IfNode extends ClassicPreset.Node {
           this.valueB = this.extractValue(signal);
           this.evaluate();
         },
+        complete: () => {
+          this.inputBCompleted = true;
+          this.tryCompleteOutput();
+        },
       });
       this.subscriptions.push(sub);
+    } else {
+      // No input connected, treat as completed
+      this.inputBCompleted = true;
+    }
+
+    // Check if both inputs are already completed (e.g., when both are not connected)
+    this.tryCompleteOutput();
+  }
+
+  private tryCompleteOutput(): void {
+    if (this.inputACompleted && this.inputBCompleted) {
+      this.outputSubject.complete();
     }
   }
 

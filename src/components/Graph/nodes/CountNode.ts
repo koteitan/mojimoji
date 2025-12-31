@@ -60,6 +60,10 @@ export class CountNode extends ClassicPreset.Node {
       this.subscription = null;
     }
 
+    // Recreate output subject to allow re-emission after completion
+    this.outputSubject = new ReplaySubject<IntegerSignal>(1);
+    this.output$ = this.outputSubject.asObservable().pipe(shareReplay(1));
+
     // Reset count when input changes
     this.count = 0;
     this.outputSubject.next({ type: 'integer', value: this.count });
@@ -71,6 +75,10 @@ export class CountNode extends ClassicPreset.Node {
         // Increment count for each received input
         this.count++;
         this.outputSubject.next({ type: 'integer', value: this.count });
+      },
+      complete: () => {
+        // Propagate complete to output
+        this.outputSubject.complete();
       },
     });
   }

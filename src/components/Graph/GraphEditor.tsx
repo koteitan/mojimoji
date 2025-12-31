@@ -1096,6 +1096,8 @@ export function GraphEditor({
               const statusData = data as { relay: string; status: string };
               return `relayStatus:${statusData.relay}:${statusData.status}`;
             }
+            case 'complete':
+              return `complete:${Date.now()}`;
             default:
               return `unknown:${Date.now()}`;
           }
@@ -1142,6 +1144,8 @@ export function GraphEditor({
               const statusData = data as { relay: string; status: string };
               return { id: itemId, type: 'relayStatus', status: `${statusData.relay}: ${statusData.status}` };
             }
+            case 'complete':
+              return { id: itemId, type: 'complete' };
             default:
               return { id: itemId, type: 'flag', flag: false };
           }

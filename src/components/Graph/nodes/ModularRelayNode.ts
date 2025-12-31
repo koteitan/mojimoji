@@ -81,12 +81,16 @@ export class ModularRelayNode extends ClassicPreset.Node {
   // Socket input values (key -> values)
   private socketValues: Map<string, unknown[]> = new Map();
 
+  // Socket input completion status (key -> completed)
+  private socketCompleted: Map<string, boolean> = new Map();
+
   // Socket input subscriptions (key -> subscription)
   private socketSubscriptions: Map<string, { unsubscribe: () => void }> = new Map();
 
   // Relay input values
   private relayUrls: string[] = [];
   private relayInputSubscription: { unsubscribe: () => void } | null = null;
+  private relayInputCompleted: boolean = false;
 
   // External trigger setting
   private externalTrigger: boolean = false;
@@ -242,6 +246,7 @@ export class ModularRelayNode extends ClassicPreset.Node {
     }
 
     this.relayUrls = [];
+    this.relayInputCompleted = false;
 
     if (!input) return;
 
@@ -270,6 +275,10 @@ export class ModularRelayNode extends ClassicPreset.Node {
 
         this.tryStartSubscription();
       },
+      complete: () => {
+        this.relayInputCompleted = true;
+        this.tryStartSubscription();
+      },
     });
   }
 
@@ -286,11 +295,15 @@ export class ModularRelayNode extends ClassicPreset.Node {
     return true;
   }
 
-  private areAllSocketValuesReceived(): boolean {
+  private areAllSocketsCompleted(): boolean {
+    // Check if relay input has completed
+    if (this.relayInputSubscription && !this.relayInputCompleted) {
+      return false;
+    }
+    // Check if all socket inputs have completed
     for (const socketKey of this.currentSockets.keys()) {
       if (this.socketSubscriptions.has(socketKey)) {
-        const values = this.socketValues.get(socketKey);
-        if (!values || values.length === 0) {
+        if (!this.socketCompleted.get(socketKey)) {
           return false;
         }
       }
@@ -299,7 +312,21 @@ export class ModularRelayNode extends ClassicPreset.Node {
   }
 
   private tryStartSubscription(): void {
-    if (this.triggerState && this.relayUrls.length > 0 && this.areRequiredInputsConnected() && this.areAllSocketValuesReceived() && !this.isSubscribed()) {
+    // Start condition depends on external trigger mode:
+    // - With external trigger: start when trigger fires (can override waiting for sockets)
+    // - Without external trigger: wait for all socket inputs to complete
+    const allCompleted = this.areAllSocketsCompleted();
+    const hasRelays = this.relayUrls.length > 0;
+    const inputsConnected = this.areRequiredInputsConnected();
+    const notSubscribed = !this.isSubscribed();
+
+    // Determine if we should start:
+    // - If externalTrigger is enabled: use triggerState (start when trigger is true)
+    // - If externalTrigger is disabled: use allCompleted (start when all sockets complete)
+    const shouldStart = this.externalTrigger ? this.triggerState : allCompleted;
+    const canStart = shouldStart && hasRelays && inputsConnected && notSubscribed;
+
+    if (canStart) {
       this.startSubscription();
     }
   }
@@ -461,6 +488,7 @@ export class ModularRelayNode extends ClassicPreset.Node {
 
     if (!input) {
       this.socketValues.delete(socketKey);
+      this.socketCompleted.delete(socketKey);
       return;
     }
 
@@ -475,6 +503,7 @@ export class ModularRelayNode extends ClassicPreset.Node {
 
     const baseField = getBaseField(element.field);
     this.socketValues.set(socketKey, []);
+    this.socketCompleted.set(socketKey, false);
 
     const subscription = input.subscribe({
       next: (signal) => {
@@ -508,6 +537,10 @@ export class ModularRelayNode extends ClassicPreset.Node {
           }
         }
 
+        this.tryStartSubscription();
+      },
+      complete: () => {
+        this.socketCompleted.set(socketKey, true);
         this.tryStartSubscription();
       },
     });

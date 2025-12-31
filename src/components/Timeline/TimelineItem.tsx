@@ -377,6 +377,17 @@ export function TimelineGenericItemComponent({ item }: TimelineGenericItemProps)
         </div>
       );
 
+    case 'complete':
+      return (
+        <div className="timeline-item timeline-item-simple">
+          <div className="timeline-item-content">
+            <div className="timeline-item-value timeline-item-complete">
+              ✓ complete
+            </div>
+          </div>
+        </div>
+      );
+
     default:
       return null;
   }

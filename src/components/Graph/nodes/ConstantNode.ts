@@ -1,5 +1,5 @@
 import { ClassicPreset } from 'rete';
-import { ReplaySubject, Observable, shareReplay, defer, from } from 'rxjs';
+import { ReplaySubject, Observable, defer, from } from 'rxjs';
 import i18next from 'i18next';
 import { getDefaultRelayUrl } from '../../../nostr/graphStorage';
 import {
@@ -87,8 +87,9 @@ export class ConstantNode extends ClassicPreset.Node {
   private rawValue: string = getDefaultValue('integer');
 
   // Output observable - use ReplaySubject(1) and shareReplay(1) so late subscribers get the last value
+  // Recreated on each emitValue() to allow complete() and re-emission
   private outputSubject = new ReplaySubject<ConstantSignal>(1);
-  private _baseOutput$: Observable<ConstantSignal> = this.outputSubject.asObservable().pipe(shareReplay(1));
+  private _baseOutput$: Observable<ConstantSignal> = this.outputSubject.asObservable();
 
   // For relay type, store URLs to emit all on subscription
   private relayUrls: string[] = [];
@@ -297,12 +298,18 @@ export class ConstantNode extends ClassicPreset.Node {
     if (this.constantType === 'relay' && Array.isArray(value)) {
       this.relayUrls = value;
       // Don't emit through subject - the getter handles relay type specially
+      // Note: defer(() => from(signals)) naturally completes after emitting all values
     } else {
       this.relayUrls = [];
+      // Recreate subject to allow complete() and re-emission on value change
+      this.outputSubject = new ReplaySubject<ConstantSignal>(1);
+      this._baseOutput$ = this.outputSubject.asObservable();
       this.outputSubject.next({
         type: this.constantType,
         value,
       });
+      // Complete the subject to signal that all values have been emitted
+      this.outputSubject.complete();
     }
   }
 

@@ -161,11 +161,28 @@ export class ExtractionNode extends ClassicPreset.Node {
       this.subscription = null;
     }
 
+    // Recreate output subjects to allow re-emission after completion
+    this.eventIdSubject = new Subject<EventIdSignal>();
+    this.pubkeySubject = new Subject<PubkeySignal>();
+    this.datetimeSubject = new Subject<DatetimeSignal>();
+    this.relaySubject = new Subject<RelaySignal>();
+    this.eventIdOutput$ = this.eventIdSubject.asObservable().pipe(share());
+    this.pubkeyOutput$ = this.pubkeySubject.asObservable().pipe(share());
+    this.datetimeOutput$ = this.datetimeSubject.asObservable().pipe(share());
+    this.relayOutput$ = this.relaySubject.asObservable().pipe(share());
+
     if (!this.input$) return;
 
     this.subscription = this.input$.subscribe({
       next: (eventSignal) => {
         this.extractAndEmit(eventSignal);
+      },
+      complete: () => {
+        // Propagate complete to all output subjects
+        this.eventIdSubject.complete();
+        this.pubkeySubject.complete();
+        this.datetimeSubject.complete();
+        this.relaySubject.complete();
       },
     });
   }

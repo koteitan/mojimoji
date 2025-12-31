@@ -1,5 +1,5 @@
 import { ClassicPreset } from 'rete';
-import { ReplaySubject, Observable, shareReplay } from 'rxjs';
+import { ReplaySubject, Observable } from 'rxjs';
 import i18next from 'i18next';
 import { pubkeySocket } from './types';
 import { isNip07Available, getPubkey } from '../../../nostr/nip07';
@@ -19,8 +19,9 @@ export class Nip07Node extends ClassicPreset.Node {
   private error: string | null = null;
 
   // Output observable - use ReplaySubject(1) so late subscribers get the last value
+  // Recreated on each emitPubkey() to allow complete() and re-emission on refresh
   private outputSubject = new ReplaySubject<PubkeySignal>(1);
-  public output$: Observable<PubkeySignal> = this.outputSubject.asObservable().pipe(shareReplay(1));
+  public output$: Observable<PubkeySignal> = this.outputSubject.asObservable();
 
   constructor() {
     super(i18next.t('nodes.nip07.title', 'NIP-07'));
@@ -59,8 +60,11 @@ export class Nip07Node extends ClassicPreset.Node {
   }
 
   emitPubkey(): void {
-    if (this.pubkey) {
+    // Only emit if subject is not already completed
+    if (this.pubkey && !this.outputSubject.closed) {
       this.outputSubject.next({ pubkey: this.pubkey });
+      // Complete the subject to signal that all values have been emitted
+      this.outputSubject.complete();
     }
   }
 

@@ -7,7 +7,7 @@ import type { EventSignal } from '../../../nostr/types';
 import { GlobalProfileFetcher } from '../../../nostr/ProfileFetcher';
 
 // Data types that Timeline can display
-export type TimelineDataType = 'event' | 'eventId' | 'pubkey' | 'relay' | 'flag' | 'integer' | 'datetime' | 'relayStatus';
+export type TimelineDataType = 'event' | 'eventId' | 'pubkey' | 'relay' | 'flag' | 'integer' | 'datetime' | 'relayStatus' | 'complete';
 
 // Generic signal for Timeline with dynamically detected type
 export interface TimelineSignal {
@@ -275,7 +275,14 @@ export class TimelineNode extends ClassicPreset.Node {
         console.error(`[TimelineNode ${this.id.slice(0, 8)}] Subscription error:`, err);
       },
       complete: () => {
-        console.warn(`[TimelineNode ${this.id.slice(0, 8)}] Subscription completed unexpectedly`);
+        // Input completed - emit a complete signal to the timeline
+        if (this.onSignal) {
+          this.onSignal({
+            type: 'complete',
+            data: null,
+            signal: 'add',
+          });
+        }
       },
     });
   }
