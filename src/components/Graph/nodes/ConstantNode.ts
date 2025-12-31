@@ -94,6 +94,9 @@ export class ConstantNode extends ClassicPreset.Node {
   // For relay type, store URLs to emit all on subscription
   private relayUrls: string[] = [];
 
+  // Track completion state
+  private completed = false;
+
   // Getter that returns appropriate observable based on type
   public get output$(): Observable<ConstantSignal> {
     if (this.constantType === 'relay') {
@@ -299,6 +302,7 @@ export class ConstantNode extends ClassicPreset.Node {
       this.relayUrls = value;
       // Don't emit through subject - the getter handles relay type specially
       // Note: defer(() => from(signals)) naturally completes after emitting all values
+      this.completed = true;
     } else {
       this.relayUrls = [];
       // Recreate subject to allow complete() and re-emission on value change
@@ -310,7 +314,12 @@ export class ConstantNode extends ClassicPreset.Node {
       });
       // Complete the subject to signal that all values have been emitted
       this.outputSubject.complete();
+      this.completed = true;
     }
+  }
+
+  isComplete(): boolean {
+    return this.completed;
   }
 
   getConstantType(): ConstantType {

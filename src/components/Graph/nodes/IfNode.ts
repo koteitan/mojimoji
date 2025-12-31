@@ -199,6 +199,7 @@ export class IfNode extends ClassicPreset.Node {
   }
 
   private rebuildPipeline(): void {
+    console.log(`[IfNode ${this.id.slice(0, 8)}] rebuildPipeline() called, inputA$=${this.inputA$ ? 'exists' : 'null'}, inputB$=${this.inputB$ ? 'exists' : 'null'}`);
     // Cleanup existing subscriptions
     this.stopSubscriptions();
     this.valueA = null;
@@ -213,9 +214,11 @@ export class IfNode extends ClassicPreset.Node {
       const sub = this.inputA$.subscribe({
         next: (signal) => {
           this.valueA = this.extractValue(signal);
+          console.log(`[IfNode ${this.id.slice(0, 8)}] inputA received:`, signal, `-> valueA=${this.valueA}`);
           this.evaluate();
         },
         complete: () => {
+          console.log(`[IfNode ${this.id.slice(0, 8)}] inputA completed`);
           this.inputACompleted = true;
           this.tryCompleteOutput();
         },
@@ -230,9 +233,11 @@ export class IfNode extends ClassicPreset.Node {
       const sub = this.inputB$.subscribe({
         next: (signal) => {
           this.valueB = this.extractValue(signal);
+          console.log(`[IfNode ${this.id.slice(0, 8)}] inputB received:`, signal, `-> valueB=${this.valueB}`);
           this.evaluate();
         },
         complete: () => {
+          console.log(`[IfNode ${this.id.slice(0, 8)}] inputB completed`);
           this.inputBCompleted = true;
           this.tryCompleteOutput();
         },
@@ -248,7 +253,9 @@ export class IfNode extends ClassicPreset.Node {
   }
 
   private tryCompleteOutput(): void {
+    console.log(`[IfNode ${this.id.slice(0, 8)}] tryCompleteOutput(): inputACompleted=${this.inputACompleted}, inputBCompleted=${this.inputBCompleted}`);
     if (this.inputACompleted && this.inputBCompleted) {
+      console.log(`[IfNode ${this.id.slice(0, 8)}] completing output`);
       this.outputSubject.complete();
     }
   }
@@ -289,6 +296,7 @@ export class IfNode extends ClassicPreset.Node {
 
   private evaluate(): void {
     if (this.valueA === null || this.valueB === null) {
+      console.log(`[IfNode ${this.id.slice(0, 8)}] evaluate() skipped: valueA=${this.valueA}, valueB=${this.valueB}`);
       return;
     }
 
@@ -298,6 +306,7 @@ export class IfNode extends ClassicPreset.Node {
     if (!supportsOrdering(this.comparisonType) &&
         this.operator !== 'equal' && this.operator !== 'notEqual') {
       // Invalid operator for this type, default to false
+      console.log(`[IfNode ${this.id.slice(0, 8)}] evaluate() invalid operator for type`);
       this.outputSubject.next({ flag: false });
       return;
     }
@@ -323,6 +332,7 @@ export class IfNode extends ClassicPreset.Node {
         break;
     }
 
+    console.log(`[IfNode ${this.id.slice(0, 8)}] evaluate(): ${this.valueA} ${this.operator} ${this.valueB} = ${result}`);
     this.outputSubject.next({ flag: result });
   }
 
@@ -331,6 +341,10 @@ export class IfNode extends ClassicPreset.Node {
       sub.unsubscribe();
     }
     this.subscriptions = [];
+  }
+
+  isComplete(): boolean {
+    return this.inputACompleted && this.inputBCompleted;
   }
 
   serialize() {

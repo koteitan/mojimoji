@@ -69,6 +69,9 @@ export class ExtractionNode extends ClassicPreset.Node {
   private input$: Observable<EventSignal> | null = null;
   private subscription: { unsubscribe: () => void } | null = null;
 
+  // Track completion state
+  private completed = false;
+
   // Output observables for each type
   private eventIdSubject = new Subject<EventIdSignal>();
   private pubkeySubject = new Subject<PubkeySignal>();
@@ -179,6 +182,7 @@ export class ExtractionNode extends ClassicPreset.Node {
       },
       complete: () => {
         // Propagate complete to all output subjects
+        this.completed = true;
         this.eventIdSubject.complete();
         this.pubkeySubject.complete();
         this.datetimeSubject.complete();
@@ -274,6 +278,10 @@ export class ExtractionNode extends ClassicPreset.Node {
       this.subscription.unsubscribe();
       this.subscription = null;
     }
+  }
+
+  isComplete(): boolean {
+    return this.completed;
   }
 
   serialize() {

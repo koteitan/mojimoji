@@ -374,6 +374,17 @@ export class SimpleRelayNode extends ClassicPreset.Node {
     return this.subscribedRelayUrls.length > 0;
   }
 
+  // Get subscription status for debugging
+  getSubscriptionStatus(): 'subscribing' | 'EOSE' | 'closed' {
+    if (this.isSubscribed()) {
+      if (this.eoseReceived) {
+        return 'EOSE';
+      }
+      return 'subscribing';
+    }
+    return 'closed';
+  }
+
   // Force restart subscription (for debugging stuck connections)
   restartSubscription(): void {
     console.log(`[SimpleRelayNode ${this.id.slice(0, 8)}] Restarting subscription...`);

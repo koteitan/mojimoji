@@ -288,6 +288,41 @@ class SharedSubscriptionManagerClass {
   }
 
   /**
+   * Get detailed entry for dumpsub(i) - returns full filter information for a specific entry
+   */
+  getDetailedEntry(index: number): { relay: string; filters: Filter[]; status: string } | null {
+    let currentIndex = 0;
+
+    for (const [relayUrl, relaySub] of this.relaySubscriptions) {
+      // Get relay status from rxNostr
+      let status = 'unknown';
+      try {
+        const allStatus = relaySub.rxNostr.getAllRelayStatus();
+        const normalizedUrl = relayUrl.replace(/\/$/, '');
+        const relayState = allStatus[relayUrl] || allStatus[normalizedUrl] || allStatus[normalizedUrl + '/'];
+        if (relayState) {
+          status = relayState.connection;
+        }
+      } catch {
+        status = 'error';
+      }
+
+      for (const subscriber of relaySub.subscribers.values()) {
+        if (currentIndex === index) {
+          return {
+            relay: relayUrl,
+            filters: subscriber.filters,
+            status,
+          };
+        }
+        currentIndex++;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Hash relay URL for subscription ID
    */
   private hashRelayUrl(url: string): string {

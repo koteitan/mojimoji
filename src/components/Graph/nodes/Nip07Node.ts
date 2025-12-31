@@ -80,6 +80,10 @@ export class Nip07Node extends ClassicPreset.Node {
     return isNip07Available();
   }
 
+  isComplete(): boolean {
+    return this.outputSubject.closed;
+  }
+
   // Refresh pubkey (in case extension was loaded after page load)
   async refresh(): Promise<void> {
     this.retryCount = 0;

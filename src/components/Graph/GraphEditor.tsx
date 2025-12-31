@@ -293,7 +293,53 @@ export function GraphEditor({
   // Debug function to dump subscription state to console
   // Usage: dumpsub() - show all subscriptions
   //        dumpsub('wss://relay.damus.io') - filter by relay URL
-  const dumpSub = useCallback((relayFilter?: string) => {
+  //        dumpsub(0) - show detail of 0th subscription
+  const dumpSub = useCallback((filterOrIndex?: string | number) => {
+    // If integer, show detailed view for that subscription
+    if (typeof filterOrIndex === 'number') {
+      const index = filterOrIndex;
+      // Get number of tracker entries first
+      const trackerEntries = SubscriptionTracker.getAllStatus();
+      const trackerCount = trackerEntries.length;
+
+      if (index < trackerCount) {
+        // It's a tracker entry - just show what we have
+        const entry = trackerEntries[index];
+        if (entry) {
+          console.log(`relay: ${entry.relay}`);
+          console.log(`filter:`);
+          console.log(`  kinds: ${entry.kinds.length > 0 ? entry.kinds.join(', ') : '*'}`);
+          console.log(`status: ${entry.status}`);
+        } else {
+          console.log(`Subscription index ${index} not found`);
+        }
+      } else {
+        // It's a shared subscription entry
+        const sharedIndex = index - trackerCount;
+        const detail = SharedSubscriptionManager.getDetailedEntry(sharedIndex);
+        if (detail) {
+          console.log(`relay: ${detail.relay}`);
+          detail.filters.forEach((filter, i) => {
+            console.log(`filter${i + 1}:`);
+            for (const [key, value] of Object.entries(filter)) {
+              if (Array.isArray(value)) {
+                console.log(`  ${key}: ${value.join(', ')}`);
+              } else {
+                console.log(`  ${key}: ${value}`);
+              }
+            }
+          });
+          console.log(`status: ${detail.status}`);
+        } else {
+          console.log(`Subscription index ${index} not found`);
+        }
+      }
+      return;
+    }
+
+    // Otherwise, list all subscriptions (optionally filtered by relay)
+    const relayFilter = filterOrIndex;
+
     // Collect entries from SubscriptionTracker (one-shot operations)
     const trackerEntries = relayFilter
       ? SubscriptionTracker.getStatusForRelay(relayFilter)
@@ -339,7 +385,7 @@ export function GraphEditor({
     // Print entries - format: [index]: [relay] -> kind:[kinds] -> [receiver]: [status]
     for (let i = 0; i < allEntries.length; i++) {
       const entry = allEntries[i];
-      const idx = String(i + 1).padStart(maxIndex);
+      const idx = String(i).padStart(maxIndex);
       const relay = entry.relay.padEnd(maxRelay);
       const kinds = `kind:${formatKinds(entry.kinds).padEnd(maxKinds)}`;
       const purpose = entry.purpose.padEnd(maxPurpose);
@@ -402,7 +448,7 @@ export function GraphEditor({
 
   // Dump observable stream structure (for debugging)
   // Shows connections including expanded FunctionNode internals
-  const dumpObs = useCallback(() => {
+  const dumpObStream = useCallback(() => {
     const editor = editorRef.current;
     if (!editor) {
       console.log('Editor not initialized');
@@ -420,17 +466,82 @@ export function GraphEditor({
       return `${type}:${nodeId.slice(0, 8)}`;
     };
 
-    const lines: string[] = ['Observable Stream Connections:'];
+    // Helper to check if a node's output is complete
+    const isOutputComplete = (nodeId: string, socketKey: string): boolean => {
+      const node = editor.getNode(nodeId);
+      if (!node) return false;
+      const nodeType = getNodeType(node);
+
+      // Check completion based on node type
+      if (nodeType === 'Constant') {
+        // ConstantNode completes immediately after emitting
+        return (node as ConstantNode).isComplete?.() ?? false;
+      } else if (nodeType === 'Nip07') {
+        return (node as Nip07Node).isComplete?.() ?? false;
+      } else if (nodeType === 'If') {
+        return (node as IfNode).isComplete?.() ?? false;
+      } else if (nodeType === 'Count') {
+        return (node as CountNode).isComplete?.() ?? false;
+      } else if (nodeType === 'Extraction') {
+        return (node as ExtractionNode).isComplete?.() ?? false;
+      } else if (nodeType === 'Function') {
+        return (node as FunctionNode).isOutputComplete?.(socketKey) ?? false;
+      }
+      // ModularRelay, SimpleRelay, Timeline, etc. don't complete
+      return false;
+    };
+
+    // Helper to get relay node subscription status
+    const getRelayStatus = (nodeId: string): string | null => {
+      const node = editor.getNode(nodeId);
+      if (!node) return null;
+      const nodeType = getNodeType(node);
+
+      if (nodeType === 'ModularRelay') {
+        return (node as ModularRelayNode).getSubscriptionStatus();
+      } else if (nodeType === 'SimpleRelay') {
+        return (node as SimpleRelayNode).getSubscriptionStatus();
+      }
+      return null;
+    };
+
+    // Collect all connections with indices
+    interface ConnectionEntry {
+      sourceLabel: string;
+      sourceOutput: string;
+      targetLabel: string;
+      targetInput: string;
+      isComplete: boolean;
+      relayStatus: string | null;
+    }
+    const entries: ConnectionEntry[] = [];
 
     // Regular connections from editor
     for (const conn of connections) {
-      const sourceLabel = getNodeLabel(conn.source);
-      const targetLabel = getNodeLabel(conn.target);
-      lines.push(`  ${sourceLabel}.${conn.sourceOutput} -> ${targetLabel}.${conn.targetInput}`);
+      entries.push({
+        sourceLabel: getNodeLabel(conn.source),
+        sourceOutput: conn.sourceOutput,
+        targetLabel: getNodeLabel(conn.target),
+        targetInput: conn.targetInput,
+        isComplete: isOutputComplete(conn.source, conn.sourceOutput),
+        relayStatus: getRelayStatus(conn.source),
+      });
     }
 
+    // Calculate max index width
+    const maxIndexWidth = String(entries.length).length;
+
+    console.log('Observable Stream Connections:');
+    entries.forEach((entry, index) => {
+      const indexStr = String(index).padStart(maxIndexWidth);
+      const completeFlag = entry.isComplete ? ' (complete)' : '';
+      const relayFlag = entry.relayStatus ? ` (${entry.relayStatus})` : '';
+      console.log(`  ${indexStr}:${entry.sourceLabel}.${entry.sourceOutput} -> ${entry.targetLabel}.${entry.targetInput}${completeFlag}${relayFlag}`);
+    });
+
     // FunctionNode internal connections (expanded)
-    lines.push('', 'FunctionNode Internal Wiring:');
+    console.log('');
+    console.log('FunctionNode Internal Wiring:');
     let hasFunctionNodes = false;
     for (const node of nodes) {
       if (getNodeType(node) === 'Function') {
@@ -439,28 +550,28 @@ export function GraphEditor({
         if (def) {
           hasFunctionNodes = true;
           const nodeLabel = `Function:${node.id.slice(0, 8)}`;
-          lines.push(`  [${nodeLabel}] path: ${functionNode.getFunctionPath()}`);
+          console.log(`  [${nodeLabel}] path: ${functionNode.getFunctionPath()}`);
 
           // Get internal wiring info
           const wiringInfo = functionNode.getInternalWiringInfo();
 
           // Show internal nodes
           if (wiringInfo.nodes.length > 0) {
-            lines.push(`    Internal nodes: ${wiringInfo.nodes.join(', ')}`);
+            console.log(`    Internal nodes: ${wiringInfo.nodes.join(', ')}`);
           }
 
-          // Show internal connections
-          for (const conn of wiringInfo.connections) {
-            lines.push(`    ${conn}`);
-          }
+          // Show internal connections with indices
+          const internalMaxIndexWidth = String(wiringInfo.connections.length).length;
+          wiringInfo.connections.forEach((conn, i) => {
+            const indexStr = String(i).padStart(internalMaxIndexWidth);
+            console.log(`    ${indexStr}:${conn}`);
+          });
         }
       }
     }
     if (!hasFunctionNodes) {
-      lines.push('  (no FunctionNodes)');
+      console.log('  (no FunctionNodes)');
     }
-
-    console.log(lines.join('\n'));
   }, []);
 
   // Dump timeline signals (for debugging)
@@ -529,6 +640,15 @@ export function GraphEditor({
     }
   }, []);
 
+  // Dump all: runs dumpgraph, dumpobstream, and dumptl
+  const dumpAll = useCallback(() => {
+    dumpGraph();
+    console.log('');
+    dumpObStream();
+    console.log('');
+    dumpTl();
+  }, [dumpGraph, dumpObStream, dumpTl]);
+
   // Expose debug functions to window
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -538,9 +658,11 @@ export function GraphEditor({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).cleansub = cleanSub;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).dumpobs = dumpObs;
+    (window as any).dumpobstream = dumpObStream;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).dumptl = dumpTl;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).dumpall = dumpAll;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).infocache = infoCache;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -555,9 +677,11 @@ export function GraphEditor({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).cleansub;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delete (window as any).dumpobs;
+      delete (window as any).dumpobstream;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).dumptl;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).dumpall;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).infocache;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -565,7 +689,7 @@ export function GraphEditor({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).reconnect;
     };
-  }, [dumpGraph, dumpSub, cleanSub, dumpObs, dumpTl, infoCache, monTimeline, reconnect]);
+  }, [dumpGraph, dumpSub, cleanSub, dumpObStream, dumpTl, dumpAll, infoCache, monTimeline, reconnect]);
 
   // Find all downstream timeline IDs from a given node
   const findDownstreamTimelines = useCallback((startNodeId: string): Set<string> => {
@@ -1014,53 +1138,31 @@ export function GraphEditor({
       if (getNodeType(node) === 'ModularRelay') {
         const modularRelayNode = node as ModularRelayNode;
 
-        // Helper to get typed output from source node
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const getTypedOutput = (sourceId: string): Observable<any> | null => {
-          const sourceNode = editor.getNode(sourceId);
-          if (!sourceNode) return null;
-          const sourceType = getNodeType(sourceNode);
-
-          // Return the appropriate output based on node type
-          if (sourceType === 'Constant') {
-            return (sourceNode as ConstantNode).output$;
-          } else if (sourceType === 'Nip07') {
-            return (sourceNode as Nip07Node).output$;
-          } else if (sourceType === 'Extraction') {
-            return (sourceNode as ExtractionNode).getOutput$();
-          } else if (sourceType === 'If') {
-            return (sourceNode as IfNode).output$;
-          } else if (sourceType === 'Count') {
-            return (sourceNode as CountNode).output$;
-          }
-          return null;
-        };
-
         // Wire up filter socket inputs FIRST (before trigger, so values are ready)
         const socketKeys = modularRelayNode.getSocketKeys();
         for (const socketKey of socketKeys) {
           const socketConn = connections.find(
-            (c: { target: string; targetInput: string }) =>
+            (c: { target: string; targetInput: string; sourceOutput: string }) =>
               c.target === node.id && c.targetInput === socketKey
           );
-          const socket$ = socketConn ? getTypedOutput(socketConn.source) : null;
+          const socket$ = socketConn ? getNodeOutput(socketConn.source, socketConn.sourceOutput) : null;
           modularRelayNode.setSocketInput(socketKey, socket$);
         }
 
         // Wire up relay input
         const relayConn = connections.find(
-          (c: { target: string; targetInput: string }) =>
+          (c: { target: string; targetInput: string; sourceOutput: string }) =>
             c.target === node.id && c.targetInput === 'relay'
         );
-        const relay$ = relayConn ? getTypedOutput(relayConn.source) : null;
+        const relay$ = relayConn ? getNodeOutput(relayConn.source, relayConn.sourceOutput) : null;
         modularRelayNode.setRelayInput(relay$);
 
         // Wire up trigger input LAST (so all other inputs are ready when subscription starts)
         const triggerConn = connections.find(
-          (c: { target: string; targetInput: string }) =>
+          (c: { target: string; targetInput: string; sourceOutput: string }) =>
             c.target === node.id && c.targetInput === 'trigger'
         );
-        const trigger$ = triggerConn ? getTypedOutput(triggerConn.source) : null;
+        const trigger$ = triggerConn ? getNodeOutput(triggerConn.source, triggerConn.sourceOutput) : null;
         modularRelayNode.setTriggerInput(trigger$);
       }
     }
@@ -1093,10 +1195,10 @@ export function GraphEditor({
         // Wire each input socket
         for (const inputKey of inputKeys) {
           const inputConn = connections.find(
-            (c: { target: string; targetInput: string }) =>
+            (c: { target: string; targetInput: string; sourceOutput: string }) =>
               c.target === node.id && c.targetInput === inputKey
           );
-          const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+          const input$ = inputConn ? getNodeOutput(inputConn.source, inputConn.sourceOutput) : null;
           functionNode.setInput(inputKey, input$);
         }
       }

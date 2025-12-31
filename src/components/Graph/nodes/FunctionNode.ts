@@ -303,12 +303,14 @@ export class FunctionNode extends ClassicPreset.Node {
 
   // Set input observable (called during pipeline wiring)
   setInput(socketKey: string, input$: Observable<FuncDefSignal> | null): void {
+    console.log(`[FunctionNode ${this.id.slice(0, 8)}] setInput(${socketKey}, ${input$ ? 'observable' : 'null'})`);
     this.inputs$.set(socketKey, input$);
     this.rebuildInternalPipeline();
   }
 
   // Rebuild internal pipeline - wire internal nodes according to graphData.connections
   private rebuildInternalPipeline(): void {
+    console.log(`[FunctionNode ${this.id.slice(0, 8)}] rebuildInternalPipeline() called`);
     // Stop existing subscriptions
     for (const sub of this.subscriptions) {
       sub.unsubscribe();
@@ -327,7 +329,9 @@ export class FunctionNode extends ClassicPreset.Node {
       if (sourceId === this.funcDefInId) {
         // Map FuncDefIn output (out_0, out_1, ...) to FunctionNode input (in_0, in_1, ...)
         const inputKey = sourceOutput.replace('out_', 'in_');
-        return this.inputs$.get(inputKey) || null;
+        const input$ = this.inputs$.get(inputKey) || null;
+        console.log(`[FunctionNode ${this.id.slice(0, 8)}] getSourceObservable: FuncDefIn.${sourceOutput} -> inputs$.get('${inputKey}') = ${input$ ? 'exists' : 'null'}`);
+        return input$;
       }
 
       // Otherwise, get from internal node
@@ -348,27 +352,21 @@ export class FunctionNode extends ClassicPreset.Node {
       return null;
     };
 
-    // Wire internal nodes
+    // Two-pass wiring to ensure inputs are set before outputs are subscribed
+    // This is necessary because setting inputs on internal nodes (like IfNode) may
+    // recreate their output$ observable, invalidating any earlier subscriptions.
+
+    // Pass 1: Wire inputs to internal nodes (not FuncDefOut)
     for (const conn of connections) {
       const { source, sourceOutput, target, targetInput } = conn;
 
+      // Skip FuncDefOut connections - handle in pass 2
+      if (target === this.funcDefOutId) continue;
+
       // Get source observable
       const source$ = getSourceObservable(source, sourceOutput);
+      console.log(`[FunctionNode ${this.id.slice(0, 8)}] Pass1: ${source.slice(0, 8)}.${sourceOutput} -> ${target.slice(0, 8)}.${targetInput}, source$=${source$ ? 'exists' : 'null'}`);
       if (!source$) continue;
-
-      // If target is FuncDefOut, wire to FunctionNode's output
-      if (target === this.funcDefOutId) {
-        // Map FuncDefOut input (in_0, in_1, ...) to FunctionNode output (out_0, out_1, ...)
-        const outputKey = targetInput.replace('in_', 'out_');
-        const outputSubject = this.outputSubjects.get(outputKey);
-        if (outputSubject) {
-          const sub = source$.subscribe({
-            next: (signal) => outputSubject.next(signal),
-          });
-          this.subscriptions.push(sub);
-        }
-        continue;
-      }
 
       // Wire to internal node
       const targetNode = this.internalNodes.get(target);
@@ -388,6 +386,38 @@ export class FunctionNode extends ClassicPreset.Node {
         targetNode.setInput(source$ as Observable<import('../../../nostr/types').EventSignal>);
       }
       // ConstantNode has no inputs, it only outputs
+    }
+
+    // Pass 2: Subscribe to outputs and wire to FuncDefOut
+    // This must happen AFTER all internal node inputs are set, because setting
+    // inputs may recreate the node's output$ observable.
+    for (const conn of connections) {
+      const { source, sourceOutput, target, targetInput } = conn;
+
+      // Only handle FuncDefOut connections
+      if (target !== this.funcDefOutId) continue;
+
+      // Get source observable (now after all inputs are wired)
+      const source$ = getSourceObservable(source, sourceOutput);
+      console.log(`[FunctionNode ${this.id.slice(0, 8)}] Pass2: ${source.slice(0, 8)}.${sourceOutput} -> FuncDefOut.${targetInput}, source$=${source$ ? 'exists' : 'null'}`);
+      if (!source$) continue;
+
+      // Map FuncDefOut input (in_0, in_1, ...) to FunctionNode output (out_0, out_1, ...)
+      const outputKey = targetInput.replace('in_', 'out_');
+      const outputSubject = this.outputSubjects.get(outputKey);
+      if (outputSubject) {
+        const sub = source$.subscribe({
+          next: (signal) => {
+            console.log(`[FunctionNode ${this.id.slice(0, 8)}] received signal from internal node, emitting to ${outputKey}:`, signal);
+            outputSubject.next(signal);
+          },
+          complete: () => {
+            console.log(`[FunctionNode ${this.id.slice(0, 8)}] internal source completed for ${outputKey}, completing output`);
+            outputSubject.complete();
+          },
+        });
+        this.subscriptions.push(sub);
+      }
     }
   }
 
@@ -433,6 +463,35 @@ export class FunctionNode extends ClassicPreset.Node {
   // Get status
   getStatus(): StatusLampState {
     return this.status;
+  }
+
+  // Check if output is complete (for debugging)
+  isOutputComplete(socketKey: string): boolean {
+    // Find the internal node that feeds into this output
+    if (!this.functionDef?.graphData) return false;
+
+    const connections = this.functionDef.graphData.connections as ConnectionData[];
+    const outputIndex = socketKey.replace('out_', 'in_');
+
+    for (const conn of connections) {
+      if (conn.target === this.funcDefOutId && conn.targetInput === outputIndex) {
+        // Found the source - check if it's complete
+        const sourceNode = this.internalNodes.get(conn.source);
+        if (sourceNode) {
+          if (sourceNode instanceof IfNode) {
+            return sourceNode.isComplete();
+          } else if (sourceNode instanceof ConstantNode) {
+            return sourceNode.isComplete();
+          } else if (sourceNode instanceof CountNode) {
+            return sourceNode.isComplete();
+          } else if (sourceNode instanceof ExtractionNode) {
+            return sourceNode.isComplete();
+          }
+        }
+        break;
+      }
+    }
+    return false;
   }
 
   // Get internal wiring info for dumpobs()

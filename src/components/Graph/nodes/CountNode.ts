@@ -26,6 +26,9 @@ export class CountNode extends ClassicPreset.Node {
   // Count value
   private count = 0;
 
+  // Track completion state
+  private completed = false;
+
   // Output observable - use ReplaySubject(1) so late subscribers get the last value
   private outputSubject = new ReplaySubject<IntegerSignal>(1);
   public output$: Observable<IntegerSignal> = this.outputSubject.asObservable().pipe(shareReplay(1));
@@ -64,8 +67,9 @@ export class CountNode extends ClassicPreset.Node {
     this.outputSubject = new ReplaySubject<IntegerSignal>(1);
     this.output$ = this.outputSubject.asObservable().pipe(shareReplay(1));
 
-    // Reset count when input changes
+    // Reset count and completion state when input changes
     this.count = 0;
+    this.completed = false;
     this.outputSubject.next({ type: 'integer', value: this.count });
 
     if (!this.input$) return;
@@ -78,9 +82,14 @@ export class CountNode extends ClassicPreset.Node {
       },
       complete: () => {
         // Propagate complete to output
+        this.completed = true;
         this.outputSubject.complete();
       },
     });
+  }
+
+  isComplete(): boolean {
+    return this.completed;
   }
 
   stopSubscription(): void {
