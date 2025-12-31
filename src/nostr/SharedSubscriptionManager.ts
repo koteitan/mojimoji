@@ -242,6 +242,40 @@ class SharedSubscriptionManagerClass {
   }
 
   /**
+   * Get relay status entries for dumpSub() - returns all relay/node combinations with status
+   */
+  getRelayStatusEntries(): { relay: string; purpose: string; status: string; error: string | null }[] {
+    const entries: { relay: string; purpose: string; status: string; error: string | null }[] = [];
+
+    for (const [relayUrl, relaySub] of this.relaySubscriptions) {
+      // Get relay status from rxNostr
+      let status = 'unknown';
+      try {
+        const allStatus = relaySub.rxNostr.getAllRelayStatus();
+        const relayState = allStatus[relayUrl];
+        if (relayState) {
+          status = relayState.connection;
+        }
+      } catch {
+        status = 'error';
+      }
+
+      // Create entry for each subscriber node
+      for (const subscriber of relaySub.subscribers.values()) {
+        const truncatedId = subscriber.nodeId.slice(0, 8);
+        entries.push({
+          relay: relayUrl,
+          purpose: `node-${truncatedId}`,
+          status,
+          error: null,
+        });
+      }
+    }
+
+    return entries;
+  }
+
+  /**
    * Hash relay URL for subscription ID
    */
   private hashRelayUrl(url: string): string {

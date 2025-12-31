@@ -48,6 +48,8 @@ import {
 } from '../../utils/localStorage';
 import { saveGraphToNostr, loadGraphByPath, loadGraphByEventId, loadGraphByNaddr, loadFunctionGraph } from '../../nostr/graphStorage';
 import { getPubkey, isNip07Available } from '../../nostr/nip07';
+import { SubscriptionTracker } from '../../nostr/SubscriptionTracker';
+import { SharedSubscriptionManager } from '../../nostr/SharedSubscriptionManager';
 import { extractContentWarning, decodeBech32ToHex, isHex64, naddrDecode, type EventSignal, type TimelineItem } from '../../nostr/types';
 import { merge, type Observable, type Subscription } from 'rxjs';
 import { APP_VERSION } from '../../App';
@@ -289,43 +291,61 @@ export function GraphEditor({
   }, []);
 
   // Debug function to dump subscription state to console
-  const dumpSub = useCallback(() => {
-    const editor = editorRef.current;
-    if (!editor) {
-      console.log('Editor not initialized');
+  // Usage: dumpsub() - show all subscriptions
+  //        dumpsub('wss://relay.damus.io') - filter by relay URL
+  const dumpSub = useCallback((relayFilter?: string) => {
+    // Collect entries from SubscriptionTracker (one-shot operations)
+    const trackerEntries = relayFilter
+      ? SubscriptionTracker.getStatusForRelay(relayFilter)
+      : SubscriptionTracker.getAllStatus();
+
+    // Collect entries from SharedSubscriptionManager (relay nodes)
+    const allSharedEntries = SharedSubscriptionManager.getRelayStatusEntries();
+    const sharedEntries = relayFilter
+      ? allSharedEntries.filter(e => e.relay.includes(relayFilter) || relayFilter.includes(e.relay))
+      : allSharedEntries;
+
+    // Combine all entries
+    const allEntries = [...trackerEntries, ...sharedEntries.map((e, i) => ({
+      index: trackerEntries.length + i + 1,
+      ...e,
+    }))];
+
+    if (allEntries.length === 0) {
+      console.log('No subscriptions');
       return;
     }
 
-    const nodes = editor.getNodes();
-    const lines: string[] = [];
+    // Calculate column widths for alignment
+    const maxIndex = String(allEntries.length).length;
+    const maxRelay = Math.max(...allEntries.map(e => e.relay.length));
+    const maxPurpose = Math.max(...allEntries.map(e => e.purpose.length));
 
-    for (const node of nodes) {
-      const type = getNodeType(node);
-      if (type === 'SimpleRelay') {
-        const relayNode = node as SimpleRelayNode;
-        const isActive = relayNode.isSubscribed();
-        const relays = relayNode.getRelayUrls();
-        const filters = relayNode.getFilters();
-        const status = isActive ? 'ON' : 'OFF';
+    // Status color mapping
+    const statusColors: Record<string, string> = {
+      'connected': 'color: green',
+      'connecting': 'color: yellow',
+      'disconnected': 'color: red',
+      'dormant': 'color: gray',
+      'error': 'color: red',
+      'unknown': 'color: gray',
+    };
 
-        const debugInfo = relayNode.getDebugInfo();
-        lines.push(`[Relay ${status}] ${node.id} | ${relays.join(', ')} | ${JSON.stringify(filters)}`);
-        lines.push(`  └─ [events] count: ${debugInfo.eventCount}, last: ${debugInfo.lastEventAgo || 'never'}, eose: ${debugInfo.eoseReceived ? 'yes' : 'no'}`);
-        if (debugInfo.relayStatus) {
-          for (const [url, state] of Object.entries(debugInfo.relayStatus)) {
-            lines.push(`  └─ [relay: ${url}] state: ${state}`);
-          }
-        }
-      } else if (type === 'Timeline') {
-        const timelineNode = node as TimelineNode;
-        const debugInfo = timelineNode.getDebugInfo();
-        const status = debugInfo.subscribed ? 'ON' : 'OFF';
-        lines.push(`[Timeline ${status}] ${node.id} | name: ${timelineNode.getTimelineName()}`);
-        lines.push(`  └─ [input: ${debugInfo.hasInput ? 'yes' : 'no'}] [callback: ${debugInfo.hasCallback ? 'yes' : 'no'}]`);
-        lines.push(`  └─ [events] count: ${debugInfo.eventCount}, last: ${debugInfo.lastEventAgo || 'never'}`);
-      }
+    // Print entries
+    for (let i = 0; i < allEntries.length; i++) {
+      const entry = allEntries[i];
+      const idx = String(i + 1).padStart(maxIndex);
+      const relay = entry.relay.padEnd(maxRelay);
+      const purpose = entry.purpose.padEnd(maxPurpose);
+      const statusColor = statusColors[entry.status] || 'color: white';
+      const errorSuffix = entry.error ? ` (${entry.error})` : '';
+
+      console.log(
+        `%c${idx}: ${relay} -> ${purpose}: %c${entry.status}${errorSuffix}`,
+        'color: inherit',
+        statusColor
+      );
     }
-    console.log(lines.join('\n'));
   }, []);
 
   // Debug function to dump profile cache info to console
@@ -369,12 +389,20 @@ export function GraphEditor({
     console.log(`🔄 Reconnected ${count} relay node(s)`);
   }, []);
 
+  // Clean up completed subscriptions (for debugging)
+  const cleanSub = useCallback(() => {
+    const removed = SubscriptionTracker.cleanup();
+    console.log(`🧹 Cleaned up ${removed} completed subscription(s)`);
+  }, []);
+
   // Expose debug functions to window
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).dumpgraph = dumpGraph;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).dumpsub = dumpSub;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).cleansub = cleanSub;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).infocache = infoCache;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -387,13 +415,15 @@ export function GraphEditor({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).dumpsub;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).cleansub;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).infocache;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).montimeline;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).reconnect;
     };
-  }, [dumpGraph, dumpSub, infoCache, monTimeline, reconnect]);
+  }, [dumpGraph, dumpSub, cleanSub, infoCache, monTimeline, reconnect]);
 
   // Find all downstream timeline IDs from a given node
   const findDownstreamTimelines = useCallback((startNodeId: string): Set<string> => {

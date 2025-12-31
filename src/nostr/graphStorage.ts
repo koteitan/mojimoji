@@ -7,7 +7,7 @@ import type { UnsignedEvent } from './nip07';
 import type { NostrEvent, Profile } from './types';
 import { saveProfileToCache } from './profileCache';
 import type { GraphData, GraphVisibility } from '../graph/types';
-import { fetchUserRelayList, fetchRelayList, getRxNostr, getDefaultRelayUrl, INDEXER_RELAYS } from './nostr';
+import { fetchUserRelayList, fetchRelayList, getRxNostr, createTrackedRxNostr, unregisterTrackedRxNostr, getDefaultRelayUrl, INDEXER_RELAYS } from './nostr';
 export { initUserRelayList, fetchUserRelayList, fetchRelayList, getDefaultRelayUrl, INDEXER_RELAYS } from './nostr';
 export type { RelayMode } from './nostr';
 
@@ -59,12 +59,15 @@ async function fetchAllGraphsFromRelays(): Promise<NostrGraphItem[]> {
   }
 
   return new Promise((resolve) => {
-    const client = getRxNostr();
-    client.setDefaultRelays(relays);
+    const { rxNostr: client, trackingId } = createTrackedRxNostr('load all graphs', relays);
 
     const rxReq = createRxBackwardReq();
     const eventsMap = new Map<string, NostrEvent>();
     let resolved = false;
+
+    const cleanup = () => {
+      unregisterTrackedRxNostr(trackingId);
+    };
 
     const subscription = client.use(rxReq).subscribe({
       next: (packet) => {
@@ -84,12 +87,14 @@ async function fetchAllGraphsFromRelays(): Promise<NostrGraphItem[]> {
         console.error('Error loading graphs:', err);
         if (!resolved) {
           resolved = true;
+          cleanup();
           resolve(parseGraphEvents(Array.from(eventsMap.values()), null));
         }
       },
       complete: () => {
         if (!resolved) {
           resolved = true;
+          cleanup();
           resolve(parseGraphEvents(Array.from(eventsMap.values()), null));
         }
       },
@@ -108,6 +113,7 @@ async function fetchAllGraphsFromRelays(): Promise<NostrGraphItem[]> {
       if (!resolved) {
         resolved = true;
         subscription.unsubscribe();
+        cleanup();
         resolve(parseGraphEvents(Array.from(eventsMap.values()), null));
       }
     }, 5000);
@@ -258,14 +264,17 @@ async function loadGraphsFromNostrInternal(
   }
 
   return new Promise((resolve) => {
-    const client = getRxNostr();
-    client.setDefaultRelays(relays!);
+    const { rxNostr: client, trackingId } = createTrackedRxNostr('find graphs', relays!);
 
     // Use backward strategy - completes on EOSE instead of waiting for timeout
     const rxReq = createRxBackwardReq();
     // Use Map to deduplicate events by d-tag (addressable event identifier)
     const eventsMap = new Map<string, NostrEvent>();
     let resolved = false;
+
+    const cleanup = () => {
+      unregisterTrackedRxNostr(trackingId);
+    };
 
     const subscription = client.use(rxReq).subscribe({
       next: (packet) => {
@@ -285,6 +294,7 @@ async function loadGraphsFromNostrInternal(
         console.error('Error loading graphs:', err);
         if (!resolved) {
           resolved = true;
+          cleanup();
           resolve(parseGraphEvents(Array.from(eventsMap.values()), userPubkey));
         }
       },
@@ -292,6 +302,7 @@ async function loadGraphsFromNostrInternal(
         // EOSE received from all relays - resolve immediately
         if (!resolved) {
           resolved = true;
+          cleanup();
           resolve(parseGraphEvents(Array.from(eventsMap.values()), userPubkey));
         }
       },
@@ -321,6 +332,7 @@ async function loadGraphsFromNostrInternal(
       if (!resolved) {
         resolved = true;
         subscription.unsubscribe();
+        cleanup();
         resolve(parseGraphEvents(Array.from(eventsMap.values()), userPubkey));
       }
     }, 5000);
@@ -342,12 +354,15 @@ export async function loadGraphByPath(
   }
 
   return new Promise((resolve) => {
-    const client = getRxNostr();
-    client.setDefaultRelays(relays!);
+    const { rxNostr: client, trackingId } = createTrackedRxNostr('find graphs', relays!);
 
     // Use backward strategy for one-shot queries
     const rxReq = createRxBackwardReq();
     let resolved = false;
+
+    const cleanup = () => {
+      unregisterTrackedRxNostr(trackingId);
+    };
 
     const subscription = client.use(rxReq).subscribe({
       next: (packet) => {
@@ -357,6 +372,7 @@ export async function loadGraphByPath(
           if (!resolved) {
             resolved = true;
             subscription.unsubscribe();
+            cleanup();
             try {
               const graphData = JSON.parse(event.content) as GraphData;
               resolve(graphData);
@@ -369,6 +385,7 @@ export async function loadGraphByPath(
       error: () => {
         if (!resolved) {
           resolved = true;
+          cleanup();
           resolve(null);
         }
       },
@@ -376,6 +393,7 @@ export async function loadGraphByPath(
         // EOSE received without finding the graph
         if (!resolved) {
           resolved = true;
+          cleanup();
           resolve(null);
         }
       },
@@ -394,6 +412,7 @@ export async function loadGraphByPath(
       if (!resolved) {
         resolved = true;
         subscription.unsubscribe();
+        cleanup();
         resolve(null);
       }
     }, 5000);
@@ -411,12 +430,15 @@ export async function loadGraphByEventId(
   }
 
   return new Promise((resolve) => {
-    const client = getRxNostr();
-    client.setDefaultRelays(relays);
+    const { rxNostr: client, trackingId } = createTrackedRxNostr('load graph by nevent', relays);
 
     // Use backward strategy for one-shot queries
     const rxReq = createRxBackwardReq();
     let resolved = false;
+
+    const cleanup = () => {
+      unregisterTrackedRxNostr(trackingId);
+    };
 
     const subscription = client.use(rxReq).subscribe({
       next: (packet) => {
@@ -425,6 +447,7 @@ export async function loadGraphByEventId(
           if (!resolved) {
             resolved = true;
             subscription.unsubscribe();
+            cleanup();
             try {
               const graphData = JSON.parse(event.content) as GraphData;
               resolve(graphData);
@@ -437,6 +460,7 @@ export async function loadGraphByEventId(
       error: () => {
         if (!resolved) {
           resolved = true;
+          cleanup();
           resolve(null);
         }
       },
@@ -444,6 +468,7 @@ export async function loadGraphByEventId(
         // EOSE received without finding the graph
         if (!resolved) {
           resolved = true;
+          cleanup();
           resolve(null);
         }
       },
@@ -461,6 +486,7 @@ export async function loadGraphByEventId(
       if (!resolved) {
         resolved = true;
         subscription.unsubscribe();
+        cleanup();
         resolve(null);
       }
     }, 7000);
@@ -485,13 +511,16 @@ export async function loadGraphByNaddr(
   }
 
   return new Promise((resolve) => {
-    const client = getRxNostr();
-    client.setDefaultRelays(relays!);
+    const { rxNostr: client, trackingId } = createTrackedRxNostr('load graph by naddr', relays!);
 
     // Use backward strategy for one-shot queries
     const rxReq = createRxBackwardReq();
     let resolved = false;
     let latestEvent: NostrEvent | null = null;
+
+    const cleanup = () => {
+      unregisterTrackedRxNostr(trackingId);
+    };
 
     const subscription = client.use(rxReq).subscribe({
       next: (packet) => {
@@ -510,6 +539,7 @@ export async function loadGraphByNaddr(
       error: () => {
         if (!resolved) {
           resolved = true;
+          cleanup();
           resolveWithEvent();
         }
       },
@@ -517,6 +547,7 @@ export async function loadGraphByNaddr(
         // EOSE received - resolve with the latest event
         if (!resolved) {
           resolved = true;
+          cleanup();
           resolveWithEvent();
         }
       },
@@ -548,6 +579,7 @@ export async function loadGraphByNaddr(
       if (!resolved) {
         resolved = true;
         subscription.unsubscribe();
+        cleanup();
         resolveWithEvent();
       }
     }, 7000);
@@ -806,13 +838,16 @@ export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<numbe
   }
 
   return new Promise((resolve) => {
-    const client = getRxNostr();
-    client.setDefaultRelays(relays!);
+    const { rxNostr: client, trackingId } = createTrackedRxNostr('cache profiles for UI', relays!);
 
     // Use backward strategy for one-shot queries
     const rxReq = createRxBackwardReq();
     let profileCount = 0;
     let resolved = false;
+
+    const cleanup = () => {
+      unregisterTrackedRxNostr(trackingId);
+    };
 
     const subscription = client.use(rxReq).subscribe({
       next: (packet) => {
@@ -837,6 +872,7 @@ export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<numbe
       error: () => {
         if (!resolved) {
           resolved = true;
+          cleanup();
           resolve(profileCount);
         }
       },
@@ -844,6 +880,7 @@ export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<numbe
         // EOSE received - resolve with profiles collected
         if (!resolved) {
           resolved = true;
+          cleanup();
           resolve(profileCount);
         }
       },
@@ -861,6 +898,7 @@ export async function fetchAndCacheProfiles(relayUrls?: string[]): Promise<numbe
       if (!resolved) {
         resolved = true;
         subscription.unsubscribe();
+        cleanup();
         resolve(profileCount);
       }
     }, 5000);

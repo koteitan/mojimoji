@@ -6,6 +6,7 @@ import type { RxNostr } from 'rx-nostr';
 import { verifier } from '@rx-nostr/crypto';
 import { getPubkey, isNip07Available } from './nip07';
 import type { NostrEvent } from './types';
+import { SubscriptionTracker, type SubscriptionPurpose } from './SubscriptionTracker';
 import i18next from 'i18next';
 
 // Kind constant for relay list (NIP-65)
@@ -41,6 +42,35 @@ export function getRxNostr(): RxNostr {
     });
   }
   return rxNostr;
+}
+
+// Counter for unique subscription IDs
+let subscriptionIdCounter = 0;
+
+/**
+ * Create a tracked RxNostr instance for a specific purpose
+ * The instance is registered with SubscriptionTracker for monitoring
+ */
+export function createTrackedRxNostr(purpose: SubscriptionPurpose, relayUrls: string[]): { rxNostr: RxNostr; trackingId: string } {
+  const rxNostr = createRxNostr({
+    verifier,
+    eoseTimeout: 3000,
+    skipFetchNip11: true,
+    skipExpirationCheck: true,
+  });
+  rxNostr.setDefaultRelays(relayUrls);
+
+  const trackingId = `${purpose}-${++subscriptionIdCounter}`;
+  SubscriptionTracker.register(trackingId, rxNostr, purpose, relayUrls);
+
+  return { rxNostr, trackingId };
+}
+
+/**
+ * Unregister a tracked RxNostr instance
+ */
+export function unregisterTrackedRxNostr(trackingId: string): void {
+  SubscriptionTracker.unregister(trackingId);
 }
 
 // Relay mode for NIP-65 read/write distinction
@@ -94,13 +124,16 @@ export async function fetchUserRelayList(mode: 'read' | 'write' = 'read'): Promi
 // Fetch relay list of any user by pubkey with read/write mode
 export async function fetchRelayList(pubkey: string, mode: RelayMode = 'read'): Promise<string[]> {
   return new Promise((resolve) => {
-    const client = getRxNostr();
-    client.setDefaultRelays(INDEXER_RELAYS);
+    const { rxNostr: client, trackingId } = createTrackedRxNostr('get user relays', INDEXER_RELAYS);
 
     // Use backward strategy for one-shot queries
     const rxReq = createRxBackwardReq();
     const relays: string[] = [];
     let resolved = false;
+
+    const cleanup = () => {
+      unregisterTrackedRxNostr(trackingId);
+    };
 
     const subscription = client.use(rxReq).subscribe({
       next: (packet) => {
@@ -120,6 +153,7 @@ export async function fetchRelayList(pubkey: string, mode: RelayMode = 'read'): 
           if (!resolved) {
             resolved = true;
             subscription.unsubscribe();
+            cleanup();
             resolve(relays);
           }
         }
@@ -127,6 +161,7 @@ export async function fetchRelayList(pubkey: string, mode: RelayMode = 'read'): 
       error: () => {
         if (!resolved) {
           resolved = true;
+          cleanup();
           resolve([]);
         }
       },
@@ -134,6 +169,7 @@ export async function fetchRelayList(pubkey: string, mode: RelayMode = 'read'): 
         // EOSE received - resolve with whatever relays we found
         if (!resolved) {
           resolved = true;
+          cleanup();
           resolve(relays);
         }
       },
@@ -152,6 +188,7 @@ export async function fetchRelayList(pubkey: string, mode: RelayMode = 'read'): 
       if (!resolved) {
         resolved = true;
         subscription.unsubscribe();
+        cleanup();
         resolve(relays);
       }
     }, 3000);
