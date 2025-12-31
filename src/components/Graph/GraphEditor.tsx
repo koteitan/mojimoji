@@ -400,6 +400,69 @@ export function GraphEditor({
     console.log(`🧹 Cleaned up ${removed} completed subscription(s)`);
   }, []);
 
+  // Dump observable stream structure (for debugging)
+  // Shows connections including expanded FunctionNode internals
+  const dumpObs = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) {
+      console.log('Editor not initialized');
+      return;
+    }
+
+    const nodes = editor.getNodes();
+    const connections = editor.getConnections();
+
+    // Helper to get short node identifier
+    const getNodeLabel = (nodeId: string): string => {
+      const node = editor.getNode(nodeId);
+      if (!node) return nodeId.slice(0, 8);
+      const type = getNodeType(node);
+      return `${type}:${nodeId.slice(0, 8)}`;
+    };
+
+    const lines: string[] = ['Observable Stream Connections:'];
+
+    // Regular connections from editor
+    for (const conn of connections) {
+      const sourceLabel = getNodeLabel(conn.source);
+      const targetLabel = getNodeLabel(conn.target);
+      lines.push(`  ${sourceLabel}.${conn.sourceOutput} -> ${targetLabel}.${conn.targetInput}`);
+    }
+
+    // FunctionNode internal connections (expanded)
+    lines.push('', 'FunctionNode Internal Wiring:');
+    let hasFunctionNodes = false;
+    for (const node of nodes) {
+      if (getNodeType(node) === 'Function') {
+        const functionNode = node as FunctionNode;
+        const def = functionNode.getFunctionDefinition();
+        if (def) {
+          hasFunctionNodes = true;
+          const nodeLabel = `Function:${node.id.slice(0, 8)}`;
+          lines.push(`  [${nodeLabel}] path: ${functionNode.getFunctionPath()}`);
+
+          // Get internal wiring info
+          const wiringInfo = functionNode.getInternalWiringInfo();
+
+          // Show internal nodes
+          if (wiringInfo.nodes.length > 0) {
+            lines.push(`    Internal nodes: ${wiringInfo.nodes.join(', ')}`);
+          }
+
+          // Show internal connections
+          for (const conn of wiringInfo.connections) {
+            lines.push(`    ${conn}`);
+          }
+        }
+      }
+    }
+    if (!hasFunctionNodes) {
+      lines.push('  (no FunctionNodes)');
+    }
+
+    console.log(lines.join('\n'));
+  }, []);
+
   // Expose debug functions to window
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -408,6 +471,8 @@ export function GraphEditor({
     (window as any).dumpsub = dumpSub;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).cleansub = cleanSub;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).dumpobs = dumpObs;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).infocache = infoCache;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -422,13 +487,15 @@ export function GraphEditor({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).cleansub;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).dumpobs;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).infocache;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).montimeline;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).reconnect;
     };
-  }, [dumpGraph, dumpSub, cleanSub, infoCache, monTimeline, reconnect]);
+  }, [dumpGraph, dumpSub, cleanSub, dumpObs, infoCache, monTimeline, reconnect]);
 
   // Find all downstream timeline IDs from a given node
   const findDownstreamTimelines = useCallback((startNodeId: string): Set<string> => {
@@ -640,7 +707,8 @@ export function GraphEditor({
       const node = editor.getNode(nodeId);
       if (!node) return;
 
-      if (getNodeType(node) === 'SimpleRelay') {
+      const nodeType = getNodeType(node);
+      if (nodeType === 'SimpleRelay' || nodeType === 'ModularRelay') {
         activeRelayIds.add(nodeId);
         return;
       }
@@ -669,8 +737,10 @@ export function GraphEditor({
         const functionNode = node as FunctionNode;
         const path = functionNode.getFunctionPath();
         const def = functionNode.getFunctionDefinition();
-        // Load if path is set but definition is not loaded or path changed
-        if (path && (!def || def.path !== path)) {
+        // Load if path is set but definition is not loaded, path changed, or graphData is empty
+        // (deserialize creates a temporary def with empty graphData for socket restoration)
+        const graphDataEmpty = !def?.graphData?.nodes?.length;
+        if (path && (!def || def.path !== path || graphDataEmpty)) {
           loadFunctionPromises.push(functionNode.loadFunction());
         }
       }
@@ -718,6 +788,10 @@ export function GraphEditor({
           },
         });
         profileSubscriptionsRef.current.push(profileSub);
+      } else if (getNodeType(node) === 'ModularRelay' && activeRelayIds.has(node.id)) {
+        // ModularRelay handles its own subscription start via tryStartSubscription
+        // when all required inputs (socket values, relay URLs) are received.
+        // Don't call startSubscription directly here as it bypasses the socket value check.
       }
     }
 

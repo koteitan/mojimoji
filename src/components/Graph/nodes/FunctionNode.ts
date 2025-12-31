@@ -6,6 +6,30 @@ import { TextInputControl, StatusLampControl, type StatusLampState } from './con
 import type { SocketDefinition, FuncDefSignal } from './FuncDefInNode';
 import type { GraphData } from '../../../graph/types';
 
+// Import node types for internal instantiation
+import { IfNode, type IfComparisonType, type ComparisonOperator } from './IfNode';
+import { ConstantNode, type ConstantType } from './ConstantNode';
+import { CountNode } from './CountNode';
+import { ExtractionNode, type ExtractionField, type RelayFilterType } from './ExtractionNode';
+
+// Internal node instance type
+type InternalNode = IfNode | ConstantNode | CountNode | ExtractionNode;
+
+// Node data from graph JSON
+interface NodeData {
+  id: string;
+  type: string;
+  data?: Record<string, unknown>;
+}
+
+// Connection data from graph JSON
+interface ConnectionData {
+  source: string;
+  sourceOutput: string;
+  target: string;
+  targetInput: string;
+}
+
 // Function definition loaded from Nostr
 export interface FunctionDefinition {
   path: string;
@@ -37,6 +61,13 @@ export class FunctionNode extends ClassicPreset.Node {
 
   // Subscriptions for wiring
   private subscriptions: Subscription[] = [];
+
+  // Internal node instances (for function expansion)
+  private internalNodes: Map<string, InternalNode> = new Map();
+
+  // FuncDefIn/FuncDefOut node IDs from function definition
+  private funcDefInId: string | null = null;
+  private funcDefOutId: string | null = null;
 
   // Callback for loading function (set by GraphEditor)
   private loadFunctionCallback: ((path: string) => Promise<FunctionDefinition | null>) | null = null;
@@ -75,7 +106,6 @@ export class FunctionNode extends ClassicPreset.Node {
   async loadFunction(): Promise<void> {
     if (!this.functionPath) {
       this.setStatus('idle', 'idle');
-      this.clearSockets();
       return;
     }
 
@@ -90,7 +120,6 @@ export class FunctionNode extends ClassicPreset.Node {
       const def = await this.loadFunctionCallback(this.functionPath);
       if (!def) {
         this.setStatus('error', 'not found');
-        this.clearSockets();
         return;
       }
 
@@ -100,7 +129,6 @@ export class FunctionNode extends ClassicPreset.Node {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unknown error';
       this.setStatus('error', message);
-      this.clearSockets();
     }
   }
 
@@ -116,9 +144,15 @@ export class FunctionNode extends ClassicPreset.Node {
     window.dispatchEvent(new CustomEvent('graph-control-change', { detail: { nodeId: this.id, rebuildPipeline: false } }));
   }
 
+  // @ts-ignore - keep for future use
   private clearSockets(): void {
     // Stop subscriptions
     this.stopSubscription();
+
+    // Clear internal nodes
+    this.internalNodes.clear();
+    this.funcDefInId = null;
+    this.funcDefOutId = null;
 
     // Remove all inputs
     for (const key of Object.keys(this.inputs)) {
@@ -141,8 +175,21 @@ export class FunctionNode extends ClassicPreset.Node {
   private updateSocketsFromDefinition(): void {
     if (!this.functionDef) return;
 
-    // Stop existing subscriptions
-    this.stopSubscription();
+    // Stop existing internal subscriptions (but keep outputSubjects for downstream subscribers)
+    for (const sub of this.subscriptions) {
+      sub.unsubscribe();
+    }
+    this.subscriptions = [];
+
+    // Clear internal nodes
+    this.internalNodes.clear();
+    this.funcDefInId = null;
+    this.funcDefOutId = null;
+
+    // Preserve existing outputSubjects (downstream nodes may be subscribed)
+    const existingOutputSubjects = new Map(this.outputSubjects);
+    // Preserve existing input observables (already wired from rebuildPipeline)
+    const existingInputs$ = new Map(this.inputs$);
 
     // Remove existing sockets
     for (const key of Object.keys(this.inputs)) {
@@ -156,27 +203,102 @@ export class FunctionNode extends ClassicPreset.Node {
     this.outputSubjects.clear();
 
     // Add input sockets based on function definition
+    // Restore existing input observables if available
     for (let i = 0; i < this.functionDef.inputSockets.length; i++) {
       const def = this.functionDef.inputSockets[i];
       const key = `in_${i}`;
       const socket = getSocketByType(def.type) || anySocket;
       this.addInput(key, new ClassicPreset.Input(socket, def.name));
-      this.inputs$.set(key, null);
+      // Restore existing observable or set to null
+      const existingInput$ = existingInputs$.get(key);
+      this.inputs$.set(key, existingInput$ || null);
     }
 
     // Add output sockets based on function definition
+    // Reuse existing subjects if available to maintain downstream subscriptions
     for (let i = 0; i < this.functionDef.outputSockets.length; i++) {
       const def = this.functionDef.outputSockets[i];
       const key = `out_${i}`;
       const socket = getSocketByType(def.type) || anySocket;
       this.addOutput(key, new ClassicPreset.Output(socket, def.name));
 
-      const subject = new Subject<FuncDefSignal>();
-      this.outputSubjects.set(key, subject);
+      // Reuse existing subject or create new one
+      const existingSubject = existingOutputSubjects.get(key);
+      if (existingSubject) {
+        this.outputSubjects.set(key, existingSubject);
+      } else {
+        const subject = new Subject<FuncDefSignal>();
+        this.outputSubjects.set(key, subject);
+      }
     }
+
+    // Instantiate internal nodes from graphData
+    this.instantiateInternalNodes();
+
+    // Rebuild internal pipeline to wire up the internal nodes with existing inputs
+    this.rebuildInternalPipeline();
 
     // Notify graph to re-render
     window.dispatchEvent(new CustomEvent('graph-sockets-change', { detail: { nodeId: this.id } }));
+  }
+
+  // Instantiate internal nodes from function definition's graphData
+  private instantiateInternalNodes(): void {
+    if (!this.functionDef?.graphData) return;
+
+    const nodes = this.functionDef.graphData.nodes as NodeData[];
+
+    for (const nodeData of nodes) {
+      const { id, type, data } = nodeData;
+
+      // Track FuncDefIn/FuncDefOut nodes (they define the interface, not instantiated)
+      if (type === 'FuncDefIn') {
+        this.funcDefInId = id;
+        continue;
+      }
+      if (type === 'FuncDefOut') {
+        this.funcDefOutId = id;
+        continue;
+      }
+
+      // Create internal node instances based on type
+      let internalNode: InternalNode | null = null;
+
+      switch (type) {
+        case 'If':
+          internalNode = new IfNode();
+          if (data) {
+            // Deserialize If node data
+            (internalNode as IfNode).deserialize(data as { comparisonType: IfComparisonType; operator: ComparisonOperator });
+          }
+          break;
+        case 'Constant':
+          internalNode = new ConstantNode();
+          if (data) {
+            // Deserialize Constant node data
+            (internalNode as ConstantNode).deserialize(data as { constantType: ConstantType; rawValue: string });
+          }
+          break;
+        case 'Count':
+          internalNode = new CountNode();
+          break;
+        case 'Extraction':
+          internalNode = new ExtractionNode();
+          if (data) {
+            // Deserialize Extraction node data
+            (internalNode as ExtractionNode).deserialize(data as { extractionField: ExtractionField; relayFilterType: RelayFilterType });
+          }
+          break;
+        default:
+          // Unsupported node type in function - skip
+          console.warn(`[FunctionNode] Unsupported internal node type: ${type}`);
+          continue;
+      }
+
+      if (internalNode) {
+        this.internalNodes.set(id, internalNode);
+      }
+    }
   }
 
   // Set input observable (called during pipeline wiring)
@@ -185,7 +307,7 @@ export class FunctionNode extends ClassicPreset.Node {
     this.rebuildInternalPipeline();
   }
 
-  // Rebuild internal pipeline - forward inputs to outputs
+  // Rebuild internal pipeline - wire internal nodes according to graphData.connections
   private rebuildInternalPipeline(): void {
     // Stop existing subscriptions
     for (const sub of this.subscriptions) {
@@ -193,21 +315,79 @@ export class FunctionNode extends ClassicPreset.Node {
     }
     this.subscriptions = [];
 
-    // For now, implement a simple pass-through:
-    // Each input is forwarded to the corresponding output
-    // This is a placeholder until full internal node instantiation is implemented
-    for (let i = 0; i < this.inputs$.size; i++) {
-      const inputKey = `in_${i}`;
-      const outputKey = `out_${i}`;
-      const input$ = this.inputs$.get(inputKey);
-      const outputSubject = this.outputSubjects.get(outputKey);
+    if (!this.functionDef?.graphData) {
+      return;
+    }
 
-      if (input$ && outputSubject) {
-        const sub = input$.subscribe({
-          next: (signal) => outputSubject.next(signal),
-        });
-        this.subscriptions.push(sub);
+    const connections = this.functionDef.graphData.connections as ConnectionData[];
+
+    // Helper to get observable from source node/socket
+    const getSourceObservable = (sourceId: string, sourceOutput: string): Observable<FuncDefSignal> | null => {
+      // If source is FuncDefIn, use FunctionNode's input
+      if (sourceId === this.funcDefInId) {
+        // Map FuncDefIn output (out_0, out_1, ...) to FunctionNode input (in_0, in_1, ...)
+        const inputKey = sourceOutput.replace('out_', 'in_');
+        return this.inputs$.get(inputKey) || null;
       }
+
+      // Otherwise, get from internal node
+      const internalNode = this.internalNodes.get(sourceId);
+      if (!internalNode) return null;
+
+      // Get output observable based on node type
+      if (internalNode instanceof IfNode) {
+        return internalNode.output$ as Observable<FuncDefSignal>;
+      } else if (internalNode instanceof ConstantNode) {
+        return internalNode.output$ as Observable<FuncDefSignal>;
+      } else if (internalNode instanceof CountNode) {
+        return internalNode.output$ as Observable<FuncDefSignal>;
+      } else if (internalNode instanceof ExtractionNode) {
+        return internalNode.getOutput$() as Observable<FuncDefSignal>;
+      }
+
+      return null;
+    };
+
+    // Wire internal nodes
+    for (const conn of connections) {
+      const { source, sourceOutput, target, targetInput } = conn;
+
+      // Get source observable
+      const source$ = getSourceObservable(source, sourceOutput);
+      if (!source$) continue;
+
+      // If target is FuncDefOut, wire to FunctionNode's output
+      if (target === this.funcDefOutId) {
+        // Map FuncDefOut input (in_0, in_1, ...) to FunctionNode output (out_0, out_1, ...)
+        const outputKey = targetInput.replace('in_', 'out_');
+        const outputSubject = this.outputSubjects.get(outputKey);
+        if (outputSubject) {
+          const sub = source$.subscribe({
+            next: (signal) => outputSubject.next(signal),
+          });
+          this.subscriptions.push(sub);
+        }
+        continue;
+      }
+
+      // Wire to internal node
+      const targetNode = this.internalNodes.get(target);
+      if (!targetNode) continue;
+
+      // Set input based on node type and socket
+      if (targetNode instanceof IfNode) {
+        if (targetInput === 'inputA') {
+          targetNode.setInputA(source$);
+        } else if (targetInput === 'inputB') {
+          targetNode.setInputB(source$);
+        }
+      } else if (targetNode instanceof CountNode) {
+        targetNode.setInput(source$);
+      } else if (targetNode instanceof ExtractionNode) {
+        // ExtractionNode expects EventSignal, cast if needed
+        targetNode.setInput(source$ as Observable<import('../../../nostr/types').EventSignal>);
+      }
+      // ConstantNode has no inputs, it only outputs
     }
   }
 
@@ -255,6 +435,53 @@ export class FunctionNode extends ClassicPreset.Node {
     return this.status;
   }
 
+  // Get internal wiring info for dumpobs()
+  getInternalWiringInfo(): { nodes: string[]; connections: string[] } {
+    const nodes: string[] = [];
+    const connections: string[] = [];
+
+    if (!this.functionDef?.graphData) {
+      return { nodes, connections };
+    }
+
+    const graphNodes = this.functionDef.graphData.nodes as NodeData[];
+    const graphConns = this.functionDef.graphData.connections as ConnectionData[];
+
+    // List internal nodes
+    for (const nodeData of graphNodes) {
+      if (nodeData.type === 'FuncDefIn' || nodeData.type === 'FuncDefOut') {
+        continue; // Skip interface nodes
+      }
+      nodes.push(`${nodeData.type}:${nodeData.id.slice(0, 8)}`);
+    }
+
+    // List connections with proper labels
+    for (const conn of graphConns) {
+      let sourceLabel: string;
+      let targetLabel: string;
+
+      // Source label
+      if (conn.source === this.funcDefInId) {
+        sourceLabel = `FunctionNode.${conn.sourceOutput.replace('out_', 'in_')}`;
+      } else {
+        const sourceNode = graphNodes.find(n => n.id === conn.source);
+        sourceLabel = sourceNode ? `${sourceNode.type}:${conn.source.slice(0, 8)}.${conn.sourceOutput}` : `?:${conn.source.slice(0, 8)}.${conn.sourceOutput}`;
+      }
+
+      // Target label
+      if (conn.target === this.funcDefOutId) {
+        targetLabel = `FunctionNode.${conn.targetInput.replace('in_', 'out_')}`;
+      } else {
+        const targetNode = graphNodes.find(n => n.id === conn.target);
+        targetLabel = targetNode ? `${targetNode.type}:${conn.target.slice(0, 8)}.${conn.targetInput}` : `?:${conn.target.slice(0, 8)}.${conn.targetInput}`;
+      }
+
+      connections.push(`${sourceLabel} -> ${targetLabel}`);
+    }
+
+    return { nodes, connections };
+  }
+
   serialize() {
     // Serialize socket definitions so they can be restored before connections
     const inputSockets: SocketDefinition[] = [];
@@ -297,15 +524,23 @@ export class FunctionNode extends ClassicPreset.Node {
     }
   }
 
-  // Stop all subscriptions
+  // Stop all internal subscriptions (but keep outputSubjects alive for downstream subscribers)
   stopSubscription(): void {
     for (const sub of this.subscriptions) {
       sub.unsubscribe();
     }
     this.subscriptions = [];
+    // NOTE: Do NOT complete outputSubjects here!
+    // They will be reused when rebuildInternalPipeline is called again.
+    // Downstream nodes (like TimelineNode) may be subscribed to them.
+  }
 
+  // Complete all subscriptions and subjects (for cleanup when node is deleted)
+  dispose(): void {
+    this.stopSubscription();
     for (const subject of this.outputSubjects.values()) {
       subject.complete();
     }
+    this.outputSubjects.clear();
   }
 }
