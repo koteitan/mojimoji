@@ -1,142 +1,79 @@
 # Timeline Specifications
+timeline shows all data not only Nostr events.
 
-## Current Implementation
+## Layout
+### notes
 
-### Timeline Display
-- Timeline pane on the left side of the screen
-- Multiple timelines supported (one per Timeline node)
-- Each timeline has:
-  - Header with timeline name
-  - Scrollable event list
-  - 35 character width per column
+- north:
+  - left: icon (profile picture)
+  - right:
+    - north: display_name
+    - south: @name
+- middle: content
+- south:
+  - [date time] [reaction icon] [number of reactions] [repost icon] [number of reposts]
+    - [date time] is aligned to the left
+    - the others are aligned to the right
 
-### Event Item Display
-Each event displays:
-- **Icon**: Profile picture from kind:0 event (default avatar if unavailable)
-- **Display Name**: `kind0.content.display_name` (fallback to name, then npub)
-- **Username**: `@kind0.content.name` (fallback to npub)
-- **Content**: Event text content
-- **Timestamp**: Formatted date/time of `event.created_at`
+### reaction list dialog
 
-### Supported Event Kinds
-| Kind | Type | Display |
-|------|------|---------|
-| 0 | Profile | icon, name, display name |
-| 1 | Text Note | Full content display |
-| 7 | Reaction | Reaction emoji/text |
+Reaction list view is modal dialog in center of screen.
+- [reaction list item]
+- [reaction list item]
+- ...
+- [close button]
 
-### Profile Cache
-- Profiles (kind:0) are cached in localStorage
-- Cache key: `mojimoji-profile-cache`
-- Profiles fetched automatically for event authors
+### reaction list item
 
----
+- [icon] [simple profile] [reaction contents] [date time]
 
-## Planned Features
+- simple profile:
+  - north: display_name
+  - south: @name
+- reaction contents:
+  - reaction
+    - reaction content
+  - repost
+    - (none)
 
-### NIP-36: Content Warning Support
+## design
 
-**Reference**: [NIP-36](https://github.com/nostr-protocol/nips/blob/master/36.md)
+- date time: YYYY/MM/DD hh:mm:ss
+- reaction icon: heart mark
+  - border color: #666
+  - fill color:
+    - if the app user gave a reaction: light pink
+    - if not found the reaction the app user gave: transparent
+- repost icon: cycle mark
+  - border color: #666
+  - fill color:
+    - if the app user gave a repost: light pink
+    - if not found the repost the app user gave: transparent
 
-#### Overview
-NIP-36 defines content warning tags for marking sensitive content that requires user approval before display.
+## behaviour
+- on load:
+  - boot background job of reaction fetcher for each relay like profile fetcher
+- on receiving the new event by timeline:
+  - add the reaction fetcher enqueue the event id for reaction queue
+- on the next job of reaction fetcher:
+  - pop event ids from reaction queue (batch in 1000ms or 50 items)
+  - start a reaction subscription with filter of kinds:[6,7] and #e tag with the event ids using backward strategy
+  - fetch from app user's relay list (kind:10002)
+- on receive the reaction/repost by reaction subscription:
+  - increment the number of reactions/reposts
+  - cache the reaction/repost event with the note
+- on the reaction subscription got EOSE:
+  - close the reaction subscription (backward strategy auto-closes on EOSE)
+  - wait for the next batch
+- on click the reaction icon:
+  - send a reaction "+" to the event (#e:event id, #p:event author) by app user's npub to app user's relays
+- on click the repost icon:
+  - send a repost of the event (#e:event id, #p:event author) by app user's npub to app user's relays
+- on click the number of reactions/reposts:
+  - show the reaction list dialog
 
-#### Tag Format
-```json
-["content-warning", "<reason>"]
-```
-- `content-warning`: Tag name
-- `<reason>`: Optional explanation for the warning (e.g., "nudity", "spoiler", "violence")
-
-#### Implementation Plan
-
-1. **Detection**
-   - Check event tags for `content-warning` tag
-   - Extract reason if provided
-
-2. **UI Display**
-   - Hide event content by default when content-warning tag is present
-   - Show warning overlay with:
-     - Warning icon
-     - Reason text (if provided) or generic "Content Warning" message
-     - "Show Content" button
-   - On button click: reveal the actual content
-
-3. **User Preferences** (future)
-   - Option to always show content warnings
-   - Option to auto-hide specific warning types
-   - Per-author content warning settings
-
-#### Example Display
-```
-┌─────────────────────────────────┐
-│ [icon] Display Name             │
-│ @username                       │
-│ ─────────────────────────────── │
-│ ⚠️ Content Warning: spoiler     │
-│        [Show Content]           │
-│ ─────────────────────────────── │
-│ 2025-01-01 12:00:00            │
-└─────────────────────────────────┘
-```
-
----
-
-### Image Display in Timeline
-
-#### Overview
-Display images (jpg, jpeg, gif, png) embedded in event content.
-
-#### Supported Formats
-| Extension | MIME Type |
-|-----------|-----------|
-| .jpg, .jpeg | image/jpeg |
-| .gif | image/gif |
-| .png | image/png |
-
-#### Implementation Plan
-
-1. **URL Detection**
-   - Parse event content for image URLs
-   - Regex pattern: `https?://[^\s]+\.(jpg|jpeg|gif|png)(\?[^\s]*)?`
-   - Support common image hosting services
-
-2. **UI Display**
-   - Render detected image URLs as `<img>` elements
-   - Limit image display size (max-width: 100%, max-height: 300px)
-   - Lazy loading for performance
-   - Click to open full-size image in new tab
-
-3. **Security Considerations**
-   - Only load images from HTTPS URLs
-   - Consider CSP (Content Security Policy) headers
-   - Add loading/error states for images
-   - Respect user preference to disable image loading
-
-4. **Content Warning Integration**
-   - If event has `content-warning` tag, hide images until revealed
-   - Consider separate option for "sensitive media" warnings
-
-#### Example Display
-```
-┌─────────────────────────────────┐
-│ [icon] Display Name             │
-│ @username                       │
-│ ─────────────────────────────── │
-│ Check out this photo!           │
-│ ┌─────────────────────────────┐ │
-│ │                             │ │
-│ │      [image preview]        │ │
-│ │                             │ │
-│ └─────────────────────────────┘ │
-│ ─────────────────────────────── │
-│ 2025-01-01 12:00:00            │
-└─────────────────────────────────┘
-```
-
----
-
-## NIP References
-
-- [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md): Basic protocol (event structure)
-- [NIP-36](https://github.com/nostr-protocol/nips/blob/master/36.md): Sensitive Content / Content Warning
+## error handling
+- same as ProfileFetcher
+  - ignore parse errors
+  - log subscription errors to console
+  - continue processing on errors
