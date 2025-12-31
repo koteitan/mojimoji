@@ -303,14 +303,12 @@ export class FunctionNode extends ClassicPreset.Node {
 
   // Set input observable (called during pipeline wiring)
   setInput(socketKey: string, input$: Observable<FuncDefSignal> | null): void {
-    console.log(`[FunctionNode ${this.id.slice(0, 8)}] setInput(${socketKey}, ${input$ ? 'observable' : 'null'})`);
     this.inputs$.set(socketKey, input$);
     this.rebuildInternalPipeline();
   }
 
   // Rebuild internal pipeline - wire internal nodes according to graphData.connections
   private rebuildInternalPipeline(): void {
-    console.log(`[FunctionNode ${this.id.slice(0, 8)}] rebuildInternalPipeline() called`);
     // Stop existing subscriptions
     for (const sub of this.subscriptions) {
       sub.unsubscribe();
@@ -330,7 +328,6 @@ export class FunctionNode extends ClassicPreset.Node {
         // Map FuncDefIn output (out_0, out_1, ...) to FunctionNode input (in_0, in_1, ...)
         const inputKey = sourceOutput.replace('out_', 'in_');
         const input$ = this.inputs$.get(inputKey) || null;
-        console.log(`[FunctionNode ${this.id.slice(0, 8)}] getSourceObservable: FuncDefIn.${sourceOutput} -> inputs$.get('${inputKey}') = ${input$ ? 'exists' : 'null'}`);
         return input$;
       }
 
@@ -365,7 +362,6 @@ export class FunctionNode extends ClassicPreset.Node {
 
       // Get source observable
       const source$ = getSourceObservable(source, sourceOutput);
-      console.log(`[FunctionNode ${this.id.slice(0, 8)}] Pass1: ${source.slice(0, 8)}.${sourceOutput} -> ${target.slice(0, 8)}.${targetInput}, source$=${source$ ? 'exists' : 'null'}`);
       if (!source$) continue;
 
       // Wire to internal node
@@ -399,7 +395,6 @@ export class FunctionNode extends ClassicPreset.Node {
 
       // Get source observable (now after all inputs are wired)
       const source$ = getSourceObservable(source, sourceOutput);
-      console.log(`[FunctionNode ${this.id.slice(0, 8)}] Pass2: ${source.slice(0, 8)}.${sourceOutput} -> FuncDefOut.${targetInput}, source$=${source$ ? 'exists' : 'null'}`);
       if (!source$) continue;
 
       // Map FuncDefOut input (in_0, in_1, ...) to FunctionNode output (out_0, out_1, ...)
@@ -408,11 +403,9 @@ export class FunctionNode extends ClassicPreset.Node {
       if (outputSubject) {
         const sub = source$.subscribe({
           next: (signal) => {
-            console.log(`[FunctionNode ${this.id.slice(0, 8)}] received signal from internal node, emitting to ${outputKey}:`, signal);
             outputSubject.next(signal);
           },
           complete: () => {
-            console.log(`[FunctionNode ${this.id.slice(0, 8)}] internal source completed for ${outputKey}, completing output`);
             outputSubject.complete();
           },
         });

@@ -449,7 +449,6 @@ export class ModularRelayNode extends ClassicPreset.Node {
   }
 
   setTriggerInput(input: Observable<{ value?: boolean; flag?: boolean }> | null): void {
-    console.log(`[ModularRelayNode ${this.id.slice(0, 8)}] setTriggerInput(${input ? 'observable' : 'null'})`);
     if (this.triggerSubscription) {
       this.triggerSubscription.unsubscribe();
       this.triggerSubscription = null;
@@ -465,10 +464,8 @@ export class ModularRelayNode extends ClassicPreset.Node {
       return;
     }
 
-    console.log(`[ModularRelayNode ${this.id.slice(0, 8)}] subscribing to trigger input...`);
     this.triggerSubscription = input.subscribe({
       next: (signal) => {
-        console.log(`[ModularRelayNode ${this.id.slice(0, 8)}] trigger received:`, signal);
         const flagValue = signal.value ?? signal.flag ?? false;
         this.triggerState = flagValue;
 
