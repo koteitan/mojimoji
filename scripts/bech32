@@ -1,0 +1,236 @@
+#!/usr/bin/env node
+
+import { bech32 } from 'bech32';
+
+function toHex(data) {
+  return Array.from(data).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function fromHex(hex) {
+  const bytes = [];
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes.push(parseInt(hex.substr(i, 2), 16));
+  }
+  return bytes;
+}
+
+function toString(data) {
+  return new TextDecoder().decode(new Uint8Array(data));
+}
+
+function fromString(str) {
+  return Array.from(new TextEncoder().encode(str));
+}
+
+function decodeSimple(data) {
+  return { hex: toHex(data) };
+}
+
+function decodeTLV(data, schema) {
+  const result = {};
+  const relays = [];
+
+  let i = 0;
+  while (i < data.length) {
+    const type = data[i];
+    const length = data[i + 1];
+    if (length === undefined) break;
+    const value = data.slice(i + 2, i + 2 + length);
+
+    const field = schema[type];
+    if (field) {
+      if (field.type === 'hex') {
+        result[field.name] = toHex(value);
+      } else if (field.type === 'string') {
+        result[field.name] = toString(value);
+      } else if (field.type === 'int') {
+        result[field.name] = value.reduce((acc, b, idx) => acc + (b << (8 * (value.length - 1 - idx))), 0);
+      } else if (field.type === 'relay') {
+        relays.push(toString(value));
+      }
+    }
+
+    i += 2 + length;
+  }
+
+  if (relays.length > 0) {
+    result.relays = relays;
+  }
+
+  return result;
+}
+
+function decode(input) {
+  const trimmed = input.trim().toLowerCase();
+
+  const decoded = bech32.decode(trimmed, 5000);
+  const prefix = decoded.prefix;
+  const data = bech32.fromWords(decoded.words);
+
+  let result = { type: prefix };
+
+  switch (prefix) {
+    case 'npub':
+    case 'nsec':
+    case 'note':
+      Object.assign(result, decodeSimple(data));
+      break;
+
+    case 'nprofile':
+      Object.assign(result, decodeTLV(data, {
+        0: { name: 'pubkey', type: 'hex' },
+        1: { name: 'relay', type: 'relay' },
+      }));
+      break;
+
+    case 'nevent':
+      Object.assign(result, decodeTLV(data, {
+        0: { name: 'eventId', type: 'hex' },
+        1: { name: 'relay', type: 'relay' },
+        2: { name: 'author', type: 'hex' },
+        3: { name: 'kind', type: 'int' },
+      }));
+      break;
+
+    case 'naddr':
+      Object.assign(result, decodeTLV(data, {
+        0: { name: 'pubkey', type: 'hex' },
+        1: { name: 'relay', type: 'relay' },
+        2: { name: 'dTag', type: 'string' },
+        3: { name: 'kind', type: 'int' },
+      }));
+      break;
+
+    case 'nrelay':
+      Object.assign(result, decodeTLV(data, {
+        0: { name: 'url', type: 'string' },
+      }));
+      break;
+
+    default:
+      result.raw = toHex(data);
+      break;
+  }
+
+  return result;
+}
+
+function encodeTLV(type, tlvEntries) {
+  const data = [];
+  for (const entry of tlvEntries) {
+    data.push(entry.type);
+    data.push(entry.value.length);
+    data.push(...entry.value);
+  }
+  const words = bech32.toWords(new Uint8Array(data));
+  return bech32.encode(type, words, 5000);
+}
+
+function encodeSimple(type, hex) {
+  const data = fromHex(hex);
+  const words = bech32.toWords(new Uint8Array(data));
+  return bech32.encode(type, words, 5000);
+}
+
+function intToBytes(n, len = 4) {
+  const bytes = [];
+  for (let i = len - 1; i >= 0; i--) {
+    bytes.push((n >> (8 * i)) & 0xff);
+  }
+  return bytes;
+}
+
+function encode(json) {
+  const { type, hex, pubkey, eventId, author, kind, dTag, relays, url } = json;
+
+  switch (type) {
+    case 'npub':
+    case 'nsec':
+    case 'note':
+      return encodeSimple(type, hex);
+
+    case 'nprofile': {
+      const tlv = [];
+      if (pubkey) tlv.push({ type: 0, value: fromHex(pubkey) });
+      if (relays) {
+        for (const r of relays) {
+          tlv.push({ type: 1, value: fromString(r) });
+        }
+      }
+      return encodeTLV('nprofile', tlv);
+    }
+
+    case 'nevent': {
+      const tlv = [];
+      if (eventId) tlv.push({ type: 0, value: fromHex(eventId) });
+      if (relays) {
+        for (const r of relays) {
+          tlv.push({ type: 1, value: fromString(r) });
+        }
+      }
+      if (author) tlv.push({ type: 2, value: fromHex(author) });
+      if (kind !== undefined) tlv.push({ type: 3, value: intToBytes(kind) });
+      return encodeTLV('nevent', tlv);
+    }
+
+    case 'naddr': {
+      const tlv = [];
+      if (pubkey) tlv.push({ type: 0, value: fromHex(pubkey) });
+      if (relays) {
+        for (const r of relays) {
+          tlv.push({ type: 1, value: fromString(r) });
+        }
+      }
+      if (dTag) tlv.push({ type: 2, value: fromString(dTag) });
+      if (kind !== undefined) tlv.push({ type: 3, value: intToBytes(kind) });
+      return encodeTLV('naddr', tlv);
+    }
+
+    case 'nrelay': {
+      const tlv = [];
+      if (url) tlv.push({ type: 0, value: fromString(url) });
+      return encodeTLV('nrelay', tlv);
+    }
+
+    default:
+      throw new Error(`Unknown type: ${type}`);
+  }
+}
+
+// Read stdin
+async function readStdin() {
+  const chunks = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString('utf-8');
+}
+
+// Main
+const arg = process.argv[2];
+
+if (arg) {
+  // Decode mode: argument is bech32 string
+  try {
+    console.log(JSON.stringify(decode(arg), null, 2));
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
+} else {
+  // Encode mode: read JSON from stdin
+  readStdin().then(input => {
+    try {
+      const json = JSON.parse(input.trim());
+      console.log(encode(json));
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  }).catch(err => {
+    console.error('Usage:');
+    console.error('  Decode: bech32 <npub|nsec|note|nprofile|nevent|naddr|nrelay>');
+    console.error('  Encode: echo \'{"type":"npub","hex":"..."}\' | bech32');
+    process.exit(1);
+  });
+}
