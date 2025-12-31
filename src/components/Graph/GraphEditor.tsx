@@ -50,7 +50,7 @@ import { saveGraphToNostr, loadGraphByPath, loadGraphByEventId, loadGraphByNaddr
 import { getPubkey, isNip07Available } from '../../nostr/nip07';
 import { SubscriptionTracker } from '../../nostr/SubscriptionTracker';
 import { SharedSubscriptionManager } from '../../nostr/SharedSubscriptionManager';
-import { extractContentWarning, decodeBech32ToHex, isHex64, naddrDecode, type EventSignal, type TimelineItem } from '../../nostr/types';
+import { extractContentWarning, decodeBech32ToHex, isHex64, naddrDecode, eventIdToNevent, pubkeyToNpub, type EventSignal, type TimelineItem } from '../../nostr/types';
 import { merge, type Observable, type Subscription } from 'rxjs';
 import { APP_VERSION } from '../../App';
 import './GraphEditor.css';
@@ -463,6 +463,72 @@ export function GraphEditor({
     console.log(lines.join('\n'));
   }, []);
 
+  // Dump timeline signals (for debugging)
+  // Usage: dumptl() - show all timeline signals
+  const dumpTl = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) {
+      console.log('Editor not initialized');
+      return;
+    }
+
+    const nodes = editor.getNodes();
+    let timelineIndex = 0;
+
+    for (const node of nodes) {
+      if (getNodeType(node) === 'Timeline') {
+        const timelineNode = node as TimelineNode;
+        const items = itemsRef.current.get(node.id) || [];
+        const name = timelineNode.getTimelineName();
+        const shortId = node.id.slice(0, 8);
+
+        console.log(`${timelineIndex}:${name} [${shortId}]`);
+
+        items.forEach((item, signalIndex) => {
+          let signalStr: string;
+          switch (item.type) {
+            case 'event':
+              signalStr = eventIdToNevent(item.event.id);
+              break;
+            case 'eventId':
+              signalStr = eventIdToNevent(item.eventId);
+              break;
+            case 'pubkey':
+              signalStr = pubkeyToNpub(item.pubkey);
+              break;
+            case 'relay':
+              signalStr = item.relays.join(', ');
+              break;
+            case 'datetime':
+              signalStr = `datetime:${item.datetime} (${new Date(item.datetime * 1000).toISOString()})`;
+              break;
+            case 'integer':
+              signalStr = `integer:${item.value}`;
+              break;
+            case 'flag':
+              signalStr = `flag:${item.flag}`;
+              break;
+            case 'relayStatus':
+              signalStr = `relayStatus:${item.status}`;
+              break;
+            case 'complete':
+              signalStr = 'complete';
+              break;
+            default:
+              signalStr = `unknown:${JSON.stringify(item)}`;
+          }
+          console.log(`  ${signalIndex}:${signalStr}`);
+        });
+
+        timelineIndex++;
+      }
+    }
+
+    if (timelineIndex === 0) {
+      console.log('No timelines found');
+    }
+  }, []);
+
   // Expose debug functions to window
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -473,6 +539,8 @@ export function GraphEditor({
     (window as any).cleansub = cleanSub;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).dumpobs = dumpObs;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).dumptl = dumpTl;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).infocache = infoCache;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -489,13 +557,15 @@ export function GraphEditor({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).dumpobs;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).dumptl;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).infocache;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).montimeline;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).reconnect;
     };
-  }, [dumpGraph, dumpSub, cleanSub, dumpObs, infoCache, monTimeline, reconnect]);
+  }, [dumpGraph, dumpSub, cleanSub, dumpObs, dumpTl, infoCache, monTimeline, reconnect]);
 
   // Find all downstream timeline IDs from a given node
   const findDownstreamTimelines = useCallback((startNodeId: string): Set<string> => {
