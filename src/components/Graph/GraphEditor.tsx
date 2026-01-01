@@ -207,6 +207,7 @@ export function GraphEditor({
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
   const [inputDropdownOpen, setInputDropdownOpen] = useState(false);
   const [functionDropdownOpen, setFunctionDropdownOpen] = useState(false);
+  const [editPanelOpen, setEditPanelOpen] = useState(false);
   const inputDropdownRef = useRef<HTMLDivElement>(null);
   const filterDropdownRef = useRef<HTMLDivElement>(null);
   const functionDropdownRef = useRef<HTMLDivElement>(null);
@@ -3169,57 +3170,77 @@ export function GraphEditor({
   return (
     <div className="graph-editor">
       <div className="graph-toolbar">
-        <div className="filter-dropdown" ref={inputDropdownRef}>
-          <button onClick={() => setInputDropdownOpen(!inputDropdownOpen)}>
-            {t('toolbar.input', '+Input')} ▼
-          </button>
-          {inputDropdownOpen && (
-            <div className="filter-dropdown-menu">
-              <button onClick={() => { addNode('SimpleRelay'); setInputDropdownOpen(false); }}>{t('toolbar.simpleRelay', 'Relay (Simple)')}</button>
-              <button onClick={() => { addNode('ModularRelay'); setInputDropdownOpen(false); }}>{t('toolbar.modularRelay', 'Relay (Modular)')}</button>
-              <button onClick={() => { addNode('Constant'); setInputDropdownOpen(false); }}>{t('toolbar.constant', 'Constant')}</button>
-              <button onClick={() => { addNode('Nip07'); setInputDropdownOpen(false); }}>{t('toolbar.nip07', 'NIP-07')}</button>
-            </div>
-          )}
+        <div className="toolbar-row">
+          <button onClick={() => setPostDialogOpen(true)} className="post-btn">{t('toolbar.post')}</button>
+          <button onClick={centerView}>{t('toolbar.center')}</button>
+          <button onClick={() => setLoadDialogOpen(true)}>{t('toolbar.load')}</button>
+          <button onClick={() => setSaveDialogOpen(true)}>{t('toolbar.save')}</button>
         </div>
-        <div className="filter-dropdown" ref={filterDropdownRef}>
-          <button onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}>
-            {t('toolbar.filter')} ▼
+        <div className="toolbar-row">
+          <button onClick={() => setEditPanelOpen(!editPanelOpen)} className={editPanelOpen ? 'close-btn' : ''}>
+            {editPanelOpen ? t('toolbar.close', 'Close') : t('toolbar.edit', 'Edit')} {editPanelOpen ? '▲' : '▼'}
           </button>
-          {filterDropdownOpen && (
-            <div className="filter-dropdown-menu">
-              <button onClick={() => { addNode('Operator'); setFilterDropdownOpen(false); }}>{t('toolbar.operator')}</button>
-              <button onClick={() => { addNode('Search'); setFilterDropdownOpen(false); }}>{t('toolbar.search')}</button>
-              <button onClick={() => { addNode('Language'); setFilterDropdownOpen(false); }}>{t('toolbar.language')}</button>
-              <button onClick={() => { addNode('NostrFilter'); setFilterDropdownOpen(false); }}>{t('toolbar.nostrFilter')}</button>
-              <button onClick={() => { addNode('Extraction'); setFilterDropdownOpen(false); }}>{t('toolbar.extraction', 'Extraction')}</button>
-              <button onClick={() => { addNode('If'); setFilterDropdownOpen(false); }}>{t('toolbar.if', 'If')}</button>
-              <button onClick={() => { addNode('Count'); setFilterDropdownOpen(false); }}>{t('toolbar.count', 'Count')}</button>
-            </div>
-          )}
         </div>
-        <button onClick={() => addNode('Timeline')}>{t('toolbar.output', '+Output')}</button>
-        <div className="filter-dropdown" ref={functionDropdownRef}>
-          <button onClick={() => setFunctionDropdownOpen(!functionDropdownOpen)}>
-            {t('toolbar.functionMenu', '+Func')} ▼
-          </button>
-          {functionDropdownOpen && (
-            <div className="filter-dropdown-menu">
-              <button onClick={() => { addNode('FuncDefIn'); setFunctionDropdownOpen(false); }}>{t('toolbar.funcDefIn', 'Func In')}</button>
-              <button onClick={() => { addNode('FuncDefOut'); setFunctionDropdownOpen(false); }}>{t('toolbar.funcDefOut', 'Func Out')}</button>
-              <button onClick={() => { addNode('Function'); setFunctionDropdownOpen(false); }}>{t('toolbar.function', 'Function')}</button>
+        {editPanelOpen && (
+          <>
+            <div className="toolbar-row">
+              <div className="filter-dropdown" ref={inputDropdownRef}>
+                <button onClick={() => setInputDropdownOpen(!inputDropdownOpen)}>
+                  {t('toolbar.input', '+Input')} ▶
+                </button>
+                {inputDropdownOpen && (
+                  <div className="filter-dropdown-menu horizontal">
+                    <button onClick={() => { addNode('SimpleRelay'); setInputDropdownOpen(false); }}>{t('toolbar.simpleRelay', 'Relay (Simple)')}</button>
+                    <button onClick={() => { addNode('ModularRelay'); setInputDropdownOpen(false); }}>{t('toolbar.modularRelay', 'Relay (Modular)')}</button>
+                    <button onClick={() => { addNode('Constant'); setInputDropdownOpen(false); }}>{t('toolbar.constant', 'Constant')}</button>
+                    <button onClick={() => { addNode('Nip07'); setInputDropdownOpen(false); }}>{t('toolbar.nip07', 'NIP-07')}</button>
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </div>
-        <button onClick={centerView}>{t('toolbar.center')}</button>
-        <div className="toolbar-separator" />
-        <button onClick={deleteSelected} className="delete-btn">{t('toolbar.delete')}</button>
-        <button onClick={clearAll} className="clear-btn">{t('toolbar.clear', 'Clear')}</button>
-        <div className="toolbar-separator" />
-        <button onClick={() => setSaveDialogOpen(true)}>{t('toolbar.save')}</button>
-        <button onClick={() => setLoadDialogOpen(true)}>{t('toolbar.load')}</button>
-        <div className="toolbar-separator" />
-        <button onClick={() => setPostDialogOpen(true)}>{t('toolbar.post')}</button>
+            <div className="toolbar-row">
+              <button onClick={() => addNode('Timeline')}>{t('toolbar.output', '+Output')}</button>
+            </div>
+            <div className="toolbar-row">
+              <div className="filter-dropdown" ref={filterDropdownRef}>
+                <button onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}>
+                  {t('toolbar.filter')} ▶
+                </button>
+                {filterDropdownOpen && (
+                  <div className="filter-dropdown-menu horizontal">
+                    <button onClick={() => { addNode('Operator'); setFilterDropdownOpen(false); }}>{t('toolbar.operator')}</button>
+                    <button onClick={() => { addNode('Search'); setFilterDropdownOpen(false); }}>{t('toolbar.search')}</button>
+                    <button onClick={() => { addNode('Language'); setFilterDropdownOpen(false); }}>{t('toolbar.language')}</button>
+                    <button onClick={() => { addNode('NostrFilter'); setFilterDropdownOpen(false); }}>{t('toolbar.nostrFilter')}</button>
+                    <button onClick={() => { addNode('Extraction'); setFilterDropdownOpen(false); }}>{t('toolbar.extraction', 'Extraction')}</button>
+                    <button onClick={() => { addNode('If'); setFilterDropdownOpen(false); }}>{t('toolbar.if', 'If')}</button>
+                    <button onClick={() => { addNode('Count'); setFilterDropdownOpen(false); }}>{t('toolbar.count', 'Count')}</button>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="toolbar-row">
+              <div className="filter-dropdown" ref={functionDropdownRef}>
+                <button onClick={() => setFunctionDropdownOpen(!functionDropdownOpen)}>
+                  {t('toolbar.functionMenu', '+Func')} ▶
+                </button>
+                {functionDropdownOpen && (
+                  <div className="filter-dropdown-menu horizontal">
+                    <button onClick={() => { addNode('FuncDefIn'); setFunctionDropdownOpen(false); }}>{t('toolbar.funcDefIn', 'Func In')}</button>
+                    <button onClick={() => { addNode('FuncDefOut'); setFunctionDropdownOpen(false); }}>{t('toolbar.funcDefOut', 'Func Out')}</button>
+                    <button onClick={() => { addNode('Function'); setFunctionDropdownOpen(false); }}>{t('toolbar.function', 'Function')}</button>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="toolbar-row">
+              <button onClick={deleteSelected} className="delete-btn">{t('toolbar.delete')}</button>
+            </div>
+            <div className="toolbar-row">
+              <button onClick={clearAll} className="clear-btn">{t('toolbar.clear', 'Clear')}</button>
+            </div>
+          </>
+        )}
       </div>
       <div
         ref={containerRef}

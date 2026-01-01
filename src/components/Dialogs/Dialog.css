@@ -577,3 +577,74 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Table layout for graph browser items */
+.item-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.item-table td {
+  padding: 0;
+  vertical-align: middle;
+}
+
+.item-cell-icon {
+  width: 24px;
+}
+
+.item-cell-name {
+  /* flex: 1 equivalent */
+}
+
+.item-cell-name .item-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-cell-visibility {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.item-cell-author-icon {
+  width: 24px;
+}
+
+.item-cell-author-name .item-author-name {
+  max-width: none;
+}
+
+.item-cell-date-delete {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.item-cell-date-delete .item-delete {
+  margin-left: 4px;
+}
+
+/* Desktop: hide second row, show inline */
+.item-row-2 {
+  display: none;
+}
+
+/* Mobile: show both rows */
+@media (max-width: 500px) {
+  .item-row-2 {
+    display: table-row;
+  }
+
+  .item-row-2 td {
+    padding-top: 4px;
+  }
+
+  /* Filter options: 2x2 grid */
+  .dialog-radio-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+}

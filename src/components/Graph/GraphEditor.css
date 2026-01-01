@@ -29,20 +29,56 @@
   top: 10px;
   left: 10px;
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
   z-index: 10;
+  pointer-events: none;
+}
+
+.toolbar-row {
+  display: flex;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.graph-toolbar button,
+.graph-toolbar .filter-dropdown {
+  pointer-events: auto;
 }
 
 .graph-toolbar button {
-  padding: 8px 12px;
+  padding: 8px 0;
   font-size: 12px;
   background: #2a2a2a;
   border: 1px solid #444;
+  white-space: nowrap;
+  text-align: center;
+  width: 70px;
 }
 
 .graph-toolbar button:hover {
   background: #3a3a3a;
   border-color: #646cff;
+}
+
+.graph-toolbar button.post-btn {
+  background: #204a20;
+  border-color: #44ff44;
+}
+
+.graph-toolbar button.post-btn:hover {
+  background: #306030;
+  border-color: #66ff66;
+}
+
+.graph-toolbar button.close-btn {
+  background: #333;
+  border-color: #666;
+}
+
+.graph-toolbar button.close-btn:hover {
+  background: #444;
+  border-color: #888;
 }
 
 .graph-toolbar button.delete-btn,
@@ -55,14 +91,6 @@
 .graph-toolbar button.clear-btn:hover {
   background: #662020;
   border-color: #ff6666;
-}
-
-/* Toolbar separator */
-.toolbar-separator {
-  width: 1px;
-  background: #444;
-  margin: 0 4px;
-  align-self: stretch;
 }
 
 /* Dropdown separator */
@@ -91,6 +119,16 @@
   border-radius: 4px;
   padding: 4px;
   z-index: 100;
+}
+
+/* Horizontal dropdown (shown to the right in edit panel) */
+.filter-dropdown-menu.horizontal {
+  top: 0;
+  left: 100%;
+  margin: 0 0 0 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
 }
 
 .filter-dropdown-menu button {
@@ -326,20 +364,8 @@ svg {
     pointer-events: auto !important;
   }
 
-  /* Toolbar: 2-line layout */
-  .graph-toolbar {
-    flex-wrap: wrap;
-    max-width: calc(100% - 20px);
-    gap: 4px;
-  }
-
   .graph-toolbar button {
     padding: 6px 8px;
     font-size: 11px;
-  }
-
-  /* Hide separators on mobile */
-  .toolbar-separator {
-    display: none;
   }
 }

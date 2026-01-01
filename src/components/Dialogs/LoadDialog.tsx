@@ -552,34 +552,45 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                           className={`browser-item graph ${selectedNostrGraph?.path === item.path ? 'selected' : ''}`}
                           onClick={() => handleSelectNostrGraph(item)}
                         >
-                          <span className="item-icon">📄</span>
-                          <span className="item-name">{item.name}</span>
-                          {/* Visibility badge */}
-                          {item.visibility && (
-                            <span className={`item-visibility ${item.visibility}`}>
-                              {item.visibility === 'public' ? 'public' : 'for yourself'}
-                            </span>
-                          )}
-                          {/* Author info */}
-                          <span className="item-author-info">
-                            <img src={profile?.picture || DEFAULT_AVATAR} alt="" className="item-author-picture" />
-                            <span className="item-author-name">
-                              {profile?.name || formatNpub(item.pubkey)}
-                            </span>
-                          </span>
-                          <span className="item-date">
-                            {item.createdAt > 0 ? new Date(item.createdAt * 1000).toLocaleString() : ''}
-                          </span>
-                          {/* Delete button (only for own graphs) */}
-                          {isOwn && (
-                            <button
-                              className="item-delete"
-                              onClick={(e) => handleDeleteNostrGraph(e, item)}
-                              title={t('dialogs.load.deleteGraph')}
-                            >
-                              ×
-                            </button>
-                          )}
+                          <table className="item-table">
+                            <tbody>
+                              <tr className="item-row-1">
+                                <td className="item-cell-icon"><span className="item-icon">📄</span></td>
+                                <td className="item-cell-name"><span className="item-name">{item.name}</span></td>
+                                <td className="item-cell-visibility">
+                                  {item.visibility && (
+                                    <span className={`item-visibility ${item.visibility}`}>
+                                      {item.visibility === 'public' ? 'public' : 'for yourself'}
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                              <tr className="item-row-2">
+                                <td className="item-cell-author-icon">
+                                  <img src={profile?.picture || DEFAULT_AVATAR} alt="" className="item-author-picture" />
+                                </td>
+                                <td className="item-cell-author-name">
+                                  <span className="item-author-name">
+                                    {profile?.name || formatNpub(item.pubkey)}
+                                  </span>
+                                </td>
+                                <td className="item-cell-date-delete">
+                                  <span className="item-date">
+                                    {item.createdAt > 0 ? new Date(item.createdAt * 1000).toLocaleString() : ''}
+                                  </span>
+                                  {isOwn && (
+                                    <button
+                                      className="item-delete"
+                                      onClick={(e) => handleDeleteNostrGraph(e, item)}
+                                      title={t('dialogs.load.deleteGraph')}
+                                    >
+                                      ×
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
                         </div>
                       );
                     })}
