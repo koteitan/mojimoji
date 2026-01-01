@@ -8,6 +8,7 @@ import {
   deleteGraphFromNostr,
   fetchUserRelayList,
   fetchAndCacheProfiles,
+  refreshGraphsCache,
   type NostrGraphItem
 } from '../../nostr/graphStorage';
 import { getCachedProfile, getAllCachedProfiles } from '../../nostr/profileCache';
@@ -19,7 +20,6 @@ import './Dialog.css';
 const DEFAULT_AVATAR = `${import.meta.env.BASE_URL}mojimoji-icon.png`;
 
 type LoadSource = 'local' | 'nostr' | 'file';
-type NostrFilter = 'public' | 'mine' | 'both' | 'by-author';
 
 interface LoadDialogProps {
   isOpen: boolean;
@@ -42,8 +42,12 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
   // Track if mousedown started on overlay (for proper click-outside handling)
   const [mouseDownOnOverlay, setMouseDownOnOverlay] = useState(false);
 
-  // Nostr state
-  const [nostrFilter, setNostrFilter] = useState<NostrFilter>('mine');
+  // Nostr filter state (checkboxes)
+  const [filterPersonal, setFilterPersonal] = useState(true);
+  const [filterPublic, setFilterPublic] = useState(true);
+  const [ownerMe, setOwnerMe] = useState(true);
+  const [ownerOthers, setOwnerOthers] = useState(false);
+  const [particularUserOnly, setParticularUserOnly] = useState(false);
   const [authorInput, setAuthorInput] = useState('');
   const [authorPubkey, setAuthorPubkey] = useState<string | null>(null);
   const [nostrGraphs, setNostrGraphs] = useState<NostrGraphItem[]>([]);
@@ -56,23 +60,27 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
   const [useCompactLayout, setUseCompactLayout] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
 
-  // Check browser-item width after render to determine layout
+  // Check browser-item width after render and on window resize
   useEffect(() => {
     if (source !== 'nostr' || nostrLoading) return;
 
-    // Small delay to ensure DOM is rendered
-    const timer = setTimeout(() => {
+    const checkLayout = () => {
       const itemEl = itemRef.current;
-      if (!itemEl) {
-        return;
-      }
-
+      if (!itemEl) return;
       const itemWidth = itemEl.offsetWidth;
-      const compact = itemWidth < 500;
-      setUseCompactLayout(compact);
-    }, 200);
+      setUseCompactLayout(itemWidth < 500);
+    };
 
-    return () => clearTimeout(timer);
+    // Use requestAnimationFrame for earliest possible detection after render
+    const rafId = requestAnimationFrame(checkLayout);
+
+    // Re-check on window resize
+    window.addEventListener('resize', checkLayout);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', checkLayout);
+    };
   }, [source, nostrLoading, nostrGraphs]);
 
   // Refresh data when dialog opens
@@ -109,39 +117,53 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
     }
   }, [isOpen, source]);
 
-  // Load Nostr graphs when filter or author changes
+  // Track previous relay URLs to detect changes
+  const prevRelayUrlsRef = useRef<string>('');
+
+  // Load Nostr graphs when source or author changes
   useEffect(() => {
     if (isOpen && source === 'nostr') {
       const loadNostrGraphs = async () => {
         setNostrLoading(true);
         setError(null);
         setSelectedNostrGraph(null);
-        setCurrentPath([]);
+        // Keep current directory path when filter changes
 
         try {
-          if (nostrFilter === 'mine' || nostrFilter === 'both') {
-            if (!isNip07Available()) {
-              setIsNip07Error(true);
-              setNostrGraphs([]);
-              return;
-            }
-          }
-
-          if (nostrFilter === 'by-author' && !authorPubkey) {
+          // If particularUserOnly is checked but no author selected, show empty
+          if (particularUserOnly && !authorPubkey) {
             setNostrGraphs([]);
+            setNostrLoading(false);
             return;
           }
 
-          // Pass relay URLs from the textarea to the query
           const relays = relayUrls.split('\n').filter(url => url.trim());
-          // 'both' uses 'mine' to fetch all user's graphs, then filters in UI
-          const apiFilter = nostrFilter === 'both' ? 'mine' : nostrFilter;
-          const graphs = await loadGraphsFromNostr(
-            apiFilter,
-            nostrFilter === 'by-author' ? authorPubkey! : undefined,
-            relays.length > 0 ? relays : undefined
-          );
-          setNostrGraphs(graphs);
+
+          // Check if relay URLs have changed - if so, refresh the cache
+          const currentRelayKey = relays.sort().join(',');
+          if (currentRelayKey !== prevRelayUrlsRef.current) {
+            prevRelayUrlsRef.current = currentRelayKey;
+            // Refresh cache with new relay URLs
+            await refreshGraphsCache(relays.length > 0 ? relays : undefined);
+          }
+
+          if (particularUserOnly) {
+            // Fetch graphs by specific author
+            const graphs = await loadGraphsFromNostr(
+              'by-author',
+              authorPubkey!,
+              relays.length > 0 ? relays : undefined
+            );
+            setNostrGraphs(graphs);
+          } else {
+            // Fetch all graphs from cache, filtering is done client-side
+            const graphs = await loadGraphsFromNostr(
+              'all',
+              undefined,
+              relays.length > 0 ? relays : undefined
+            );
+            setNostrGraphs(graphs);
+          }
         } catch (e) {
           setError(e instanceof Error ? e.message : t('dialogs.load.errorUnknown'));
           setNostrGraphs([]);
@@ -151,7 +173,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
       };
       loadNostrGraphs();
     }
-  }, [isOpen, source, nostrFilter, authorPubkey, relayUrls, t]);
+  }, [isOpen, source, particularUserOnly, authorPubkey, relayUrls, t]);
 
   // Update author suggestions when input changes
   useEffect(() => {
@@ -193,36 +215,57 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
   const nostrItems = useMemo(() => {
     if (source !== 'nostr') return [];
 
-    // For 'by-author' filter, don't show items until an author is selected
-    if (nostrFilter === 'by-author' && !authorPubkey) {
+    // For particularUserOnly, don't show items until an author is selected
+    if (particularUserOnly && !authorPubkey) {
       return [];
     }
 
     const items = getNostrItemsInDirectory(nostrGraphs, fullPath, userPubkey);
 
-    // When filter is 'mine' (For yourself), show only private items
-    if (nostrFilter === 'mine') {
-      return items.filter(item => {
-        // Always show directories
-        if (item.isDirectory) return true;
-        // Show only 'For yourself' items (hide public items)
-        return item.visibility !== 'public';
-      });
-    }
+    // Filter by visibility and owner
+    return items.filter(item => {
+      // Always show directories
+      if (item.isDirectory) return true;
 
-    // When filter is 'public', show only public items (hide all 'For yourself' items)
-    if (nostrFilter === 'public') {
-      return items.filter(item => {
-        // Always show directories
-        if (item.isDirectory) return true;
-        // Show only public items (hide 'For yourself' items from everyone including myself)
-        return item.visibility === 'public';
-      });
-    }
+      // Filter by owner (who created the graph)
+      const isMine = item.pubkey === userPubkey;
+      const isOthers = item.pubkey !== userPubkey;
 
-    // 'both' and 'by-author' filters show all items (both public and private)
-    return items;
-  }, [source, nostrGraphs, fullPath, userPubkey, nostrFilter, authorPubkey]);
+      // Check owner filter (skip if particularUserOnly since we already fetched specific author)
+      if (!particularUserOnly) {
+        if (ownerMe && ownerOthers) {
+          // Show both mine and others
+        } else if (ownerMe && !ownerOthers) {
+          // Show only mine
+          if (!isMine) return false;
+        } else if (!ownerMe && ownerOthers) {
+          // Show only others
+          if (!isOthers) return false;
+        } else {
+          // Neither checked - show nothing
+          return false;
+        }
+      }
+
+      // Filter by visibility (public flag)
+      const isPublic = item.visibility === 'public';
+      const isPersonal = item.visibility !== 'public';
+
+      if (filterPersonal && filterPublic) {
+        // Show both
+        return true;
+      } else if (filterPersonal && !filterPublic) {
+        // Show only personal
+        return isPersonal;
+      } else if (!filterPersonal && filterPublic) {
+        // Show only public
+        return isPublic;
+      } else {
+        // Neither checked - show nothing
+        return false;
+      }
+    });
+  }, [source, nostrGraphs, fullPath, userPubkey, filterPersonal, filterPublic, ownerMe, ownerOthers, particularUserOnly, authorPubkey]);
 
   const items = source === 'local' ? localItems : [];
 
@@ -267,15 +310,22 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
       try {
         await deleteGraphFromNostr(item.path, undefined, item.event?.id);
         // Reload graphs
-        const apiFilter = nostrFilter === 'both' ? 'mine' : nostrFilter;
-        const graphs = await loadGraphsFromNostr(apiFilter, nostrFilter === 'by-author' ? authorPubkey! : undefined);
-        setNostrGraphs(graphs);
+        const relays = relayUrls.split('\n').filter(url => url.trim());
+
+        if (particularUserOnly && authorPubkey) {
+          const graphs = await loadGraphsFromNostr('by-author', authorPubkey, relays.length > 0 ? relays : undefined);
+          setNostrGraphs(graphs);
+        } else {
+          const graphs = await loadGraphsFromNostr('all', undefined, relays.length > 0 ? relays : undefined);
+          setNostrGraphs(graphs);
+        }
+
         setSelectedNostrGraph(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : t('dialogs.load.errorUnknown'));
       }
     }
-  }, [t, nostrFilter, authorPubkey]);
+  }, [t, particularUserOnly, authorPubkey, relayUrls]);
 
   const handleDeleteFolder = useCallback((e: React.MouseEvent, path: string, name: string) => {
     e.stopPropagation();
@@ -445,53 +495,72 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                 />
               </div>
 
-              {/* Visibility filter */}
+              {/* Visibility filter (checkboxes) */}
               <div className="dialog-input-group">
                 <label>{t('dialogs.load.filterLabel')}</label>
-                <div className="dialog-radio-group">
+                <div className="dialog-checkbox-group">
                   <label>
                     <input
-                      type="radio"
-                      name="nostrFilter"
-                      checked={nostrFilter === 'mine'}
-                      onChange={() => setNostrFilter('mine')}
+                      type="checkbox"
+                      checked={filterPersonal}
+                      onChange={(e) => setFilterPersonal(e.target.checked)}
                     />
                     {t('dialogs.visibility.mine')}
                   </label>
                   <label>
                     <input
-                      type="radio"
-                      name="nostrFilter"
-                      checked={nostrFilter === 'public'}
-                      onChange={() => setNostrFilter('public')}
+                      type="checkbox"
+                      checked={filterPublic}
+                      onChange={(e) => setFilterPublic(e.target.checked)}
                     />
                     {t('dialogs.visibility.public')}
-                  </label>
-                  <label>
-                    <input
-                      type="radio"
-                      name="nostrFilter"
-                      checked={nostrFilter === 'both'}
-                      onChange={() => setNostrFilter('both')}
-                    />
-                    {t('dialogs.visibility.both')}
-                  </label>
-                  <label>
-                    <input
-                      type="radio"
-                      name="nostrFilter"
-                      checked={nostrFilter === 'by-author'}
-                      onChange={() => setNostrFilter('by-author')}
-                    />
-                    {t('dialogs.visibility.byAuthor')}
                   </label>
                 </div>
               </div>
 
-              {/* Author input (shown when "By author" selected) */}
-              {nostrFilter === 'by-author' && (
+              {/* Owner filter (checkboxes) */}
+              <div className="dialog-input-group">
+                <label>{t('dialogs.load.ownerLabel')}</label>
+                <div className="dialog-checkbox-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={ownerMe}
+                      disabled={particularUserOnly}
+                      onChange={(e) => setOwnerMe(e.target.checked)}
+                    />
+                    {t('dialogs.load.ownerMe')}
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={ownerOthers}
+                      disabled={particularUserOnly}
+                      onChange={(e) => setOwnerOthers(e.target.checked)}
+                    />
+                    {t('dialogs.load.ownerOthers')}
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={particularUserOnly}
+                      onChange={(e) => {
+                        setParticularUserOnly(e.target.checked);
+                        if (e.target.checked) {
+                          setOwnerMe(false);
+                          setOwnerOthers(false);
+                        }
+                      }}
+                    />
+                    {t('dialogs.load.particularUserOnly')}
+                  </label>
+                </div>
+              </div>
+
+              {/* Author input (shown when "particular user only" is checked) */}
+              {particularUserOnly && (
                 <div className="dialog-input-group">
-                  <label>{t('dialogs.load.authorLabel')}</label>
+                  <label>{t('dialogs.load.particularUserLabel')}</label>
                   <div className="author-autocomplete">
                     <input
                       type="text"
@@ -586,7 +655,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                                     <span className="item-name">{item.name}</span>
                                     {item.visibility && (
                                       <span className={`item-visibility ${item.visibility}`}>
-                                        {item.visibility === 'public' ? 'public' : 'for yourself'}
+                                        {item.visibility === 'public' ? 'public' : 'personal'}
                                       </span>
                                     )}
                                   </td>

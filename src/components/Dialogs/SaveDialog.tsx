@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getGraphsInDirectory, deleteGraphAtPath, deleteGraphsInDirectory } from '../../utils/localStorage';
 import { isNip07Available, getPubkey } from '../../nostr/nip07';
-import { loadGraphsFromNostr, getNostrItemsInDirectory, deleteGraphFromNostr, fetchUserRelayList, fetchAndCacheProfiles, type NostrGraphItem } from '../../nostr/graphStorage';
+import { loadGraphsFromNostr, getNostrItemsInDirectory, deleteGraphFromNostr, fetchUserRelayList, fetchAndCacheProfiles, refreshGraphsCache, type NostrGraphItem } from '../../nostr/graphStorage';
 import { getCachedProfile } from '../../nostr/profileCache';
 import { formatNpub } from '../../nostr/types';
 import { Nip07ErrorMessage } from './Nip07ErrorMessage';
@@ -45,22 +45,27 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
   const [useCompactLayout, setUseCompactLayout] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
 
-  // Check browser-item width after render to determine layout
+  // Check browser-item width after render and on window resize
   useEffect(() => {
     if (destination !== 'nostr' || nostrLoading) return;
 
-    const timer = setTimeout(() => {
+    const checkLayout = () => {
       const itemEl = itemRef.current;
-      if (!itemEl) {
-        return;
-      }
-
+      if (!itemEl) return;
       const itemWidth = itemEl.offsetWidth;
-      const compact = itemWidth < 500;
-      setUseCompactLayout(compact);
-    }, 200);
+      setUseCompactLayout(itemWidth < 500);
+    };
 
-    return () => clearTimeout(timer);
+    // Use requestAnimationFrame for earliest possible detection after render
+    const rafId = requestAnimationFrame(checkLayout);
+
+    // Re-check on window resize
+    window.addEventListener('resize', checkLayout);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', checkLayout);
+    };
   }, [destination, nostrLoading, nostrGraphs]);
 
   // Refresh data when dialog opens
@@ -71,6 +76,9 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
       setUseCompactLayout(false);
     }
   }, [isOpen]);
+
+  // Track previous relay URLs to detect changes
+  const prevRelayUrlsRef = useRef<string>('');
 
   // Load user's pubkey, relay list, Nostr graphs, and fetch profiles when Nostr tab is selected
   useEffect(() => {
@@ -89,6 +97,8 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
           const relays = await fetchUserRelayList('write');
           if (relays.length > 0) {
             setRelayUrls(relays.join('\n'));
+            // Initialize previous relay URLs ref
+            prevRelayUrlsRef.current = [...relays].sort().join(',');
           }
           // Fetch and cache profiles from relays for autocomplete
           fetchAndCacheProfiles(relays.length > 0 ? relays : undefined);
@@ -103,6 +113,33 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
       loadNostrData();
     }
   }, [isOpen, destination, t]);
+
+  // Reload graphs when relay URLs change
+  useEffect(() => {
+    if (!isOpen || destination !== 'nostr' || nostrLoading) return;
+
+    const relays = relayUrls.split('\n').filter(url => url.trim());
+    const currentRelayKey = [...relays].sort().join(',');
+
+    // Skip if relay URLs haven't changed
+    if (currentRelayKey === prevRelayUrlsRef.current) return;
+    prevRelayUrlsRef.current = currentRelayKey;
+
+    const reloadGraphs = async () => {
+      try {
+        setNostrLoading(true);
+        // Refresh cache with new relay URLs
+        await refreshGraphsCache(relays.length > 0 ? relays : undefined);
+        const graphs = await loadGraphsFromNostr('mine');
+        setNostrGraphs(graphs);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : t('dialogs.save.errorUnknown'));
+      } finally {
+        setNostrLoading(false);
+      }
+    };
+    reloadGraphs();
+  }, [isOpen, destination, relayUrls, nostrLoading, t]);
 
   const fullPath = currentPath.length > 0 ? currentPath.join('/') : '';
   // Get saved graphs with locally-created directories
@@ -414,7 +451,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                                     <span className="item-name">{item.name}</span>
                                     {nostrItem && nostrItem.visibility && (
                                       <span className={`item-visibility ${nostrItem.visibility}`}>
-                                        {nostrItem.visibility === 'public' ? 'public' : 'for yourself'}
+                                        {nostrItem.visibility === 'public' ? 'public' : 'personal'}
                                       </span>
                                     )}
                                   </td>

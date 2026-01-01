@@ -154,8 +154,8 @@
       "file": "ファイル"
     },
     "visibility": {
-      "mine": "自分用",
-      "public": "公開",
+      "mine": "個人用",
+      "public": "公開用",
       "both": "両方",
       "byAuthor": "両方(ユーザーごと)"
     },
@@ -188,8 +188,12 @@
       "browserDescription": "ブラウザに保存されたグラフを読み込みます。",
       "nostrDescription": "Nostrリレーからグラフを読み込みます。フィルタを選択して検索してください。",
       "fileDescription": "コンピュータ上のJSONファイルからグラフを読み込みます。",
-      "filterLabel": "フィルタ",
-      "authorLabel": "作者",
+      "filterLabel": "公開設定",
+      "ownerLabel": "所有者",
+      "ownerMe": "自分",
+      "ownerOthers": "自分以外",
+      "particularUserOnly": "特定ユーザーのみ",
+      "particularUserLabel": "特定ユーザー名または pubkey",
       "authorPlaceholder": "npub、hex、または名前を入力",
       "chooseFile": "ファイルを選択",
       "load": "読込",

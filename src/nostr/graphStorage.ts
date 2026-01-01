@@ -36,9 +36,9 @@ let allGraphsPromise: Promise<NostrGraphItem[]> | null = null;
 
 // Initialize all graphs cache (call on app load, after relay list is initialized)
 // Fetches all mojimoji graphs from user's relays with #client: ['mojimoji'] filter
-export async function initAllGraphs(): Promise<NostrGraphItem[]> {
+export async function initAllGraphs(customRelays?: string[]): Promise<NostrGraphItem[]> {
   try {
-    const graphs = await fetchAllGraphsFromRelays();
+    const graphs = await fetchAllGraphsFromRelays(customRelays);
     allGraphsCache = graphs;
     return graphs;
   } catch {
@@ -51,9 +51,16 @@ function invalidateGraphsCache(): void {
   allGraphsCache = null;
 }
 
+// Clear cache and re-fetch graphs from specified relays
+export async function refreshGraphsCache(customRelays?: string[]): Promise<NostrGraphItem[]> {
+  allGraphsCache = null;
+  allGraphsPromise = null;
+  return initAllGraphs(customRelays);
+}
+
 // Fetch all mojimoji graphs from user's relays (single subscription with #client filter)
-async function fetchAllGraphsFromRelays(): Promise<NostrGraphItem[]> {
-  let relays = await fetchUserRelayList();
+async function fetchAllGraphsFromRelays(customRelays?: string[]): Promise<NostrGraphItem[]> {
+  let relays = customRelays && customRelays.length > 0 ? customRelays : await fetchUserRelayList();
   if (relays.length === 0) {
     relays = [getDefaultRelayUrl()];
   }
@@ -181,14 +188,14 @@ export async function saveGraphToNostr(
   return signedEvent.id;
 }
 
-// Load graphs from Nostr relay (filters from cache for 'mine' and 'public')
+// Load graphs from Nostr relay (filters from cache for 'mine', 'public', and 'all')
 export async function loadGraphsFromNostr(
-  filter: 'public' | 'mine' | 'by-author',
+  filter: 'public' | 'mine' | 'by-author' | 'all',
   authorPubkey?: string,
   relayUrls?: string[]
 ): Promise<NostrGraphItem[]> {
-  // For 'mine' and 'public' filters, use the all-graphs cache and filter in app
-  if (filter === 'mine' || filter === 'public') {
+  // For 'mine', 'public', and 'all' filters, use the all-graphs cache and filter in app
+  if (filter === 'mine' || filter === 'public' || filter === 'all') {
     // Ensure cache is loaded
     if (allGraphsCache === null) {
       if (allGraphsPromise !== null) {
@@ -209,6 +216,9 @@ export async function loadGraphsFromNostr(
       const userPubkey = await getPubkey();
       // Filter by user's pubkey (author's own graphs)
       return graphs.filter(g => g.pubkey === userPubkey);
+    } else if (filter === 'all') {
+      // Return all graphs without filtering (for client-side filtering)
+      return graphs;
     } else {
       // Filter by public visibility
       return graphs.filter(g => g.visibility === 'public');
