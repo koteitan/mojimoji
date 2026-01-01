@@ -12,12 +12,60 @@
   padding: 12px;
   border-bottom: 1px solid #333;
   background: #242424;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .timeline-header h3 {
   margin: 0;
   font-size: 14px;
   color: #fff;
+}
+
+.timeline-swap-buttons {
+  display: flex;
+  gap: 2px;
+}
+
+.timeline-swap-button {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #666;
+  font-size: 12px;
+  padding: 0 4px;
+  transition: color 0.2s;
+  line-height: 1;
+}
+
+.timeline-swap-button:hover {
+  color: #fff;
+}
+
+.timeline-swap-button:focus,
+.timeline-swap-button:active {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Swap animation - cross over each other */
+@keyframes swap-left {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-300px); }
+}
+
+@keyframes swap-right {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(300px); }
+}
+
+.timeline.swapping-left {
+  animation: swap-left 0.3s ease-in-out forwards;
+}
+
+.timeline.swapping-right {
+  animation: swap-right 0.3s ease-in-out forwards;
 }
 
 .timeline-events {

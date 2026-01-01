@@ -21,6 +21,7 @@ function App() {
   const [timelines, setTimelines] = useState<TimelineData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingDots, setLoadingDots] = useState('* * *');
+  const [swappingIndices, setSwappingIndices] = useState<[number, number] | null>(null);
 
   // Initialize user's relay list, graphs, and profiles on app load
   useEffect(() => {
@@ -72,6 +73,19 @@ function App() {
     );
   }, []);
 
+  const handleTimelineSwap = useCallback((index: number) => {
+    setSwappingIndices([index, index + 1]);
+    setTimeout(() => {
+      setTimelines(prev => {
+        if (index < 0 || index >= prev.length - 1) return prev;
+        const newTimelines = [...prev];
+        [newTimelines[index], newTimelines[index + 1]] = [newTimelines[index + 1], newTimelines[index]];
+        return newTimelines;
+      });
+      setSwappingIndices(null);
+    }, 300);
+  }, []);
+
   return (
     <div className="app">
       <div className="title-bar">
@@ -85,11 +99,18 @@ function App() {
               <p className="hint">Connect a Timeline node in the graph editor</p>
             </div>
           ) : (
-            timelines.map(timeline => (
+            timelines.map((timeline, index) => (
               <Timeline
                 key={timeline.id}
                 name={timeline.name}
                 items={timeline.items}
+                index={index}
+                isLast={index === timelines.length - 1}
+                onSwap={handleTimelineSwap}
+                swapDirection={
+                  swappingIndices?.[0] === index ? 'right' :
+                  swappingIndices?.[1] === index ? 'left' : null
+                }
               />
             ))
           )}
