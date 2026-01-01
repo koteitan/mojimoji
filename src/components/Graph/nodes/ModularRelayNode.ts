@@ -50,6 +50,7 @@ function getSocketForField(field: string): ClassicPreset.Socket {
       return datetimeSocket;
     case 'ids':
     case '#e':
+    case '#q':
       return eventIdSocket;
     case 'authors':
     case '#p':

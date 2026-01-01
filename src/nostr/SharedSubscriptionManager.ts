@@ -11,6 +11,7 @@ interface Subscriber {
   filters: Filter[];
   onEvent: (event: NostrEvent) => void;
   onEose?: () => void;
+  eoseTimeout?: number;
 }
 
 interface RelaySubscription {
@@ -40,19 +41,24 @@ class SharedSubscriptionManagerClass {
    * @param filters The filters to apply
    * @param onEvent Callback when an event is received
    * @param onEose Optional callback when EOSE is received
+   * @param eoseTimeout Optional EOSE timeout in ms (used when creating new RxNostr instance)
    */
   subscribe(
     relayUrl: string,
     nodeId: string,
     filters: Filter[],
     onEvent: (event: NostrEvent) => void,
-    onEose?: () => void
+    onEose?: () => void,
+    eoseTimeout?: number
   ): void {
     let relaySub = this.relaySubscriptions.get(relayUrl);
 
     if (!relaySub) {
-      // Create new relay subscription
-      const rxNostr = createRxNostr({ verifier });
+      // Create new relay subscription with eoseTimeout if provided
+      const rxNostr = createRxNostr({
+        verifier,
+        eoseTimeout: eoseTimeout ?? 30000,
+      });
       rxNostr.setDefaultRelays([relayUrl]);
       const rxReq = createRxForwardReq(`shared-${this.hashRelayUrl(relayUrl)}`);
 
@@ -68,7 +74,7 @@ class SharedSubscriptionManagerClass {
     }
 
     // Add/update subscriber
-    relaySub.subscribers.set(nodeId, { nodeId, filters, onEvent, onEose });
+    relaySub.subscribers.set(nodeId, { nodeId, filters, onEvent, onEose, eoseTimeout });
 
     // Debounce filter update
     this.scheduleFilterUpdate(relayUrl);

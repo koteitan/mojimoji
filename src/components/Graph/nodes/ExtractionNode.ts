@@ -12,7 +12,7 @@ import { SelectControl } from './controls';
 import type { EventSignal } from '../../../nostr/types';
 
 // Extraction field types
-export type ExtractionField = 'eventId' | 'author' | 'created_at' | '#e' | '#p' | '#r';
+export type ExtractionField = 'eventId' | 'author' | 'created_at' | '#e' | '#p' | '#q' | '#r';
 
 // Relay filter types (for #r extraction)
 export type RelayFilterType = 'all' | 'read' | 'write' | 'readWrite';
@@ -45,6 +45,7 @@ function getSocketForField(field: ExtractionField): ClassicPreset.Socket {
   switch (field) {
     case 'eventId':
     case '#e':
+    case '#q':
       return eventIdSocket;
     case 'author':
     case '#p':
@@ -101,6 +102,7 @@ export class ExtractionNode extends ClassicPreset.Node {
           { value: 'created_at', label: i18next.t('nodes.extraction.createdAt', 'Created At') },
           { value: '#e', label: '#e' },
           { value: '#p', label: '#p' },
+          { value: '#q', label: '#q' },
           { value: '#r', label: '#r' },
         ],
         (value) => {
@@ -216,6 +218,15 @@ export class ExtractionNode extends ClassicPreset.Node {
         }
         break;
 
+      case '#q':
+        // Extract all #q tags (quote references)
+        for (const tag of event.tags) {
+          if (tag[0] === 'q' && tag[1]) {
+            this.eventIdSubject.next({ eventId: tag[1], signal });
+          }
+        }
+        break;
+
       case '#p':
         // Extract all #p tags
         for (const tag of event.tags) {
@@ -262,6 +273,7 @@ export class ExtractionNode extends ClassicPreset.Node {
     switch (this.extractionField) {
       case 'eventId':
       case '#e':
+      case '#q':
         return this.eventIdOutput$;
       case 'author':
       case '#p':

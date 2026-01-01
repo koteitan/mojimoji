@@ -197,6 +197,59 @@ function encode(json) {
   }
 }
 
+// Convert 5-bit words to bytes without strict padding check
+function fromWordsLoose(words) {
+  let value = 0;
+  let bits = 0;
+  const result = [];
+
+  for (const word of words) {
+    value = (value << 5) | word;
+    bits += 5;
+
+    while (bits >= 8) {
+      bits -= 8;
+      result.push((value >> bits) & 0xff);
+    }
+  }
+
+  // Ignore remaining bits (loose mode)
+  return result;
+}
+
+// Manually decode bech32 without checksum validation (for -f option)
+function decodeNoChecksum(input) {
+  const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+  const trimmed = input.trim().toLowerCase();
+
+  // Find separator (last '1' in the string)
+  const sepIndex = trimmed.lastIndexOf('1');
+  if (sepIndex < 1) {
+    throw new Error('Invalid bech32: no separator found');
+  }
+
+  const prefix = trimmed.slice(0, sepIndex);
+  const datapart = trimmed.slice(sepIndex + 1);
+
+  // Decode data part to 5-bit words
+  const words = [];
+  for (const c of datapart) {
+    const idx = CHARSET.indexOf(c);
+    if (idx === -1) {
+      throw new Error(`Invalid character: ${c}`);
+    }
+    words.push(idx);
+  }
+
+  // Remove last 6 characters (checksum)
+  const dataWords = words.slice(0, -6);
+
+  // Convert 5-bit words to bytes (loose mode - ignore padding errors)
+  const data = fromWordsLoose(dataWords);
+
+  return { prefix, data };
+}
+
 // Read stdin
 async function readStdin() {
   const chunks = [];
@@ -206,16 +259,79 @@ async function readStdin() {
   return Buffer.concat(chunks).toString('utf-8');
 }
 
-// Main
-const arg = process.argv[2];
+// Parse arguments
+let forceMode = false;
+let inputArg = null;
 
-if (arg) {
+for (let i = 2; i < process.argv.length; i++) {
+  const arg = process.argv[i];
+  if (arg === '-f' || arg === '--force') {
+    forceMode = true;
+  } else if (!inputArg) {
+    inputArg = arg;
+  }
+}
+
+// Main
+if (inputArg) {
   // Decode mode: argument is bech32 string
   try {
-    console.log(JSON.stringify(decode(arg), null, 2));
+    console.log(JSON.stringify(decode(inputArg), null, 2));
   } catch (err) {
-    console.error(`Error: ${err.message}`);
-    process.exit(1);
+    if (forceMode) {
+      // Try to decode without checksum validation
+      try {
+        console.error(`Warning: ${err.message} (forcing decode)`);
+        const { prefix, data } = decodeNoChecksum(inputArg);
+        let result = { type: prefix, checksumInvalid: true };
+
+        switch (prefix) {
+          case 'npub':
+          case 'nsec':
+          case 'note':
+            Object.assign(result, decodeSimple(data));
+            break;
+          case 'nprofile':
+            Object.assign(result, decodeTLV(data, {
+              0: { name: 'pubkey', type: 'hex' },
+              1: { name: 'relay', type: 'relay' },
+            }));
+            break;
+          case 'nevent':
+            Object.assign(result, decodeTLV(data, {
+              0: { name: 'eventId', type: 'hex' },
+              1: { name: 'relay', type: 'relay' },
+              2: { name: 'author', type: 'hex' },
+              3: { name: 'kind', type: 'int' },
+            }));
+            break;
+          case 'naddr':
+            Object.assign(result, decodeTLV(data, {
+              0: { name: 'pubkey', type: 'hex' },
+              1: { name: 'relay', type: 'relay' },
+              2: { name: 'dTag', type: 'string' },
+              3: { name: 'kind', type: 'int' },
+            }));
+            break;
+          case 'nrelay':
+            Object.assign(result, decodeTLV(data, {
+              0: { name: 'url', type: 'string' },
+            }));
+            break;
+          default:
+            result.raw = toHex(data);
+            break;
+        }
+
+        console.log(JSON.stringify(result, null, 2));
+      } catch (forceErr) {
+        console.error(`Error: ${forceErr.message}`);
+        process.exit(1);
+      }
+    } else {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
   }
 } else {
   // Encode mode: read JSON from stdin
@@ -229,8 +345,11 @@ if (arg) {
     }
   }).catch(err => {
     console.error('Usage:');
-    console.error('  Decode: bech32 <npub|nsec|note|nprofile|nevent|naddr|nrelay>');
+    console.error('  Decode: bech32 [-f] <npub|nsec|note|nprofile|nevent|naddr|nrelay>');
     console.error('  Encode: echo \'{"type":"npub","hex":"..."}\' | bech32');
+    console.error('');
+    console.error('Options:');
+    console.error('  -f, --force  Decode even if checksum is invalid');
     process.exit(1);
   });
 }

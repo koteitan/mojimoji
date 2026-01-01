@@ -2,7 +2,7 @@ import { ClassicPreset } from 'rete';
 import { Subject, Observable, share } from 'rxjs';
 import i18next from 'i18next';
 import { eventSocket } from './types';
-import { TextAreaControl, SelectControl, FilterControl, type Filters } from './controls';
+import { TextAreaControl, SelectControl, FilterControl, TextInputControl, type Filters } from './controls';
 import type { NostrEvent, Profile, EventSignal } from '../../../nostr/types';
 import { decodeBech32ToHex, isHex64, parseDateToTimestamp } from '../../../nostr/types';
 import { isNip07Available } from '../../../nostr/nip07';
@@ -146,6 +146,7 @@ export class SimpleRelayNode extends ClassicPreset.Node {
   private relayUrls: string[] = [getDefaultRelayUrl()];
   private autoRelayUrls: string[] = []; // Cached relay URLs from kind:10002
   private filters: Filters = getDefaultFilters();
+  private eoseTimeout: number = 30000; // rx-nostr default
 
   // RxJS Observable for output events (with signal type)
   private eventSubject = new Subject<EventSignal>();
@@ -223,6 +224,23 @@ export class SimpleRelayNode extends ClassicPreset.Node {
         }
       )
     );
+
+    // EOSE timeout control
+    this.addControl(
+      'eoseTimeout',
+      new TextInputControl(
+        String(this.eoseTimeout),
+        i18next.t('nodes.modularRelay.eoseTimeout', 'EOSE Timeout'),
+        (value) => {
+          this.eoseTimeout = parseInt(value) || 30000;
+        },
+        true,
+        '30000',
+        false,
+        true, // horizontal
+        'ms'  // suffix
+      )
+    );
   }
 
   // Load relay URLs from kind:10002 via NIP-07
@@ -264,10 +282,11 @@ export class SimpleRelayNode extends ClassicPreset.Node {
       relaySource: this.relaySource,
       relayUrls: this.relayUrls,
       filters: this.filters,
+      eoseTimeout: this.eoseTimeout,
     };
   }
 
-  deserialize(data: { relaySource?: RelaySourceType; relayUrls: string[]; filters?: Filters; filterJson?: string }) {
+  deserialize(data: { relaySource?: RelaySourceType; relayUrls: string[]; filters?: Filters; filterJson?: string; eoseTimeout?: number }) {
     // Backward compatibility: default to 'manual' if relaySource is not present
     this.relaySource = data.relaySource || 'manual';
     this.relayUrls = data.relayUrls;
@@ -290,6 +309,9 @@ export class SimpleRelayNode extends ClassicPreset.Node {
       }
     }
 
+    // EOSE timeout migration (default to 30000 if not present)
+    this.eoseTimeout = data.eoseTimeout ?? 30000;
+
     // Update relay source control
     const relaySourceControl = this.controls['relaySource'] as SelectControl;
     if (relaySourceControl) {
@@ -310,6 +332,12 @@ export class SimpleRelayNode extends ClassicPreset.Node {
     const filterControl = this.controls['filter'] as FilterControl;
     if (filterControl) {
       filterControl.filters = this.filters;
+    }
+
+    // Update EOSE timeout control
+    const eoseTimeoutControl = this.controls['eoseTimeout'] as TextInputControl;
+    if (eoseTimeoutControl) {
+      eoseTimeoutControl.value = String(this.eoseTimeout);
     }
   }
 
@@ -355,7 +383,8 @@ export class SimpleRelayNode extends ClassicPreset.Node {
         () => {
           // EOSE callback
           this.eoseReceived = true;
-        }
+        },
+        this.eoseTimeout
       );
     }
   }
