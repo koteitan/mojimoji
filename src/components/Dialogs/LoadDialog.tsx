@@ -53,11 +53,39 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [relayUrls, setRelayUrls] = useState('');
   const [urlCopied, setUrlCopied] = useState(false);
+  const [useCompactLayout, setUseCompactLayout] = useState(false);
+  const nameRef = useRef<HTMLSpanElement>(null);
+
+  // Check graph name width after render to determine layout
+  // Only measure when in 1-row layout (useCompactLayout === false)
+  // because 2-row layout has wider graph name space
+  useEffect(() => {
+    if (source !== 'nostr' || nostrLoading || useCompactLayout) return;
+
+    // Small delay to ensure DOM is rendered
+    const timer = setTimeout(() => {
+      const nameEl = nameRef.current;
+      if (!nameEl) {
+        return;
+      }
+
+      const nameWidth = nameEl.offsetWidth;
+      const compact = nameWidth < 120;
+      alert(`Graph name width: ${nameWidth}px → ${compact ? '2-row' : '1-row'} layout`);
+      if (compact && !useCompactLayout) {
+        setUseCompactLayout(true);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [source, nostrLoading, nostrGraphs, useCompactLayout]);
 
   // Refresh data when dialog opens
   useEffect(() => {
     if (isOpen) {
       setRefreshKey(prev => prev + 1);
+      // Reset layout detection when dialog opens
+      setUseCompactLayout(false);
     }
   }, [isOpen]);
 
@@ -543,54 +571,75 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                         <span className="item-name">{item.name}</span>
                       </div>
                     ))}
-                    {nostrItems.filter(item => !item.isDirectory).map(item => {
+                    {nostrItems.filter(item => !item.isDirectory).map((item, index) => {
                       const profile = getCachedProfile(item.pubkey);
                       const isOwn = item.pubkey === userPubkey;
+                      const isFirst = index === 0;
                       return (
                         <div
                           key={item.path}
-                          className={`browser-item graph ${selectedNostrGraph?.path === item.path ? 'selected' : ''}`}
+                          className={`browser-item graph ${selectedNostrGraph?.path === item.path ? 'selected' : ''} ${useCompactLayout ? 'compact' : ''}`}
                           onClick={() => handleSelectNostrGraph(item)}
                         >
-                          <table className="item-table">
-                            <tbody>
-                              <tr className="item-row-1">
-                                <td className="item-cell-icon"><span className="item-icon">📄</span></td>
-                                <td className="item-cell-name"><span className="item-name">{item.name}</span></td>
-                                <td className="item-cell-visibility">
-                                  {item.visibility && (
-                                    <span className={`item-visibility ${item.visibility}`}>
-                                      {item.visibility === 'public' ? 'public' : 'for yourself'}
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                              <tr className="item-row-2">
-                                <td className="item-cell-author-icon">
-                                  <img src={profile?.picture || DEFAULT_AVATAR} alt="" className="item-author-picture" />
-                                </td>
-                                <td className="item-cell-author-name">
-                                  <span className="item-author-name">
-                                    {profile?.name || formatNpub(item.pubkey)}
+                          {useCompactLayout ? (
+                            <>
+                              <div className="item-row-1">
+                                <span className="item-icon">📄</span>
+                                <span className="item-name" ref={isFirst ? nameRef : undefined}>{item.name}</span>
+                                {item.visibility && (
+                                  <span className={`item-visibility ${item.visibility}`}>
+                                    {item.visibility === 'public' ? 'public' : 'for yourself'}
                                   </span>
-                                </td>
-                                <td className="item-cell-date-delete">
-                                  <span className="item-date">
-                                    {item.createdAt > 0 ? new Date(item.createdAt * 1000).toLocaleString() : ''}
-                                  </span>
-                                  {isOwn && (
-                                    <button
-                                      className="item-delete"
-                                      onClick={(e) => handleDeleteNostrGraph(e, item)}
-                                      title={t('dialogs.load.deleteGraph')}
-                                    >
-                                      ×
-                                    </button>
-                                  )}
-                                </td>
-                              </tr>
-                            </tbody>
-                          </table>
+                                )}
+                              </div>
+                              <div className="item-row-2">
+                                <img src={profile?.picture || DEFAULT_AVATAR} alt="" className="item-author-picture" />
+                                <span className="item-author-name">
+                                  {profile?.name || formatNpub(item.pubkey)}
+                                </span>
+                                <span className="item-date">
+                                  {item.createdAt > 0 ? new Date(item.createdAt * 1000).toLocaleString() : ''}
+                                </span>
+                                {isOwn && (
+                                  <button
+                                    className="item-delete"
+                                    onClick={(e) => handleDeleteNostrGraph(e, item)}
+                                    title={t('dialogs.load.deleteGraph')}
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <span className="item-icon">📄</span>
+                              <span className="item-name" ref={isFirst ? nameRef : undefined}>{item.name}</span>
+                              {item.visibility && (
+                                <span className={`item-visibility ${item.visibility}`}>
+                                  {item.visibility === 'public' ? 'public' : 'for yourself'}
+                                </span>
+                              )}
+                              <span className="item-author-info">
+                                <img src={profile?.picture || DEFAULT_AVATAR} alt="" className="item-author-picture" />
+                                <span className="item-author-name">
+                                  {profile?.name || formatNpub(item.pubkey)}
+                                </span>
+                              </span>
+                              <span className="item-date">
+                                {item.createdAt > 0 ? new Date(item.createdAt * 1000).toLocaleString() : ''}
+                              </span>
+                              {isOwn && (
+                                <button
+                                  className="item-delete"
+                                  onClick={(e) => handleDeleteNostrGraph(e, item)}
+                                  title={t('dialogs.load.deleteGraph')}
+                                >
+                                  ×
+                                </button>
+                              )}
+                            </>
+                          )}
                         </div>
                       );
                     })}

@@ -17,7 +17,7 @@
   background: #1e1e1e;
   border: 1px solid #444;
   border-radius: 8px;
-  width: 500px;
+  width: 600px;
   max-width: 90vw;
   max-height: 80vh;
   display: flex;
@@ -173,6 +173,11 @@
 
 .browser-item.graph {
   color: #ccc;
+}
+
+.browser-item.graph.compact {
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .item-icon {
@@ -578,70 +583,57 @@
   white-space: nowrap;
 }
 
-/* Table layout for graph browser items */
-.item-table {
+/* Mobile 2-row layout */
+.browser-item.graph .item-row-1,
+.browser-item.graph .item-row-2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
-  border-collapse: collapse;
 }
 
-.item-table td {
-  padding: 0;
-  vertical-align: middle;
+.browser-item.graph .item-row-1 .item-icon {
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
 }
 
-.item-cell-icon {
-  width: 24px;
-}
-
-.item-cell-name {
-  /* flex: 1 equivalent */
-}
-
-.item-cell-name .item-name {
-  display: block;
+.browser-item.graph .item-row-1 .item-name {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.item-cell-visibility {
-  text-align: right;
+.browser-item.graph .item-row-2 {
+  margin-top: 4px;
+}
+
+.browser-item.graph .item-row-2 .item-author-picture {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.browser-item.graph .item-row-2 .item-author-name {
+  flex: 1;
+  font-size: 11px;
+  color: #888;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.item-cell-author-icon {
-  width: 24px;
+.browser-item.graph .item-row-2 .item-date {
+  font-size: 11px;
+  color: #888;
+  flex-shrink: 0;
 }
 
-.item-cell-author-name .item-author-name {
-  max-width: none;
-}
-
-.item-cell-date-delete {
-  text-align: right;
-  white-space: nowrap;
-}
-
-.item-cell-date-delete .item-delete {
-  margin-left: 4px;
-}
-
-/* Desktop: hide second row, show inline */
-.item-row-2 {
-  display: none;
-}
-
-/* Mobile: show both rows */
+/* Filter options: 2x2 grid on mobile */
 @media (max-width: 500px) {
-  .item-row-2 {
-    display: table-row;
-  }
-
-  .item-row-2 td {
-    padding-top: 4px;
-  }
-
-  /* Filter options: 2x2 grid */
   .dialog-radio-group {
     display: grid;
     grid-template-columns: 1fr 1fr;

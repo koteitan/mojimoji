@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getGraphsInDirectory, deleteGraphAtPath, deleteGraphsInDirectory } from '../../utils/localStorage';
 import { isNip07Available, getPubkey } from '../../nostr/nip07';
@@ -42,11 +42,38 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
   // Share dialog state (for Nostr saves)
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [savedPath, setSavedPath] = useState<string | null>(null);
+  const [useCompactLayout, setUseCompactLayout] = useState(false);
+  const nameRef = useRef<HTMLSpanElement>(null);
+
+  // Check graph name width after render to determine layout
+  // Only measure when in 1-row layout (useCompactLayout === false)
+  // because 2-row layout has wider graph name space
+  useEffect(() => {
+    if (destination !== 'nostr' || nostrLoading) return;
+
+    const timer = setTimeout(() => {
+      const nameEl = nameRef.current;
+      if (!nameEl) {
+        return;
+      }
+
+      const nameWidth = nameEl.offsetWidth;
+      const compact = nameWidth < 120;
+      alert(`Graph name width: ${nameWidth}px → ${compact ? '2-row' : '1-row'} layout`);
+      if (compact && !useCompactLayout) {
+        setUseCompactLayout(true);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [destination, nostrLoading, nostrGraphs, useCompactLayout]);
 
   // Refresh data when dialog opens
   useEffect(() => {
     if (isOpen) {
       setRefreshKey(prev => prev + 1);
+      // Reset layout detection when dialog opens
+      setUseCompactLayout(false);
     }
   }, [isOpen]);
 
@@ -371,43 +398,78 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                         )}
                       </div>
                     ))}
-                    {items.filter(item => !item.isDirectory).map(item => {
+                    {items.filter(item => !item.isDirectory).map((item, index) => {
                       const timestamp = 'savedAt' in item ? item.savedAt : ('createdAt' in item ? (item as NostrGraphItem).createdAt * 1000 : 0);
                       const nostrItem = destination === 'nostr' ? item as NostrGraphItem : null;
                       const profile = nostrItem ? getCachedProfile(nostrItem.pubkey) : null;
+                      const isFirst = index === 0;
                       return (
                         <div
                           key={item.path}
-                          className={`browser-item graph ${graphName === item.name ? 'selected' : ''}`}
+                          className={`browser-item graph ${graphName === item.name ? 'selected' : ''} ${useCompactLayout ? 'compact' : ''}`}
                           onClick={() => handleSelectGraph(item.name)}
                         >
-                          <span className="item-icon">📄</span>
-                          <span className="item-name">{item.name}</span>
-                          {/* Visibility badge (Nostr only) */}
-                          {nostrItem && nostrItem.visibility && (
-                            <span className={`item-visibility ${nostrItem.visibility}`}>
-                              {nostrItem.visibility === 'public' ? 'public' : 'for yourself'}
-                            </span>
-                          )}
-                          {/* Author info (Nostr only) */}
-                          {nostrItem && (
-                            <span className="item-author-info">
-                              <img src={profile?.picture || DEFAULT_AVATAR} alt="" className="item-author-picture" />
-                              <span className="item-author-name">
-                                {profile?.name || formatNpub(nostrItem.pubkey)}
+                          {useCompactLayout ? (
+                            <>
+                              <div className="item-row-1">
+                                <span className="item-icon">📄</span>
+                                <span className="item-name" ref={isFirst ? nameRef : undefined}>{item.name}</span>
+                                {nostrItem && nostrItem.visibility && (
+                                  <span className={`item-visibility ${nostrItem.visibility}`}>
+                                    {nostrItem.visibility === 'public' ? 'public' : 'for yourself'}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="item-row-2">
+                                {nostrItem && (
+                                  <>
+                                    <img src={profile?.picture || DEFAULT_AVATAR} alt="" className="item-author-picture" />
+                                    <span className="item-author-name">
+                                      {profile?.name || formatNpub(nostrItem.pubkey)}
+                                    </span>
+                                  </>
+                                )}
+                                <span className="item-date">
+                                  {timestamp > 0 ? new Date(timestamp).toLocaleString() : ''}
+                                </span>
+                                <button
+                                  className="item-delete"
+                                  onClick={(e) => handleDeleteGraph(e, item.path, item.name, nostrItem?.event?.id)}
+                                  title={t('dialogs.load.deleteGraph')}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <span className="item-icon">📄</span>
+                              <span className="item-name" ref={isFirst ? nameRef : undefined}>{item.name}</span>
+                              {nostrItem && nostrItem.visibility && (
+                                <span className={`item-visibility ${nostrItem.visibility}`}>
+                                  {nostrItem.visibility === 'public' ? 'public' : 'for yourself'}
+                                </span>
+                              )}
+                              {nostrItem && (
+                                <span className="item-author-info">
+                                  <img src={profile?.picture || DEFAULT_AVATAR} alt="" className="item-author-picture" />
+                                  <span className="item-author-name">
+                                    {profile?.name || formatNpub(nostrItem.pubkey)}
+                                  </span>
+                                </span>
+                              )}
+                              <span className="item-date">
+                                {timestamp > 0 ? new Date(timestamp).toLocaleString() : ''}
                               </span>
-                            </span>
+                              <button
+                                className="item-delete"
+                                onClick={(e) => handleDeleteGraph(e, item.path, item.name, nostrItem?.event?.id)}
+                                title={t('dialogs.load.deleteGraph')}
+                              >
+                                ×
+                              </button>
+                            </>
                           )}
-                          <span className="item-date">
-                            {timestamp > 0 ? new Date(timestamp).toLocaleString() : ''}
-                          </span>
-                          <button
-                            className="item-delete"
-                            onClick={(e) => handleDeleteGraph(e, item.path, item.name, nostrItem?.event?.id)}
-                            title={t('dialogs.load.deleteGraph')}
-                          >
-                            ×
-                          </button>
                         </div>
                       );
                     })}
