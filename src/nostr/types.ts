@@ -272,11 +272,24 @@ export interface TimelineEvent {
 }
 
 // Timeline item types for different data types
-export type TimelineItemType = 'event' | 'eventId' | 'pubkey' | 'datetime' | 'relay' | 'integer' | 'flag' | 'relayStatus' | 'complete';
+export type TimelineItemType = 'event' | 'eventId' | 'pubkey' | 'datetime' | 'relay' | 'integer' | 'flag' | 'relayStatus' | 'complete' | 'reactionGroup';
 
 export interface TimelineItemBase {
   id: string;
   type: TimelineItemType;
+}
+
+// Reaction author info for grouped reactions
+export interface ReactionAuthor {
+  pubkey: string;
+  profile?: Profile;
+  timestamp: number;
+}
+
+// Grouped reactions by content (emoji)
+export interface ReactionsByContent {
+  content: string;  // The reaction emoji/text (e.g., "+", "🔥", "👍")
+  authors: ReactionAuthor[];
 }
 
 export interface TimelineEventItem extends TimelineItemBase {
@@ -326,6 +339,16 @@ export interface TimelineCompleteItem extends TimelineItemBase {
   type: 'complete';
 }
 
+// Grouped reactions to a single target event (bump-up system)
+export interface TimelineReactionGroupItem extends TimelineItemBase {
+  type: 'reactionGroup';
+  targetEventId: string;
+  targetEvent?: NostrEvent;
+  targetProfile?: Profile;
+  reactions: ReactionsByContent[];
+  newestTimestamp: number;  // For sorting/bumping
+}
+
 export type TimelineItem =
   | TimelineEventItem
   | TimelineEventIdItem
@@ -335,7 +358,8 @@ export type TimelineItem =
   | TimelineIntegerItem
   | TimelineFlagItem
   | TimelineRelayStatusItem
-  | TimelineCompleteItem;
+  | TimelineCompleteItem
+  | TimelineReactionGroupItem;
 
 // Extract content warning from event tags (NIP-36)
 // Returns: string (reason), null (warning with no reason), undefined (no warning)
@@ -343,6 +367,44 @@ export function extractContentWarning(event: NostrEvent): string | null | undefi
   const cwTag = event.tags.find(tag => tag[0] === 'content-warning');
   if (!cwTag) return undefined;
   return cwTag[1] || null; // Return reason or null if no reason provided
+}
+
+// Reference type for quote/reply/repost/reaction events
+export type EventReferenceType = 'quote' | 'reply' | 'repost' | 'reaction';
+
+// Detect if an event references another event and return the reference type
+// Returns null if no reference found
+// Reference rules:
+// - Quote: kind:1 with #q tag
+// - Reply: kind:1 with #e tag (but no #q tag)
+// - Repost: kind:6 with #e tag
+// - Reaction: kind:7 with #e tag
+export function detectEventReference(event: NostrEvent): { type: EventReferenceType; eventId: string } | null {
+  const hasQTag = event.tags.find(tag => tag[0] === 'q');
+  const hasETag = event.tags.find(tag => tag[0] === 'e');
+
+  if (event.kind === 1) {
+    // Quote: has #q tag
+    if (hasQTag) {
+      return { type: 'quote', eventId: hasQTag[1] };
+    }
+    // Reply: has #e tag (but not quote)
+    if (hasETag) {
+      return { type: 'reply', eventId: hasETag[1] };
+    }
+  } else if (event.kind === 6) {
+    // Repost: kind 6 with #e tag
+    if (hasETag) {
+      return { type: 'repost', eventId: hasETag[1] };
+    }
+  } else if (event.kind === 7) {
+    // Reaction: kind 7 with #e tag
+    if (hasETag) {
+      return { type: 'reaction', eventId: hasETag[1] };
+    }
+  }
+
+  return null;
 }
 
 // Extract image URLs from text content

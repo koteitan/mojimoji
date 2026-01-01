@@ -50,7 +50,8 @@ import { saveGraphToNostr, loadGraphByPath, loadGraphByEventId, loadGraphByNaddr
 import { getPubkey, isNip07Available } from '../../nostr/nip07';
 import { SubscriptionTracker } from '../../nostr/SubscriptionTracker';
 import { SharedSubscriptionManager } from '../../nostr/SharedSubscriptionManager';
-import { extractContentWarning, decodeBech32ToHex, isHex64, naddrDecode, eventIdToNevent, pubkeyToNpub, type EventSignal, type TimelineItem } from '../../nostr/types';
+import { extractContentWarning, decodeBech32ToHex, isHex64, naddrDecode, eventIdToNevent, pubkeyToNpub, detectEventReference, type EventSignal, type TimelineItem, type TimelineReactionGroupItem } from '../../nostr/types';
+import { EventFetcher } from '../../nostr/EventFetcher';
 import { merge, type Observable, type Subscription } from 'rxjs';
 import { APP_VERSION } from '../../App';
 import './GraphEditor.css';
@@ -1353,12 +1354,130 @@ export function GraphEditor({
           }
         };
 
+        // Helper to handle reaction grouping
+        const handleReactionSignal = (eventSignal: EventSignal) => {
+          const reactionEvent = eventSignal.event;
+          const reference = detectEventReference(reactionEvent);
+          if (!reference || reference.type !== 'reaction') return;
+
+          const targetEventId = reference.eventId;
+          const reactionContent = reactionEvent.content || '+';
+          const authorPubkey = reactionEvent.pubkey;
+          const timestamp = reactionEvent.created_at;
+          const authorProfile = getCachedProfile(authorPubkey);
+
+          let items = itemsRef.current.get(timelineNodeId) || [];
+
+          // Find existing reaction group for this target event
+          const groupId = `reaction-group-${targetEventId}`;
+          let existingGroupIndex = items.findIndex(
+            item => item.type === 'reactionGroup' && item.id === groupId
+          );
+
+          if (existingGroupIndex >= 0) {
+            // Update existing group
+            const existingGroup = items[existingGroupIndex] as TimelineReactionGroupItem;
+
+            // Find or create reaction content group
+            let contentGroup = existingGroup.reactions.find(r => r.content === reactionContent);
+            if (!contentGroup) {
+              contentGroup = { content: reactionContent, authors: [] };
+              existingGroup.reactions.push(contentGroup);
+            }
+
+            // Check if author already exists in this content group
+            if (!contentGroup.authors.some(a => a.pubkey === authorPubkey)) {
+              contentGroup.authors.push({
+                pubkey: authorPubkey,
+                profile: authorProfile,
+                timestamp,
+              });
+            }
+
+            // Update newest timestamp for bump-up
+            existingGroup.newestTimestamp = Math.max(existingGroup.newestTimestamp, timestamp);
+
+            // Create new items array with updated group
+            const updatedItems = [...items];
+            updatedItems[existingGroupIndex] = { ...existingGroup };
+
+            // Sort: reaction groups by newestTimestamp, events by created_at
+            updatedItems.sort((a, b) => {
+              const aTime = a.type === 'reactionGroup' ? a.newestTimestamp :
+                           a.type === 'event' ? a.event.created_at : 0;
+              const bTime = b.type === 'reactionGroup' ? b.newestTimestamp :
+                           b.type === 'event' ? b.event.created_at : 0;
+              return bTime - aTime;
+            });
+
+            itemsRef.current.set(timelineNodeId, updatedItems);
+            onItemsUpdate(timelineNodeId, updatedItems);
+          } else {
+            // Create new reaction group
+            const newGroup: TimelineReactionGroupItem = {
+              id: groupId,
+              type: 'reactionGroup',
+              targetEventId,
+              reactions: [{
+                content: reactionContent,
+                authors: [{
+                  pubkey: authorPubkey,
+                  profile: authorProfile,
+                  timestamp,
+                }],
+              }],
+              newestTimestamp: timestamp,
+            };
+
+            // Fetch target event
+            EventFetcher.queueRequest(targetEventId, (fetchedEvent) => {
+              if (fetchedEvent) {
+                // Update the group with fetched event
+                const currentItems = itemsRef.current.get(timelineNodeId) || [];
+                const groupIdx = currentItems.findIndex(item => item.id === groupId);
+                if (groupIdx >= 0) {
+                  const group = currentItems[groupIdx] as TimelineReactionGroupItem;
+                  group.targetEvent = fetchedEvent;
+                  group.targetProfile = getCachedProfile(fetchedEvent.pubkey);
+                  const updatedItems = [...currentItems];
+                  updatedItems[groupIdx] = { ...group };
+                  itemsRef.current.set(timelineNodeId, updatedItems);
+                  onItemsUpdate(timelineNodeId, updatedItems);
+                }
+              }
+            });
+
+            // Add new group and sort
+            const newItems = [...items, newGroup].sort((a, b) => {
+              const aTime = a.type === 'reactionGroup' ? a.newestTimestamp :
+                           a.type === 'event' ? a.event.created_at : 0;
+              const bTime = b.type === 'reactionGroup' ? b.newestTimestamp :
+                           b.type === 'event' ? b.event.created_at : 0;
+              return bTime - aTime;
+            });
+
+            // Limit to 100 items
+            const limitedItems = newItems.slice(0, 100);
+            itemsRef.current.set(timelineNodeId, limitedItems);
+            onItemsUpdate(timelineNodeId, limitedItems);
+          }
+        };
+
         // Set the signal callback - handles both 'add' and 'remove' signals
         timelineNode.setOnTimelineSignal((signal: TimelineSignal) => {
           const items = itemsRef.current.get(timelineNodeId) || [];
           const itemId = generateItemId(signal);
 
           if (signal.signal === 'add') {
+            // Check if this is a reaction event (kind:7)
+            if (signal.type === 'event') {
+              const eventSignal = signal.data as EventSignal;
+              if (eventSignal.event.kind === 7) {
+                handleReactionSignal(eventSignal);
+                return;
+              }
+            }
+
             // Skip if item is in excluded set (remove arrived before add)
             if (excludedSet.has(itemId)) {
               // Remove from excluded set since we've now processed the add
@@ -1375,10 +1494,11 @@ export function GraphEditor({
             let newItems: TimelineItem[];
             if (signal.type === 'event') {
               newItems = [...items, newItem].sort((a, b) => {
-                if (a.type === 'event' && b.type === 'event') {
-                  return b.event.created_at - a.event.created_at;
-                }
-                return 0;
+                const aTime = a.type === 'reactionGroup' ? a.newestTimestamp :
+                             a.type === 'event' ? a.event.created_at : 0;
+                const bTime = b.type === 'reactionGroup' ? b.newestTimestamp :
+                             b.type === 'event' ? b.event.created_at : 0;
+                return bTime - aTime;
               });
             } else {
               // For non-event types, prepend (newest first)
