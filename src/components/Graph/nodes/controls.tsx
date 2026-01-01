@@ -97,13 +97,19 @@ export class TextInputControl extends ClassicPreset.Control {
   placeholder: string;
   onChange: (value: string) => void;
   rebuildPipeline: boolean;
+  disabled: boolean;
+  horizontal: boolean;
+  suffix: string;
 
   constructor(
     value: string,
     label: string,
     onChange: (value: string) => void,
     rebuildPipeline: boolean = true,
-    placeholder: string = ''
+    placeholder: string = '',
+    disabled: boolean = false,
+    horizontal: boolean = false,
+    suffix: string = ''
   ) {
     super();
     this.value = value;
@@ -111,6 +117,9 @@ export class TextInputControl extends ClassicPreset.Control {
     this.placeholder = placeholder;
     this.onChange = onChange;
     this.rebuildPipeline = rebuildPipeline;
+    this.disabled = disabled;
+    this.horizontal = horizontal;
+    this.suffix = suffix;
   }
 }
 
@@ -227,16 +236,22 @@ export class ToggleControl extends ClassicPreset.Control {
   value: boolean;
   label: string;
   onChange: (value: boolean) => void;
+  offLabel: string;
+  onLabel: string;
 
   constructor(
     value: boolean,
     label: string,
-    onChange: (value: boolean) => void
+    onChange: (value: boolean) => void,
+    offLabel: string = 'off',
+    onLabel: string = 'on'
   ) {
     super();
     this.value = value;
     this.label = label;
     this.onChange = onChange;
+    this.offLabel = offLabel;
+    this.onLabel = onLabel;
   }
 }
 

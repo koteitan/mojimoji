@@ -195,6 +195,29 @@ svg {
   gap: 4px;
 }
 
+.control-wrapper-horizontal {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.control-input-with-suffix {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.control-wrapper-horizontal .control-input-with-suffix .control-input {
+  width: auto;
+  min-width: 60px;
+  max-width: 80px;
+}
+
+.control-suffix {
+  font-size: 11px;
+  color: #888;
+}
+
 .control-label {
   font-size: 11px;
   color: #888;

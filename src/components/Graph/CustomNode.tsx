@@ -34,23 +34,27 @@ function TextInputControlComponent({ control, nodeId }: { control: TextInputCont
   }, [control.value]);
 
   return (
-    <div className="control-wrapper">
+    <div className={`control-wrapper${control.horizontal ? ' control-wrapper-horizontal' : ''}`}>
       <label className="control-label">{control.label}</label>
-      <input
-        type="text"
-        className="control-input"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={() => {
-          // Only dispatch change event if value actually changed
-          if (value !== control.value) {
-            control.value = value;
-            control.onChange(value);
-            dispatchControlChange(nodeId, control.rebuildPipeline);
-          }
-        }}
-        onPointerDown={(e) => e.stopPropagation()}
-      />
+      <div className="control-input-with-suffix">
+        <input
+          type="text"
+          className={`control-input${control.disabled ? ' disabled' : ''}`}
+          value={value}
+          disabled={control.disabled}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={() => {
+            // Only dispatch change event if value actually changed
+            if (value !== control.value) {
+              control.value = value;
+              control.onChange(value);
+              dispatchControlChange(nodeId, control.rebuildPipeline);
+            }
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+        />
+        {control.suffix && <span className="control-suffix">{control.suffix}</span>}
+      </div>
     </div>
   );
 }
@@ -185,7 +189,7 @@ function ToggleControlComponent({ control, nodeId }: { control: ToggleControl; n
     <div className="control-wrapper toggle-control-wrapper">
       <label className="control-label">{control.label}</label>
       <div className="toggle-switch-container">
-        <span className={`toggle-label ${!value ? 'active' : ''}`}>off</span>
+        <span className={`toggle-label ${!value ? 'active' : ''}`}>{control.offLabel}</span>
         <button
           className={`toggle-switch ${value ? 'on' : 'off'}`}
           onClick={() => {
@@ -199,7 +203,7 @@ function ToggleControlComponent({ control, nodeId }: { control: ToggleControl; n
         >
           <span className="toggle-slider" />
         </button>
-        <span className={`toggle-label ${value ? 'active' : ''}`}>on</span>
+        <span className={`toggle-label ${value ? 'active' : ''}`}>{control.onLabel}</span>
       </div>
     </div>
   );

@@ -66,7 +66,9 @@
     },
     "modularRelay": {
       "title": "モジュラーリレー",
-      "externalTrigger": "外部トリガー",
+      "subTrigger": "購読トリガー",
+      "strategy": "ストラテジー",
+      "eoseTimeout": "EOSE タイムアウト",
       "inputs": "入力",
       "source": "ソース",
       "sourceAuto": "auto (NIP-07→kind:10002)",

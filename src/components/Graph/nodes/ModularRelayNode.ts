@@ -1,5 +1,7 @@
 import { ClassicPreset } from 'rete';
 import { Subject, Observable, share } from 'rxjs';
+import { createRxNostr, createRxBackwardReq } from 'rx-nostr';
+import { verifier } from '@rx-nostr/crypto';
 import i18next from 'i18next';
 import {
   eventSocket,
@@ -12,12 +14,15 @@ import {
   relayStatusSocket,
 } from './types';
 import type { RelayStatusType } from './types';
-import { FilterControl, ToggleControl, isSocketField, getBaseField } from './controls';
+import { FilterControl, ToggleControl, TextInputControl, isSocketField, getBaseField } from './controls';
 import type { Filters } from './controls';
 import type { NostrEvent, Profile, EventSignal } from '../../../nostr/types';
 import { decodeBech32ToHex, isHex64, parseDateToTimestamp } from '../../../nostr/types';
 import { findPubkeysByName } from '../../../nostr/profileCache';
 import { SharedSubscriptionManager } from '../../../nostr/SharedSubscriptionManager';
+
+// Strategy type for subscription mode
+export type SubscriptionStrategy = 'forward' | 'backward';
 
 // Signal type for relay status output
 export interface RelayStatusSignal {
@@ -95,6 +100,16 @@ export class ModularRelayNode extends ClassicPreset.Node {
   // External trigger setting
   private externalTrigger: boolean = false;
 
+  // Subscription strategy (forward = realtime, backward = one-shot)
+  private strategy: SubscriptionStrategy = 'forward';
+
+  // EOSE timeout for backward strategy (rx-nostr default: 30000ms)
+  private eoseTimeout: number = 30000;
+
+  // Backward subscription resources
+  private backwardRxNostr: ReturnType<typeof createRxNostr> | null = null;
+  private backwardSubscription: { unsubscribe: () => void } | null = null;
+
   // Trigger input
   private triggerSubscription: { unsubscribe: () => void } | null = null;
   private triggerState: boolean = true; // default true when no external trigger
@@ -134,11 +149,49 @@ export class ModularRelayNode extends ClassicPreset.Node {
       'externalTrigger',
       new ToggleControl(
         this.externalTrigger,
-        i18next.t('nodes.modularRelay.externalTrigger', 'External Trigger'),
+        i18next.t('nodes.modularRelay.subTrigger', 'sub trigger'),
         (value) => {
           this.externalTrigger = value;
           this.updateTriggerSocket();
-        }
+        },
+        'auto',
+        'manual'
+      )
+    );
+
+    // Strategy toggle (forward = realtime stream, backward = one-shot query)
+    this.addControl(
+      'strategy',
+      new ToggleControl(
+        this.strategy === 'forward',
+        i18next.t('nodes.modularRelay.strategy', 'Strategy'),
+        (value) => {
+          this.strategy = value ? 'forward' : 'backward';
+          // Enable/disable eoseTimeout control based on strategy
+          const eoseControl = this.controls['eoseTimeout'] as TextInputControl;
+          if (eoseControl) {
+            eoseControl.disabled = this.strategy === 'forward';
+          }
+        },
+        'backward',
+        'forward'
+      )
+    );
+
+    // EOSE timeout control (only applicable for backward strategy)
+    this.addControl(
+      'eoseTimeout',
+      new TextInputControl(
+        String(this.eoseTimeout),
+        i18next.t('nodes.modularRelay.eoseTimeout', 'EOSE timeout'),
+        (value) => {
+          this.eoseTimeout = parseInt(value) || 30000;
+        },
+        true,
+        '30000',
+        this.strategy === 'forward', // disabled when forward
+        true, // horizontal layout
+        'ms'  // suffix
       )
     );
 
@@ -569,7 +622,18 @@ export class ModularRelayNode extends ClassicPreset.Node {
     if (filters.length === 0) return;
 
     this.subscribedRelayUrls = [...relayUrls];
-    for (const relayUrl of this.subscribedRelayUrls) {
+
+    if (this.strategy === 'backward') {
+      // Backward strategy: one-shot query, complete after EOSE
+      this.startBackwardSubscription(relayUrls, filters);
+    } else {
+      // Forward strategy: realtime stream (default)
+      this.startForwardSubscription(relayUrls, filters);
+    }
+  }
+
+  private startForwardSubscription(relayUrls: string[], filters: Record<string, unknown>[]): void {
+    for (const relayUrl of relayUrls) {
       const rxNostr = SharedSubscriptionManager.getRxNostr(relayUrl);
 
       const connectionStateSub = rxNostr.createConnectionStateObservable().subscribe({
@@ -618,11 +682,92 @@ export class ModularRelayNode extends ClassicPreset.Node {
     }
   }
 
+  private startBackwardSubscription(relayUrls: string[], filters: Record<string, unknown>[]): void {
+    // Create dedicated rxNostr for backward subscription with eoseTimeout
+    this.backwardRxNostr = createRxNostr({ verifier, eoseTimeout: this.eoseTimeout });
+    this.backwardRxNostr.setDefaultRelays(relayUrls);
+
+    const rxReq = createRxBackwardReq();
+
+    // Track EOSE per relay to know when all are done
+    const pendingRelays = new Set(relayUrls);
+
+    this.backwardSubscription = this.backwardRxNostr.use(rxReq).subscribe({
+      next: (packet) => {
+        this.eventCount++;
+        this.eventSubject.next({ event: packet.event as NostrEvent, signal: 'add' });
+      },
+      complete: () => {
+        // All relays have sent EOSE and closed
+        this.eoseReceived = true;
+        for (const relayUrl of relayUrls) {
+          this.relayStatusSubject.next({ relay: relayUrl, status: 'EOSE' });
+        }
+        // Complete the event subject for backward strategy
+        this.eventSubject.complete();
+        // Recreate subject for potential future subscriptions
+        this.eventSubject = new Subject<EventSignal>();
+        this.output$ = this.eventSubject.asObservable().pipe(share());
+      },
+    });
+
+    // Monitor connection state
+    const connectionStateSub = this.backwardRxNostr.createConnectionStateObservable().subscribe({
+      next: (packet) => {
+        let status: RelayStatusType;
+        switch (packet.state) {
+          case 'initialized':
+            status = 'idle';
+            break;
+          case 'connecting':
+          case 'waiting-for-retrying':
+            status = 'connecting';
+            break;
+          case 'connected':
+            status = 'sub-stored';
+            break;
+          case 'dormant':
+          case 'terminated':
+            status = 'closed';
+            pendingRelays.delete(packet.from);
+            break;
+          case 'error':
+          case 'rejected':
+            status = 'error';
+            pendingRelays.delete(packet.from);
+            break;
+          default:
+            status = 'idle';
+        }
+        this.relayStatusSubject.next({ relay: packet.from, status });
+      },
+    });
+    this.connectionStateSubscriptions.set('backward-connection', connectionStateSub);
+
+    // Emit each filter separately (rx-nostr expects single filter per emit)
+    for (const filter of filters) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      rxReq.emit(filter as any, { relays: relayUrls });
+    }
+    rxReq.over();
+  }
+
   stopSubscription(): void {
+    // Stop forward subscriptions
     for (const relayUrl of this.subscribedRelayUrls) {
       SharedSubscriptionManager.unsubscribe(relayUrl, this.id);
     }
     this.subscribedRelayUrls = [];
+
+    // Stop backward subscription
+    if (this.backwardSubscription) {
+      this.backwardSubscription.unsubscribe();
+      this.backwardSubscription = null;
+    }
+    if (this.backwardRxNostr) {
+      this.backwardRxNostr.dispose();
+      this.backwardRxNostr = null;
+    }
 
     for (const sub of this.connectionStateSubscriptions.values()) {
       sub.unsubscribe();
@@ -671,14 +816,20 @@ export class ModularRelayNode extends ClassicPreset.Node {
     return 'closed';
   }
 
+  getStrategy(): SubscriptionStrategy {
+    return this.strategy;
+  }
+
   serialize() {
     return {
       filters: this.filters,
       externalTrigger: this.externalTrigger,
+      strategy: this.strategy,
+      eoseTimeout: this.eoseTimeout,
     };
   }
 
-  deserialize(data: { filters?: Filters; externalTrigger?: boolean }) {
+  deserialize(data: { filters?: Filters; externalTrigger?: boolean; strategy?: SubscriptionStrategy; eoseTimeout?: number }) {
     if (data.filters) {
       this.filters = data.filters;
     }
@@ -690,6 +841,30 @@ export class ModularRelayNode extends ClassicPreset.Node {
         toggleControl.value = this.externalTrigger;
       }
       this.updateTriggerSocket();
+    }
+
+    if (data.strategy !== undefined) {
+      this.strategy = data.strategy;
+    } else {
+      // Migration: old graphs without strategy attribute always used forward
+      this.strategy = 'forward';
+    }
+    const strategyControl = this.controls['strategy'] as ToggleControl;
+    if (strategyControl) {
+      strategyControl.value = this.strategy === 'forward';
+    }
+
+    // EOSE timeout migration
+    if (data.eoseTimeout !== undefined) {
+      this.eoseTimeout = data.eoseTimeout;
+    } else {
+      // Migration: old graphs without eoseTimeout use default (30000ms)
+      this.eoseTimeout = 30000;
+    }
+    const eoseControl = this.controls['eoseTimeout'] as TextInputControl;
+    if (eoseControl) {
+      eoseControl.value = String(this.eoseTimeout);
+      eoseControl.disabled = this.strategy === 'forward';
     }
 
     const filterControl = this.controls['filter'] as FilterControl;
