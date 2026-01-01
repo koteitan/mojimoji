@@ -355,6 +355,7 @@
 
 .dialog-checkbox-group input[type="checkbox"] {
   margin: 0;
+  accent-color: #666;
 }
 
 .dialog-checkbox-group input[type="checkbox"]:disabled {

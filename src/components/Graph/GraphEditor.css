@@ -58,7 +58,7 @@
 
 .graph-toolbar button:hover {
   background: #3a3a3a;
-  border-color: #646cff;
+  border-color: #666;
 }
 
 .graph-toolbar button.post-btn {
@@ -277,7 +277,7 @@ svg {
 .control-textarea:focus,
 .control-select:focus {
   outline: none;
-  border-color: #646cff;
+  border-color: #666;
 }
 
 .control-textarea {
