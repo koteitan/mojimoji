@@ -9,6 +9,8 @@ lerna-debug.log*
 live-server-*.log
 step.md
 task.md
+issues.md
+memo.md
 
 node_modules
 dist

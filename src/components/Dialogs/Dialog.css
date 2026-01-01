@@ -397,6 +397,16 @@
   background: #5b8;
 }
 
+.dialog-button.danger {
+  background: #a44;
+  border-color: #c55;
+  color: #fff;
+}
+
+.dialog-button.danger:hover:not(:disabled) {
+  background: #c55;
+}
+
 .dialog-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;

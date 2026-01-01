@@ -252,30 +252,49 @@ Event from bob   → broadcast to Subscriber B only
 
 ```mermaid
 stateDiagram-v2
-    [*] --> idle
-    idle --> waiting_sockets: setSocketInput() called
-    waiting_sockets --> waiting_sockets: receiving socket values
-    waiting_sockets --> waiting_relay: all socket values received
-    waiting_relay --> waiting_sockets: missing value
-    waiting_relay --> waiting_trigger: relay URLs received
-    waiting_trigger --> waiting_relay: relay empty
-    waiting_trigger --> subscribed: trigger = true
-    subscribed --> waiting_trigger: trigger = false
+    [*] --> idle: initial state
+    idle --> waiting_inputs: setSocketInput()/setRelayInput()
+    waiting_inputs --> waiting_inputs: receiving values
+    waiting_inputs --> subscribed: all inputs complete AND has relay
+    waiting_inputs --> subscribed: external trigger=true AND has relay
+    subscribed --> idle: trigger=false (when using external trigger)
 
-    note right of waiting_sockets: Collecting filter values
-    note right of waiting_relay: Waiting for relay URLs
-    note right of waiting_trigger: Ready, waiting for trigger
+    note right of waiting_inputs: Collecting values and complete signals
     note right of subscribed: Active subscription
 ```
 
 ### tryStartSubscription() Conditions
 
-All conditions must be true:
-1. `triggerState === true` (or no trigger input connected)
-2. `relayUrls.length > 0`
-3. `areRequiredInputsConnected()` - all required sockets wired
-4. `areAllSocketValuesReceived()` - all socket values received
-5. `!isSubscribed()` - not already subscribed
+Subscription starts when:
+```
+(triggerState OR areAllSocketsCompleted()) AND relayUrls.length > 0 AND areRequiredInputsConnected() AND !isSubscribed()
+```
+
+Condition details:
+| Condition | Description |
+|-----------|-------------|
+| `triggerState` | External trigger is true (or default true when not connected) |
+| `areAllSocketsCompleted()` | All socket inputs have received complete signal |
+| `relayUrls.length > 0` | At least one relay URL received |
+| `areRequiredInputsConnected()` | All required sockets are connected |
+| `!isSubscribed()` | Not already subscribed |
+
+**Behavior:**
+- When using external trigger: Start subscription immediately when trigger becomes true (don't wait for socket completion)
+- When not using external trigger: Start subscription when all socket inputs complete
+
+### RxJS Complete Signal Propagation
+
+ConstantNode and Nip07Node call `complete()` after emitting values. This allows downstream nodes to know when all initial values have been sent.
+
+```mermaid
+flowchart LR
+    C[ConstantNode] -->|"value + complete"| M[ModularRelay]
+    N[Nip07Node] -->|"pubkey + complete"| M
+    M -->|"all complete received"| S[startSubscription]
+```
+
+Intermediate nodes (IfNode, ExtractionNode, etc.) complete their output when all inputs have completed.
 
 ## 7. Timeline Item Processing
 

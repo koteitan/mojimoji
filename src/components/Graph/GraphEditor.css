@@ -45,12 +45,14 @@
   border-color: #646cff;
 }
 
-.graph-toolbar button.delete-btn {
+.graph-toolbar button.delete-btn,
+.graph-toolbar button.clear-btn {
   background: #4a2020;
   border-color: #ff4444;
 }
 
-.graph-toolbar button.delete-btn:hover {
+.graph-toolbar button.delete-btn:hover,
+.graph-toolbar button.clear-btn:hover {
   background: #662020;
   border-color: #ff6666;
 }

@@ -205,8 +205,10 @@ export function GraphEditor({
   // State for dropdown menus
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
   const [inputDropdownOpen, setInputDropdownOpen] = useState(false);
+  const [functionDropdownOpen, setFunctionDropdownOpen] = useState(false);
   const inputDropdownRef = useRef<HTMLDivElement>(null);
   const filterDropdownRef = useRef<HTMLDivElement>(null);
+  const functionDropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -217,10 +219,13 @@ export function GraphEditor({
       if (filterDropdownOpen && filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
         setFilterDropdownOpen(false);
       }
+      if (functionDropdownOpen && functionDropdownRef.current && !functionDropdownRef.current.contains(event.target as Node)) {
+        setFunctionDropdownOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [inputDropdownOpen, filterDropdownOpen]);
+  }, [inputDropdownOpen, filterDropdownOpen, functionDropdownOpen]);
 
   // State for save/load/post dialogs
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
@@ -295,6 +300,8 @@ export function GraphEditor({
   //        dumpsub('wss://relay.damus.io') - filter by relay URL
   //        dumpsub(0) - show detail of 0th subscription
   const dumpSub = useCallback((filterOrIndex?: string | number) => {
+    const lines: string[] = [];
+
     // If integer, show detailed view for that subscription
     if (typeof filterOrIndex === 'number') {
       const index = filterOrIndex;
@@ -306,34 +313,35 @@ export function GraphEditor({
         // It's a tracker entry - just show what we have
         const entry = trackerEntries[index];
         if (entry) {
-          console.log(`relay: ${entry.relay}`);
-          console.log(`filter:`);
-          console.log(`  kinds: ${entry.kinds.length > 0 ? entry.kinds.join(', ') : '*'}`);
-          console.log(`status: ${entry.status}`);
+          lines.push(`relay: ${entry.relay}`);
+          lines.push(`filter:`);
+          lines.push(`  kinds: ${entry.kinds.length > 0 ? entry.kinds.join(', ') : '*'}`);
+          lines.push(`status: ${entry.status}`);
         } else {
-          console.log(`Subscription index ${index} not found`);
+          lines.push(`Subscription index ${index} not found`);
         }
       } else {
         // It's a shared subscription entry
         const sharedIndex = index - trackerCount;
         const detail = SharedSubscriptionManager.getDetailedEntry(sharedIndex);
         if (detail) {
-          console.log(`relay: ${detail.relay}`);
+          lines.push(`relay: ${detail.relay}`);
           detail.filters.forEach((filter, i) => {
-            console.log(`filter${i + 1}:`);
+            lines.push(`filter${i + 1}:`);
             for (const [key, value] of Object.entries(filter)) {
               if (Array.isArray(value)) {
-                console.log(`  ${key}: ${value.join(', ')}`);
+                lines.push(`  ${key}: ${value.join(', ')}`);
               } else {
-                console.log(`  ${key}: ${value}`);
+                lines.push(`  ${key}: ${value}`);
               }
             }
           });
-          console.log(`status: ${detail.status}`);
+          lines.push(`status: ${detail.status}`);
         } else {
-          console.log(`Subscription index ${index} not found`);
+          lines.push(`Subscription index ${index} not found`);
         }
       }
+      console.log(lines.join('\n'));
       return;
     }
 
@@ -382,7 +390,7 @@ export function GraphEditor({
       }
     };
 
-    // Print entries - format: [index]: [relay] -> kind:[kinds] -> [receiver]: [status]
+    // Build entries - format: [index]: [relay] -> kind:[kinds] -> [receiver]: [status]
     for (let i = 0; i < allEntries.length; i++) {
       const entry = allEntries[i];
       const idx = String(i).padStart(maxIndex);
@@ -392,10 +400,15 @@ export function GraphEditor({
       const statusColor = getStatusColor(entry.status);
       const errorSuffix = entry.error ? ` (${entry.error})` : '';
 
-      console.log(
-        `${idx}: ${relay} -> ${kinds} -> ${purpose}: %c${entry.status}${errorSuffix}`,
-        `color: ${statusColor}; font-weight: bold`
-      );
+      lines.push(`${idx}: ${relay} -> ${kinds} -> ${purpose}: %c${entry.status}${errorSuffix}%c`);
+      lines.push(`color: ${statusColor}; font-weight: bold`);
+      lines.push('');  // Reset style
+    }
+
+    // Output with color styling (need separate console.log for %c to work per line)
+    for (let i = 0; i < allEntries.length; i++) {
+      const lineIdx = i * 3;
+      console.log(lines[lineIdx], lines[lineIdx + 1], lines[lineIdx + 2]);
     }
   }, []);
 
@@ -455,6 +468,7 @@ export function GraphEditor({
       return;
     }
 
+    const lines: string[] = [];
     const nodes = editor.getNodes();
     const connections = editor.getConnections();
 
@@ -531,17 +545,17 @@ export function GraphEditor({
     // Calculate max index width
     const maxIndexWidth = String(entries.length).length;
 
-    console.log('Observable Stream Connections:');
+    lines.push('Observable Stream Connections:');
     entries.forEach((entry, index) => {
       const indexStr = String(index).padStart(maxIndexWidth);
       const completeFlag = entry.isComplete ? ' (complete)' : '';
       const relayFlag = entry.relayStatus ? ` (${entry.relayStatus})` : '';
-      console.log(`  ${indexStr}:${entry.sourceLabel}.${entry.sourceOutput} -> ${entry.targetLabel}.${entry.targetInput}${completeFlag}${relayFlag}`);
+      lines.push(`  ${indexStr}:${entry.sourceLabel}.${entry.sourceOutput} -> ${entry.targetLabel}.${entry.targetInput}${completeFlag}${relayFlag}`);
     });
 
     // FunctionNode internal connections (expanded)
-    console.log('');
-    console.log('FunctionNode Internal Wiring:');
+    lines.push('');
+    lines.push('FunctionNode Internal Wiring:');
     let hasFunctionNodes = false;
     for (const node of nodes) {
       if (getNodeType(node) === 'Function') {
@@ -550,28 +564,29 @@ export function GraphEditor({
         if (def) {
           hasFunctionNodes = true;
           const nodeLabel = `Function:${node.id.slice(0, 8)}`;
-          console.log(`  [${nodeLabel}] path: ${functionNode.getFunctionPath()}`);
+          lines.push(`  [${nodeLabel}] path: ${functionNode.getFunctionPath()}`);
 
           // Get internal wiring info
           const wiringInfo = functionNode.getInternalWiringInfo();
 
           // Show internal nodes
           if (wiringInfo.nodes.length > 0) {
-            console.log(`    Internal nodes: ${wiringInfo.nodes.join(', ')}`);
+            lines.push(`    Internal nodes: ${wiringInfo.nodes.join(', ')}`);
           }
 
           // Show internal connections with indices
           const internalMaxIndexWidth = String(wiringInfo.connections.length).length;
           wiringInfo.connections.forEach((conn, i) => {
             const indexStr = String(i).padStart(internalMaxIndexWidth);
-            console.log(`    ${indexStr}:${conn}`);
+            lines.push(`    ${indexStr}:${conn}`);
           });
         }
       }
     }
     if (!hasFunctionNodes) {
-      console.log('  (no FunctionNodes)');
+      lines.push('  (no FunctionNodes)');
     }
+    console.log(lines.join('\n'));
   }, []);
 
   // Dump timeline signals (for debugging)
@@ -583,6 +598,7 @@ export function GraphEditor({
       return;
     }
 
+    const lines: string[] = [];
     const nodes = editor.getNodes();
     let timelineIndex = 0;
 
@@ -593,7 +609,7 @@ export function GraphEditor({
         const name = timelineNode.getTimelineName();
         const shortId = node.id.slice(0, 8);
 
-        console.log(`${timelineIndex}:${name} [${shortId}]`);
+        lines.push(`${timelineIndex}:${name} [${shortId}]`);
 
         items.forEach((item, signalIndex) => {
           let signalStr: string;
@@ -628,7 +644,7 @@ export function GraphEditor({
             default:
               signalStr = `unknown:${JSON.stringify(item)}`;
           }
-          console.log(`  ${signalIndex}:${signalStr}`);
+          lines.push(`  ${signalIndex}:${signalStr}`);
         });
 
         timelineIndex++;
@@ -636,8 +652,9 @@ export function GraphEditor({
     }
 
     if (timelineIndex === 0) {
-      console.log('No timelines found');
+      lines.push('No timelines found');
     }
+    console.log(lines.join('\n'));
   }, []);
 
   // Dump all: runs dumpgraph, dumpobstream, and dumptl
@@ -1905,6 +1922,36 @@ export function GraphEditor({
     }
   }, []);
 
+  // Clear all nodes and connections
+  const clearAll = useCallback(async () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    // Confirm before clearing
+    if (!confirm(t('toolbar.confirmClear', 'Clear all nodes and connections?'))) return;
+
+    const existingNodes = editor.getNodes();
+    for (const node of existingNodes) {
+      // Notify timeline removal
+      if (getNodeType(node) === 'Timeline') {
+        onTimelineRemove(node.id);
+      }
+      // Remove connections first
+      const connections = editor.getConnections().filter(
+        (c: { source: string; target: string }) => c.source === node.id || c.target === node.id
+      );
+      for (const conn of connections) {
+        await editor.removeConnection(conn.id);
+      }
+      // Remove node
+      await editor.removeNode(node.id);
+    }
+
+    // Clear items
+    itemsRef.current.clear();
+    excludedItemsRef.current.clear();
+  }, [onTimelineRemove, t]);
+
   useEffect(() => {
     if (!containerRef.current) return;
     // Prevent double initialization in React StrictMode
@@ -3015,17 +3062,26 @@ export function GraphEditor({
               <button onClick={() => { addNode('Extraction'); setFilterDropdownOpen(false); }}>{t('toolbar.extraction', 'Extraction')}</button>
               <button onClick={() => { addNode('If'); setFilterDropdownOpen(false); }}>{t('toolbar.if', 'If')}</button>
               <button onClick={() => { addNode('Count'); setFilterDropdownOpen(false); }}>{t('toolbar.count', 'Count')}</button>
-              <div className="dropdown-separator" />
-              <button onClick={() => { addNode('FuncDefIn'); setFilterDropdownOpen(false); }}>{t('toolbar.funcDefIn', 'Func In')}</button>
-              <button onClick={() => { addNode('FuncDefOut'); setFilterDropdownOpen(false); }}>{t('toolbar.funcDefOut', 'Func Out')}</button>
-              <button onClick={() => { addNode('Function'); setFilterDropdownOpen(false); }}>{t('toolbar.function', 'Function')}</button>
             </div>
           )}
         </div>
         <button onClick={() => addNode('Timeline')}>{t('toolbar.output', '+Output')}</button>
-        <div className="toolbar-separator" />
+        <div className="filter-dropdown" ref={functionDropdownRef}>
+          <button onClick={() => setFunctionDropdownOpen(!functionDropdownOpen)}>
+            {t('toolbar.functionMenu', '+Func')} ▼
+          </button>
+          {functionDropdownOpen && (
+            <div className="filter-dropdown-menu">
+              <button onClick={() => { addNode('FuncDefIn'); setFunctionDropdownOpen(false); }}>{t('toolbar.funcDefIn', 'Func In')}</button>
+              <button onClick={() => { addNode('FuncDefOut'); setFunctionDropdownOpen(false); }}>{t('toolbar.funcDefOut', 'Func Out')}</button>
+              <button onClick={() => { addNode('Function'); setFunctionDropdownOpen(false); }}>{t('toolbar.function', 'Function')}</button>
+            </div>
+          )}
+        </div>
         <button onClick={centerView}>{t('toolbar.center')}</button>
+        <div className="toolbar-separator" />
         <button onClick={deleteSelected} className="delete-btn">{t('toolbar.delete')}</button>
+        <button onClick={clearAll} className="clear-btn">{t('toolbar.clear', 'Clear')}</button>
         <div className="toolbar-separator" />
         <button onClick={() => setSaveDialogOpen(true)}>{t('toolbar.save')}</button>
         <button onClick={() => setLoadDialogOpen(true)}>{t('toolbar.load')}</button>
@@ -3038,6 +3094,7 @@ export function GraphEditor({
         onClick={() => {
           setInputDropdownOpen(false);
           setFilterDropdownOpen(false);
+          setFunctionDropdownOpen(false);
         }}
       />
       <div className="footer-info">

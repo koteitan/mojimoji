@@ -253,29 +253,48 @@ bobからのイベント   → サブスクライバBのみにブロードキャ
 ```mermaid
 stateDiagram-v2
     [*] --> idle: 初期状態
-    idle --> waiting_sockets: setSocketInput()呼出
-    waiting_sockets --> waiting_sockets: ソケット値受信中
-    waiting_sockets --> waiting_relay: 全ソケット値受信完了
-    waiting_relay --> waiting_sockets: 値が不足
-    waiting_relay --> waiting_trigger: リレーURL受信
-    waiting_trigger --> waiting_relay: リレーが空
-    waiting_trigger --> subscribed: トリガー = true
-    subscribed --> waiting_trigger: トリガー = false
+    idle --> waiting_inputs: setSocketInput()/setRelayInput()
+    waiting_inputs --> waiting_inputs: 値受信中
+    waiting_inputs --> subscribed: 全入力complete AND リレー有
+    waiting_inputs --> subscribed: 外部トリガー=true AND リレー有
+    subscribed --> idle: トリガー=false (外部トリガー使用時)
 
-    note right of waiting_sockets: フィルタ値を収集中
-    note right of waiting_relay: リレーURLを待機中
-    note right of waiting_trigger: 準備完了、トリガー待ち
+    note right of waiting_inputs: 値とcomplete信号を収集中
     note right of subscribed: アクティブなサブスクリプション
 ```
 
 ### tryStartSubscription()の条件
 
-以下の全条件がtrueである必要があります：
-1. `triggerState === true`（またはトリガー入力が未接続）
-2. `relayUrls.length > 0`
-3. `areRequiredInputsConnected()` - 必要な全ソケットが接続済み
-4. `areAllSocketValuesReceived()` - 全ソケット値を受信済み
-5. `!isSubscribed()` - まだサブスクライブしていない
+サブスクリプション開始条件：
+```
+(triggerState OR areAllSocketsCompleted()) AND relayUrls.length > 0 AND areRequiredInputsConnected() AND !isSubscribed()
+```
+
+条件の詳細：
+| 条件 | 説明 |
+|------|------|
+| `triggerState` | 外部トリガーがtrue（または未接続時はデフォルトtrue） |
+| `areAllSocketsCompleted()` | 全ソケット入力がcomplete信号を受信済み |
+| `relayUrls.length > 0` | リレーURLを1つ以上受信済み |
+| `areRequiredInputsConnected()` | 必要な全ソケットが接続済み |
+| `!isSubscribed()` | まだサブスクライブしていない |
+
+**動作:**
+- 外部トリガーを使用する場合：トリガーがtrueになったら即座にサブスクリプション開始（ソケット完了を待たない）
+- 外部トリガーを使用しない場合：全ソケット入力がcompleteしたらサブスクリプション開始
+
+### RxJS complete信号の伝播
+
+ConstantNodeとNip07Nodeは値を発行後、`complete()`を呼び出します。これにより下流ノードはすべての初期値が送信されたことを知ることができます。
+
+```mermaid
+flowchart LR
+    C[ConstantNode] -->|"value + complete"| M[ModularRelay]
+    N[Nip07Node] -->|"pubkey + complete"| M
+    M -->|"全complete受信"| S[startSubscription]
+```
+
+中間ノード（IfNode、ExtractionNode等）は、全入力がcompleteした時に出力をcompleteします。
 
 ## 7. タイムラインアイテム処理
 
