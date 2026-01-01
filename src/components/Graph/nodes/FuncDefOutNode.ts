@@ -22,14 +22,14 @@ export class FuncDefOutNode extends ClassicPreset.Node {
   private outputSubjects: Map<string, Subject<FuncDefSignal>> = new Map();
 
   constructor() {
-    super(i18next.t('nodes.funcDefOut.title', 'Function Output'));
+    super(i18next.t('nodes.funcDefOut.title', 'Define Function (out)'));
 
     // Add socket list control
     this.addControl(
       'socketList',
       new SocketListControl(
         this.socketList,
-        i18next.t('nodes.funcDefOut.sockets', 'Input Sockets'),
+        i18next.t('nodes.funcDefOut.socketLabel', 'output socket'),
         (sockets) => {
           this.socketList = sockets;
           this.updateInputSockets();

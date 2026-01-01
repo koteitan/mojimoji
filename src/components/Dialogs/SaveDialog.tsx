@@ -292,19 +292,19 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
               className={`dialog-tab ${destination === 'local' ? 'active' : ''}`}
               onClick={(e) => { e.stopPropagation(); setDestination('local'); setCurrentPath([]); setIsNip07Error(false); setError(null); }}
             >
-              Browser
+              {t('dialogs.tabs.browser')}
             </button>
             <button
               className={`dialog-tab ${destination === 'nostr' ? 'active' : ''}`}
               onClick={(e) => { e.stopPropagation(); setDestination('nostr'); setCurrentPath([]); setIsNip07Error(false); setError(null); }}
             >
-              Nostr Relay
+              {t('dialogs.tabs.nostr')}
             </button>
             <button
               className={`dialog-tab ${destination === 'file' ? 'active' : ''}`}
               onClick={(e) => { e.stopPropagation(); setDestination('file'); setIsNip07Error(false); setError(null); }}
             >
-              File
+              {t('dialogs.tabs.file')}
             </button>
           </div>
           <div className="dialog-destination-description">
@@ -444,7 +444,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                       checked={visibility === 'private'}
                       onChange={() => setVisibility('private')}
                     />
-                    For yourself
+                    {t('dialogs.visibility.mine')}
                   </label>
                   <label>
                     <input
@@ -453,7 +453,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                       checked={visibility === 'public'}
                       onChange={() => setVisibility('public')}
                     />
-                    Public
+                    {t('dialogs.visibility.public')}
                   </label>
                 </div>
                 <div className="dialog-visibility-description">
@@ -502,7 +502,7 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
             </button>
           )}
           <button
-            className="dialog-button primary"
+            className="dialog-button danger"
             onClick={handleSave}
             disabled={saving || !graphName.trim()}
           >

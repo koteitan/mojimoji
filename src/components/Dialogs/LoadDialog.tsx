@@ -388,19 +388,19 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
               className={`dialog-tab ${source === 'local' ? 'active' : ''}`}
               onClick={(e) => { e.stopPropagation(); setSource('local'); setCurrentPath([]); setSelectedGraph(null); setIsNip07Error(false); setError(null); }}
             >
-              Browser
+              {t('dialogs.tabs.browser')}
             </button>
             <button
               className={`dialog-tab ${source === 'nostr' ? 'active' : ''}`}
               onClick={(e) => { e.stopPropagation(); setSource('nostr'); setCurrentPath([]); setSelectedNostrGraph(null); setIsNip07Error(false); setError(null); }}
             >
-              Nostr Relay
+              {t('dialogs.tabs.nostr')}
             </button>
             <button
               className={`dialog-tab ${source === 'file' ? 'active' : ''}`}
               onClick={(e) => { e.stopPropagation(); setSource('file'); setSelectedFile(null); setIsNip07Error(false); setError(null); }}
             >
-              File
+              {t('dialogs.tabs.file')}
             </button>
           </div>
           <div className="dialog-destination-description">
@@ -433,7 +433,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                       checked={nostrFilter === 'mine'}
                       onChange={() => setNostrFilter('mine')}
                     />
-                    For yourself
+                    {t('dialogs.visibility.mine')}
                   </label>
                   <label>
                     <input
@@ -442,7 +442,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                       checked={nostrFilter === 'public'}
                       onChange={() => setNostrFilter('public')}
                     />
-                    Public
+                    {t('dialogs.visibility.public')}
                   </label>
                   <label>
                     <input
@@ -451,7 +451,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                       checked={nostrFilter === 'both'}
                       onChange={() => setNostrFilter('both')}
                     />
-                    Both
+                    {t('dialogs.visibility.both')}
                   </label>
                   <label>
                     <input
@@ -460,7 +460,7 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                       checked={nostrFilter === 'by-author'}
                       onChange={() => setNostrFilter('by-author')}
                     />
-                    Both by author
+                    {t('dialogs.visibility.byAuthor')}
                   </label>
                 </div>
               </div>

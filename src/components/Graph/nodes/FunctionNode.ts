@@ -73,7 +73,7 @@ export class FunctionNode extends ClassicPreset.Node {
   private loadFunctionCallback: ((path: string) => Promise<FunctionDefinition | null>) | null = null;
 
   constructor() {
-    super(i18next.t('nodes.function.title', 'Function'));
+    super(i18next.t('nodes.function.title', 'Function Call'));
 
     // Add status lamp control
     this.addControl(
@@ -86,7 +86,7 @@ export class FunctionNode extends ClassicPreset.Node {
       'path',
       new TextInputControl(
         this.functionPath,
-        i18next.t('nodes.function.path', 'Function Path'),
+        i18next.t('nodes.function.pathLabel', 'graph path (nostr)'),
         (value) => {
           this.functionPath = value;
           // Don't load immediately - wait for blur

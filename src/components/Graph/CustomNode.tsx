@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Presets } from 'rete-react-plugin';
 import { TextInputControl, TextAreaControl, SelectControl, CheckboxControl, CheckboxGroupControl, FilterControl, SimpleFilterControl, ToggleControl, StatusLampControl, FILTER_FIELDS, MODULAR_FILTER_FIELDS, NOSTR_FILTER_FIELDS, isSocketField, type Filters, type FilterElement } from './nodes/controls';
 import { SocketListControl, SOCKET_TYPES, type SocketDefinition } from './nodes/FuncDefInNode';
@@ -206,6 +207,7 @@ function ToggleControlComponent({ control, nodeId }: { control: ToggleControl; n
 
 // Filter control component for nostr filters
 function FilterControlComponent({ control, nodeId }: { control: FilterControl; nodeId: string }) {
+  const { t } = useTranslation();
   const [filters, setFilters] = useState<Filters>(control.filters);
 
   const updateFilters = (newFilters: Filters) => {
@@ -338,7 +340,7 @@ function FilterControlComponent({ control, nodeId }: { control: FilterControl; n
         onClick={addFilter}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        + Add Filter
+        {t('controls.addFilter', '+ Add Filter (OR)')}
       </button>
     </div>
   );

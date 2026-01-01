@@ -333,15 +333,16 @@
 /* Toggle switch styles */
 .toggle-control-wrapper {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .toggle-switch-container {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .toggle-label {

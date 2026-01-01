@@ -1,21 +1,30 @@
 {
+  "controls": {
+    "addFilter": "+ フィルター追加(OR)"
+  },
   "toolbar": {
     "input": "+入力",
     "simpleRelay": "リレー(シンプル)",
     "modularRelay": "リレー(モジュラー)",
     "constant": "定数",
-    "nip07": "NIP-07",
+    "nip07": "NIP-07 npub",
     "filter": "+フィルタ",
     "operator": "演算",
     "search": "検索",
     "language": "言語",
-    "nostrFilter": "Nostrフィルタ",
+    "nostrFilter": "nostr 互換フィルタ",
     "extraction": "抽出",
     "if": "If",
     "count": "カウント",
     "output": "+出力",
-    "center": "center",
-    "delete": "del",
+    "functionMenu": "+関数",
+    "funcDefIn": "定義(in)",
+    "funcDefOut": "定義(out)",
+    "function": "関数呼び出し",
+    "center": "センター",
+    "delete": "削除",
+    "clear": "全削除",
+    "confirmClear": "すべてのノードと接続を削除しますか？",
     "save": "保存",
     "load": "読込",
     "post": "投稿"
@@ -34,7 +43,7 @@
       "and": "AND",
       "or": "OR",
       "diff": "A-B",
-      "dataType": "データタイプ"
+      "dataType": "型"
     },
     "search": {
       "title": "検索",
@@ -47,7 +56,7 @@
       "language": "言語"
     },
     "nostrFilter": {
-      "title": "Nostrフィルタ",
+      "title": "nostr 互換フィルタ",
       "exclude": "除外"
     },
     "timeline": {
@@ -68,13 +77,13 @@
     "extraction": {
       "title": "抽出",
       "field": "フィールド",
-      "fieldEventId": "イベントID",
-      "fieldAuthor": "作者 (pubkey)",
-      "fieldCreatedAt": "作成日時",
+      "fieldEventId": "id",
+      "fieldAuthor": "pubkey",
+      "fieldCreatedAt": "created_at",
       "fieldTagE": "#e (参照イベント)",
       "fieldTagP": "#p (参照pubkey)",
       "fieldTagR": "#r (リレー)",
-      "relayType": "リレータイプ",
+      "relayType": "リレーフィルタ",
       "relayTypeAll": "すべて",
       "relayTypeRead": "読み取り可",
       "relayTypeWrite": "書き込み可",
@@ -95,23 +104,35 @@
       "flagOff": "オフ (0)"
     },
     "nip07": {
-      "title": "NIP-07",
+      "title": "NIP-07 npub",
       "description": "NIP-07拡張から公開鍵を取得"
     },
     "if": {
       "title": "If",
       "type": "タイプ",
       "operator": "比較",
-      "integer": "整数",
-      "datetime": "日時",
-      "eventId": "イベントID",
-      "pubkey": "公開鍵",
-      "relay": "リレー",
-      "flag": "フラグ",
-      "relayStatus": "リレー状態"
+      "integer": "integer",
+      "datetime": "datetime",
+      "eventId": "eventId",
+      "pubkey": "pubkey",
+      "relay": "relay",
+      "flag": "flag",
+      "relayStatus": "relayStatus"
     },
     "count": {
       "title": "カウント"
+    },
+    "funcDefIn": {
+      "title": "関数定義(in)",
+      "socketLabel": "入力ソケット"
+    },
+    "funcDefOut": {
+      "title": "関数定義(out)",
+      "socketLabel": "出力ソケット"
+    },
+    "function": {
+      "title": "関数呼び出し",
+      "pathLabel": "グラフパス (nostr)"
     }
   },
   "timeline": {
@@ -123,6 +144,17 @@
   },
   "dialogs": {
     "cancel": "キャンセル",
+    "tabs": {
+      "browser": "ブラウザ",
+      "nostr": "Nostr リレー",
+      "file": "ファイル"
+    },
+    "visibility": {
+      "mine": "自分用",
+      "public": "公開",
+      "both": "両方",
+      "byAuthor": "両方(ユーザーごと)"
+    },
     "save": {
       "title": "グラフを保存",
       "saveTo": "保存先:",

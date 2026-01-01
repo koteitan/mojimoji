@@ -1,21 +1,30 @@
 {
+  "controls": {
+    "addFilter": "+ Add Filter (OR)"
+  },
   "toolbar": {
     "input": "+Input",
     "simpleRelay": "Relay (Simple)",
     "modularRelay": "Relay (Modular)",
     "constant": "Constant",
-    "nip07": "NIP-07",
+    "nip07": "NIP-07 npub",
     "filter": "+Filter",
     "operator": "Operator",
     "search": "Search",
     "language": "Language",
-    "nostrFilter": "Nostr Filter",
+    "nostrFilter": "nostr compatible filter",
     "extraction": "Extraction",
     "if": "If",
     "count": "Count",
     "output": "+Output",
+    "functionMenu": "+Func",
+    "funcDefIn": "Definition (in)",
+    "funcDefOut": "Definition (out)",
+    "function": "Call",
     "center": "Center",
     "delete": "Delete",
+    "clear": "Clear",
+    "confirmClear": "Clear all nodes and connections?",
     "save": "Save",
     "load": "Load",
     "post": "Post"
@@ -30,11 +39,11 @@
       "filter": "Filters"
     },
     "operator": {
-      "title": "Operator",
+      "title": "Operation",
       "and": "AND",
       "or": "OR",
       "diff": "A-B",
-      "dataType": "Data Type"
+      "dataType": "Type"
     },
     "search": {
       "title": "Search",
@@ -47,7 +56,7 @@
       "language": "Language"
     },
     "nostrFilter": {
-      "title": "Nostr Filter",
+      "title": "nostr compatible filter",
       "exclude": "Exclude"
     },
     "timeline": {
@@ -68,13 +77,13 @@
     "extraction": {
       "title": "Extraction",
       "field": "Field",
-      "fieldEventId": "Event ID",
-      "fieldAuthor": "Author (pubkey)",
-      "fieldCreatedAt": "Created At",
+      "fieldEventId": "id",
+      "fieldAuthor": "pubkey",
+      "fieldCreatedAt": "created_at",
       "fieldTagE": "#e (referenced event)",
       "fieldTagP": "#p (referenced pubkey)",
       "fieldTagR": "#r (relay)",
-      "relayType": "Relay Type",
+      "relayType": "Relay Filter",
       "relayTypeAll": "All",
       "relayTypeRead": "With read",
       "relayTypeWrite": "With write",
@@ -95,23 +104,35 @@
       "flagOff": "Off (0)"
     },
     "nip07": {
-      "title": "NIP-07",
+      "title": "NIP-07 npub",
       "description": "Get pubkey from NIP-07 extension"
     },
     "if": {
       "title": "If",
       "type": "Type",
       "operator": "Comparison",
-      "integer": "Integer",
-      "datetime": "Datetime",
-      "eventId": "Event ID",
-      "pubkey": "Pubkey",
-      "relay": "Relay",
-      "flag": "Flag",
-      "relayStatus": "Relay Status"
+      "integer": "integer",
+      "datetime": "datetime",
+      "eventId": "eventId",
+      "pubkey": "pubkey",
+      "relay": "relay",
+      "flag": "flag",
+      "relayStatus": "relayStatus"
     },
     "count": {
       "title": "Count"
+    },
+    "funcDefIn": {
+      "title": "Define Function (in)",
+      "socketLabel": "input socket"
+    },
+    "funcDefOut": {
+      "title": "Define Function (out)",
+      "socketLabel": "output socket"
+    },
+    "function": {
+      "title": "Function Call",
+      "pathLabel": "graph path (nostr)"
     }
   },
   "timeline": {
@@ -123,6 +144,17 @@
   },
   "dialogs": {
     "cancel": "Cancel",
+    "tabs": {
+      "browser": "Browser",
+      "nostr": "Nostr Relay",
+      "file": "File"
+    },
+    "visibility": {
+      "mine": "For yourself",
+      "public": "Public",
+      "both": "Both",
+      "byAuthor": "Both (per user)"
+    },
     "save": {
       "title": "Save Graph",
       "saveTo": "Save to:",
