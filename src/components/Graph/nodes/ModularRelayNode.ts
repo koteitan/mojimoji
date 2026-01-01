@@ -144,54 +144,18 @@ export class ModularRelayNode extends ClassicPreset.Node {
     this.addOutput('output', new ClassicPreset.Output(eventSocket, 'Events'));
     this.addOutput('relayStatus', new ClassicPreset.Output(relayStatusSocket, 'Relay Status'));
 
-    // External trigger toggle (when ON, shows trigger socket)
+    // Sub trigger toggle (when ON, shows trigger socket)
     this.addControl(
       'externalTrigger',
       new ToggleControl(
         this.externalTrigger,
-        i18next.t('nodes.modularRelay.subTrigger', 'sub trigger'),
+        i18next.t('nodes.modularRelay.subTrigger', 'Sub Trigger'),
         (value) => {
           this.externalTrigger = value;
           this.updateTriggerSocket();
         },
-        'auto',
-        'manual'
-      )
-    );
-
-    // Strategy toggle (forward = realtime stream, backward = one-shot query)
-    this.addControl(
-      'strategy',
-      new ToggleControl(
-        this.strategy === 'forward',
-        i18next.t('nodes.modularRelay.strategy', 'Strategy'),
-        (value) => {
-          this.strategy = value ? 'forward' : 'backward';
-          // Enable/disable eoseTimeout control based on strategy
-          const eoseControl = this.controls['eoseTimeout'] as TextInputControl;
-          if (eoseControl) {
-            eoseControl.disabled = this.strategy === 'forward';
-          }
-        },
-        'backward',
-        'forward'
-      )
-    );
-
-    // EOSE timeout control (only applicable for backward strategy)
-    this.addControl(
-      'eoseTimeout',
-      new TextInputControl(
-        String(this.eoseTimeout),
-        i18next.t('nodes.modularRelay.eoseTimeout', 'EOSE timeout'),
-        (value) => {
-          this.eoseTimeout = parseInt(value) || 30000;
-        },
-        true,
-        '30000',
-        this.strategy === 'forward', // disabled when forward
-        true, // horizontal layout
-        'ms'  // suffix
+        'Auto',
+        'Manual'
       )
     );
 
@@ -207,6 +171,42 @@ export class ModularRelayNode extends ClassicPreset.Node {
         },
         false, // hideValues
         true   // useModularFields - show socket options in dropdown
+      )
+    );
+
+    // EOSE timeout control (only applicable for backward strategy)
+    this.addControl(
+      'eoseTimeout',
+      new TextInputControl(
+        String(this.eoseTimeout),
+        i18next.t('nodes.modularRelay.eoseTimeout', 'EOSE Timeout'),
+        (value) => {
+          this.eoseTimeout = parseInt(value) || 30000;
+        },
+        true,
+        '30000',
+        this.strategy === 'forward', // disabled when forward
+        true, // horizontal layout
+        'ms'  // suffix
+      )
+    );
+
+    // Close sub toggle (forward = never close, backward = close on all relay EOSEs)
+    this.addControl(
+      'strategy',
+      new ToggleControl(
+        this.strategy === 'forward',
+        i18next.t('nodes.modularRelay.closeSub', 'Close Sub'),
+        (value) => {
+          this.strategy = value ? 'forward' : 'backward';
+          // Enable/disable eoseTimeout control based on strategy
+          const eoseControl = this.controls['eoseTimeout'] as TextInputControl;
+          if (eoseControl) {
+            eoseControl.disabled = this.strategy === 'forward';
+          }
+        },
+        i18next.t('nodes.modularRelay.closeSubOnEose', 'On All Relay EOSEs'),
+        i18next.t('nodes.modularRelay.closeSubNever', 'Never')
       )
     );
 

@@ -4,10 +4,17 @@ import { initReactI18next } from 'react-i18next';
 import en from './locales/en.json';
 import ja from './locales/ja.json';
 
-// Detect browser language
-const getBrowserLanguage = (): string => {
-  const lang = navigator.language.split('-')[0];
-  return ['en', 'ja'].includes(lang) ? lang : 'en';
+// Get language from URL query parameter or browser setting
+const getLanguage = (): string => {
+  // Check URL query parameter first (e.g., ?lang=en or ?lang=ja)
+  const urlParams = new URLSearchParams(window.location.search);
+  const queryLang = urlParams.get('lang');
+  if (queryLang && ['en', 'ja'].includes(queryLang)) {
+    return queryLang;
+  }
+  // Fall back to browser language
+  const browserLang = navigator.language.split('-')[0];
+  return ['en', 'ja'].includes(browserLang) ? browserLang : 'en';
 };
 
 i18n
@@ -17,7 +24,7 @@ i18n
       en: { translation: en },
       ja: { translation: ja },
     },
-    lng: getBrowserLanguage(),
+    lng: getLanguage(),
     fallbackLng: 'en',
     interpolation: {
       escapeValue: false,

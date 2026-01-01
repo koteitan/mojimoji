@@ -67,7 +67,9 @@
     "modularRelay": {
       "title": "モジュラーリレー",
       "subTrigger": "購読トリガー",
-      "strategy": "ストラテジー",
+      "closeSub": "購読を停止",
+      "closeSubOnEose": "全リレーEOSE 時",
+      "closeSubNever": "しない",
       "eoseTimeout": "EOSE タイムアウト",
       "inputs": "入力",
       "source": "ソース",
