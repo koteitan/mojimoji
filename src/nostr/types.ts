@@ -86,6 +86,48 @@ export function isHex64(str: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(str.trim());
 }
 
+// Normalize pubkey to hex format
+// Accepts: hex (64 chars), npub1..., nprofile1...
+// Returns: hex string (lowercase) or original if invalid
+export function normalizePubkeyToHex(pubkey: string): string {
+  const trimmed = pubkey.trim();
+
+  // Already hex
+  if (isHex64(trimmed)) {
+    return trimmed.toLowerCase();
+  }
+
+  // Try bech32 decode
+  const decoded = decodeBech32ToHex(trimmed);
+  if (decoded && (decoded.type === 'npub' || decoded.type === 'nprofile')) {
+    return decoded.hex.toLowerCase();
+  }
+
+  // Return original if can't normalize
+  return trimmed;
+}
+
+// Normalize event ID to hex format
+// Accepts: hex (64 chars), note1..., nevent1...
+// Returns: hex string (lowercase) or original if invalid
+export function normalizeEventIdToHex(eventId: string): string {
+  const trimmed = eventId.trim();
+
+  // Already hex
+  if (isHex64(trimmed)) {
+    return trimmed.toLowerCase();
+  }
+
+  // Try bech32 decode
+  const decoded = decodeBech32ToHex(trimmed);
+  if (decoded && (decoded.type === 'note' || decoded.type === 'nevent')) {
+    return decoded.hex.toLowerCase();
+  }
+
+  // Return original if can't normalize
+  return trimmed;
+}
+
 // NIP-19 naddr encoding (parameterized replaceable event address)
 // TLV format:
 // - Type 0 (special): 32 bytes - pubkey

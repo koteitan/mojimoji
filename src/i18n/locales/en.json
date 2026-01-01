@@ -16,6 +16,8 @@
     "extraction": "Extraction",
     "if": "If",
     "count": "Count",
+    "sampling": "Sampling",
+    "delay": "Delay",
     "output": "+Output",
     "functionMenu": "+Func",
     "funcDefIn": "Definition (in)",
@@ -125,6 +127,16 @@
     },
     "count": {
       "title": "Count"
+    },
+    "sampling": {
+      "title": "Sampling",
+      "numerator": "Numerator",
+      "denominator": "Denominator"
+    },
+    "delay": {
+      "title": "Delay",
+      "delay": "Delay",
+      "unit": "Unit"
     },
     "funcDefIn": {
       "title": "Define Function (in)",

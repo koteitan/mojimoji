@@ -20,6 +20,9 @@ export { IfNode } from './IfNode';
 export type { ComparisonOperator, FlagSignal } from './IfNode';
 export { CountNode } from './CountNode';
 export type { IntegerSignal } from './CountNode';
+export { SamplingNode } from './SamplingNode';
+export { DelayNode } from './DelayNode';
+export type { DelayUnit } from './DelayNode';
 
 // Function nodes
 export { FuncDefInNode, SocketListControl, SOCKET_TYPES } from './FuncDefInNode';

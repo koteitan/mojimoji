@@ -17,7 +17,7 @@ import type { RelayStatusType } from './types';
 import { FilterControl, ToggleControl, TextInputControl, isSocketField, getBaseField } from './controls';
 import type { Filters } from './controls';
 import type { NostrEvent, Profile, EventSignal } from '../../../nostr/types';
-import { decodeBech32ToHex, isHex64, parseDateToTimestamp } from '../../../nostr/types';
+import { decodeBech32ToHex, isHex64, parseDateToTimestamp, normalizePubkeyToHex, normalizeEventIdToHex } from '../../../nostr/types';
 import { findPubkeysByName } from '../../../nostr/profileCache';
 import { SharedSubscriptionManager } from '../../../nostr/SharedSubscriptionManager';
 
@@ -86,6 +86,9 @@ export class ModularRelayNode extends ClassicPreset.Node {
 
   // Socket input values (key -> values)
   private socketValues: Map<string, unknown[]> = new Map();
+
+  // Socket input excluded set (key -> set of normalized values to exclude)
+  private socketExcluded: Map<string, Set<string>> = new Map();
 
   // Socket input completion status (key -> completed)
   private socketCompleted: Map<string, boolean> = new Map();
@@ -236,6 +239,7 @@ export class ModularRelayNode extends ClassicPreset.Node {
       if (!newSockets.has(key)) {
         this.removeInput(key);
         this.socketValues.delete(key);
+        this.socketExcluded.delete(key);
       }
     }
 
@@ -246,6 +250,7 @@ export class ModularRelayNode extends ClassicPreset.Node {
         if (existingField !== undefined) {
           this.removeInput(key);
           this.socketValues.delete(key);
+          this.socketExcluded.delete(key);
         }
         const socket = getSocketForField(field);
         const label = getBaseField(field); // e.g., "kinds"
@@ -542,6 +547,7 @@ export class ModularRelayNode extends ClassicPreset.Node {
 
     if (!input) {
       this.socketValues.delete(socketKey);
+      this.socketExcluded.delete(socketKey);
       this.socketCompleted.delete(socketKey);
       return;
     }
@@ -557,11 +563,19 @@ export class ModularRelayNode extends ClassicPreset.Node {
 
     const baseField = getBaseField(element.field);
     this.socketValues.set(socketKey, []);
+    this.socketExcluded.set(socketKey, new Set());
     this.socketCompleted.set(socketKey, false);
 
     const subscription = input.subscribe({
       next: (signal) => {
         const values = this.socketValues.get(socketKey) || [];
+        const excluded = this.socketExcluded.get(socketKey)!;
+
+        // Extract signal type (add or remove)
+        const signalType: 'add' | 'remove' =
+          (typeof signal === 'object' && signal !== null && 'signal' in signal)
+            ? (signal as { signal: 'add' | 'remove' }).signal
+            : 'add';
 
         let value: unknown;
         if (typeof signal === 'object' && signal !== null) {
@@ -582,12 +596,39 @@ export class ModularRelayNode extends ClassicPreset.Node {
           value = signal;
         }
 
+        // Normalize value for comparison key
+        const normalizedKey = this.normalizeValueForKey(value, baseField);
+
         if (baseField === 'limit' || baseField === 'since' || baseField === 'until') {
-          this.socketValues.set(socketKey, [value]);
+          // Single value fields: just set the value (ignore remove for these)
+          if (signalType === 'add') {
+            this.socketValues.set(socketKey, [value]);
+          }
         } else {
-          if (!values.includes(value)) {
-            values.push(value);
-            this.socketValues.set(socketKey, values);
+          // Multi-value fields: use excludedSet logic
+          if (signalType === 'add') {
+            // Check if value is in excluded set
+            if (excluded.has(normalizedKey)) {
+              // Already removed before add arrived - skip and remove from excluded
+              excluded.delete(normalizedKey);
+            } else {
+              // Add value if not already present
+              if (!values.some(v => this.normalizeValueForKey(v, baseField) === normalizedKey)) {
+                values.push(value);
+                this.socketValues.set(socketKey, values);
+              }
+            }
+          } else {
+            // Remove signal
+            const index = values.findIndex(v => this.normalizeValueForKey(v, baseField) === normalizedKey);
+            if (index !== -1) {
+              // Value exists - remove it
+              values.splice(index, 1);
+              this.socketValues.set(socketKey, values);
+            } else {
+              // Value not found - add to excluded set for future add
+              excluded.add(normalizedKey);
+            }
           }
         }
 
@@ -600,6 +641,22 @@ export class ModularRelayNode extends ClassicPreset.Node {
     });
 
     this.socketSubscriptions.set(socketKey, subscription);
+  }
+
+  // Normalize value to a consistent key for comparison
+  private normalizeValueForKey(value: unknown, field: string): string {
+    if (typeof value === 'string') {
+      // Normalize pubkey fields (npub, nprofile -> hex)
+      if (field === 'authors' || field === '#p') {
+        return normalizePubkeyToHex(value);
+      }
+      // Normalize event ID fields (note, nevent -> hex)
+      if (field === 'ids' || field === '#e' || field === '#q') {
+        return normalizeEventIdToHex(value);
+      }
+      return value.toLowerCase();
+    }
+    return String(value);
   }
 
   hasInputSockets(): boolean {

@@ -20,6 +20,8 @@ import {
   ModularRelayNode,
   IfNode,
   CountNode,
+  SamplingNode,
+  DelayNode,
   FuncDefInNode,
   FuncDefOutNode,
   FunctionNode,
@@ -50,7 +52,7 @@ import { saveGraphToNostr, loadGraphByPath, loadGraphByEventId, loadGraphByNaddr
 import { getPubkey, isNip07Available } from '../../nostr/nip07';
 import { SubscriptionTracker } from '../../nostr/SubscriptionTracker';
 import { SharedSubscriptionManager } from '../../nostr/SharedSubscriptionManager';
-import { extractContentWarning, decodeBech32ToHex, isHex64, naddrDecode, eventIdToNevent, pubkeyToNpub, detectEventReference, type EventSignal, type TimelineItem, type TimelineReactionGroupItem } from '../../nostr/types';
+import { extractContentWarning, decodeBech32ToHex, isHex64, naddrDecode, eventIdToNevent, pubkeyToNpub, detectEventReference, normalizePubkeyToHex, normalizeEventIdToHex, type EventSignal, type TimelineItem, type TimelineReactionGroupItem } from '../../nostr/types';
 import { EventFetcher } from '../../nostr/EventFetcher';
 import { merge, type Observable, type Subscription } from 'rxjs';
 import { APP_VERSION } from '../../App';
@@ -74,7 +76,7 @@ const formatBuildTimestamp = (): string => {
 
 const BUILD_TIMESTAMP = formatBuildTimestamp();
 
-type NodeTypes = SimpleRelayNode | OperatorNode | SearchNode | LanguageNode | NostrFilterNode | TimelineNode | ConstantNode | Nip07Node | ExtractionNode | ModularRelayNode | IfNode | CountNode | FuncDefInNode | FuncDefOutNode | FunctionNode;
+type NodeTypes = SimpleRelayNode | OperatorNode | SearchNode | LanguageNode | NostrFilterNode | TimelineNode | ConstantNode | Nip07Node | ExtractionNode | ModularRelayNode | IfNode | CountNode | SamplingNode | DelayNode | FuncDefInNode | FuncDefOutNode | FunctionNode;
 
 // Helper to get the internal node type
 const getNodeType = (node: NodeTypes): string => {
@@ -110,6 +112,68 @@ const wouldCreateCycle = (
 
   // If we can reach sourceId from targetId, adding sourceId -> targetId creates a cycle
   return canReach(targetId, sourceId);
+};
+
+// Topological sort of nodes based on connection dependencies
+// Returns node IDs in order where each node comes after all its dependencies (source nodes)
+const topologicalSort = (
+  nodes: Array<{ id: string }>,
+  connections: Array<{ source: string; target: string }>
+): string[] => {
+  // Build adjacency list and in-degree count
+  const inDegree = new Map<string, number>();
+  const adjacencyList = new Map<string, string[]>();
+
+  // Initialize all nodes
+  for (const node of nodes) {
+    inDegree.set(node.id, 0);
+    adjacencyList.set(node.id, []);
+  }
+
+  // Build graph from connections
+  for (const conn of connections) {
+    // source -> target means target depends on source
+    // Only count if both source and target exist in nodes
+    if (inDegree.has(conn.source) && inDegree.has(conn.target)) {
+      adjacencyList.get(conn.source)!.push(conn.target);
+      inDegree.set(conn.target, (inDegree.get(conn.target) || 0) + 1);
+    }
+  }
+
+  // Kahn's algorithm: BFS starting from nodes with in-degree 0
+  const queue: string[] = [];
+  const result: string[] = [];
+
+  // Find all nodes with in-degree 0 (no dependencies)
+  for (const [nodeId, degree] of inDegree) {
+    if (degree === 0) {
+      queue.push(nodeId);
+    }
+  }
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    result.push(current);
+
+    // Reduce in-degree of all neighbors
+    for (const neighbor of adjacencyList.get(current) || []) {
+      const newDegree = (inDegree.get(neighbor) || 1) - 1;
+      inDegree.set(neighbor, newDegree);
+      if (newDegree === 0) {
+        queue.push(neighbor);
+      }
+    }
+  }
+
+  // If result doesn't contain all nodes, there's a cycle (shouldn't happen due to cycle detection)
+  // Include any remaining nodes at the end
+  for (const node of nodes) {
+    if (!result.includes(node.id)) {
+      result.push(node.id);
+    }
+  }
+
+  return result;
 };
 
 // Helper to check socket compatibility
@@ -841,6 +905,10 @@ export function GraphEditor({
       return (node as IfNode).output$;
     } else if (getNodeType(node) === 'Count') {
       return (node as CountNode).output$;
+    } else if (getNodeType(node) === 'Sampling') {
+      return (node as SamplingNode).output$;
+    } else if (getNodeType(node) === 'Delay') {
+      return (node as DelayNode).output$;
     } else if (getNodeType(node) === 'FuncDefIn') {
       const funcDefInNode = node as FuncDefInNode;
       // sourceOutput is like 'out_0', 'out_1', etc.
@@ -900,6 +968,10 @@ export function GraphEditor({
         (node as TimelineNode).stopSubscription();
       } else if (getNodeType(node) === 'Count') {
         (node as CountNode).stopSubscription();
+      } else if (getNodeType(node) === 'Sampling') {
+        (node as SamplingNode).stopSubscription();
+      } else if (getNodeType(node) === 'Delay') {
+        (node as DelayNode).stopSubscription();
       } else if (getNodeType(node) === 'If') {
         (node as IfNode).stopSubscriptions();
       } else if (getNodeType(node) === 'FuncDefIn') {
@@ -1008,235 +1080,232 @@ export function GraphEditor({
       }
     }
 
-    // Wire up Operator nodes
-    for (const node of nodes) {
-      if (getNodeType(node) === 'Operator') {
-        const operatorNode = node as OperatorNode;
+    // Helper to get typed output from source node for If inputs
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const getIfTypedOutput = (sourceId: string, sourceOutput?: string): Observable<any> | null => {
+      const sourceNode = editor.getNode(sourceId);
+      if (!sourceNode) return null;
+      const sourceType = getNodeType(sourceNode);
 
-        // Find input1 connection
-        const input1Conn = connections.find(
-          (c: { target: string; targetInput: string }) =>
-            c.target === node.id && c.targetInput === 'input1'
-        );
-        const input1$ = input1Conn ? getNodeOutput(input1Conn.source) : null;
-
-        // Find input2 connection
-        const input2Conn = connections.find(
-          (c: { target: string; targetInput: string }) =>
-            c.target === node.id && c.targetInput === 'input2'
-        );
-        const input2$ = input2Conn ? getNodeOutput(input2Conn.source) : null;
-
-        operatorNode.setInputs(input1$, input2$);
-      }
-    }
-
-    // Wire up Search nodes
-    for (const node of nodes) {
-      if (getNodeType(node) === 'Search') {
-        const searchNode = node as SearchNode;
-
-        const inputConn = connections.find(
-          (c: { target: string }) => c.target === node.id
-        );
-        const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
-
-        searchNode.setInput(input$);
-      }
-    }
-
-    // Wire up Language nodes
-    for (const node of nodes) {
-      if (getNodeType(node) === 'Language') {
-        const languageNode = node as LanguageNode;
-
-        const inputConn = connections.find(
-          (c: { target: string }) => c.target === node.id
-        );
-        const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
-
-        languageNode.setInput(input$);
-      }
-    }
-
-    // Wire up NostrFilter nodes
-    for (const node of nodes) {
-      if (getNodeType(node) === 'NostrFilter') {
-        const nostrFilterNode = node as NostrFilterNode;
-
-        // Wire up filter socket inputs first
-        const socketKeys = nostrFilterNode.getSocketKeys();
-        for (const socketKey of socketKeys) {
-          const socketConn = connections.find(
-            (c: { target: string; targetInput: string; sourceOutput: string }) =>
-              c.target === node.id && c.targetInput === socketKey
-          );
-          const socket$ = socketConn ? getNodeOutput(socketConn.source, socketConn.sourceOutput) : null;
-          nostrFilterNode.setSocketInput(socketKey, socket$);
+      // Return the appropriate output based on node type
+      if (sourceType === 'Constant') {
+        return (sourceNode as ConstantNode).output$;
+      } else if (sourceType === 'Nip07') {
+        return (sourceNode as Nip07Node).output$;
+      } else if (sourceType === 'Extraction') {
+        return (sourceNode as ExtractionNode).getOutput$();
+      } else if (sourceType === 'If') {
+        return (sourceNode as IfNode).output$;
+      } else if (sourceType === 'Count') {
+        return (sourceNode as CountNode).output$;
+      } else if (sourceType === 'ModularRelay') {
+        const modularRelayNode = sourceNode as ModularRelayNode;
+        if (sourceOutput === 'relayStatus') {
+          return modularRelayNode.relayStatus$;
         }
-
-        // Wire up main event input (find connection to 'input' socket specifically)
-        const inputConn = connections.find(
-          (c: { target: string; targetInput?: string }) =>
-            c.target === node.id && (!c.targetInput || c.targetInput === 'input')
-        );
-        const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
-
-        nostrFilterNode.setInput(input$);
+        return null; // Events are not valid for If node
       }
-    }
+      return null;
+    };
 
-    // Wire up Count nodes
-    for (const node of nodes) {
-      if (getNodeType(node) === 'Count') {
-        const countNode = node as CountNode;
+    // Topological sort nodes based on connection dependencies
+    // This ensures upstream nodes are wired before downstream nodes
+    const sortedNodeIds = topologicalSort(nodes, connections);
 
-        const inputConn = connections.find(
-          (c: { target: string }) => c.target === node.id
-        );
-        const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+    // Wire up nodes in topological order
+    for (const nodeId of sortedNodeIds) {
+      const node = editor.getNode(nodeId);
+      if (!node) continue;
 
-        countNode.setInput(input$);
-      }
-    }
+      const nodeType = getNodeType(node);
 
-    // Wire up Extraction nodes
-    for (const node of nodes) {
-      if (getNodeType(node) === 'Extraction') {
-        const extractionNode = node as ExtractionNode;
-
-        const inputConn = connections.find(
-          (c: { target: string }) => c.target === node.id
-        );
-        const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
-
-        extractionNode.setInput(input$ as Observable<EventSignal> | null);
-      }
-    }
-
-    // Wire up If nodes
-    for (const node of nodes) {
-      if (getNodeType(node) === 'If') {
-        const ifNode = node as IfNode;
-
-        // Helper to get typed output from source node for If inputs
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const getIfTypedOutput = (sourceId: string, sourceOutput?: string): Observable<any> | null => {
-          const sourceNode = editor.getNode(sourceId);
-          if (!sourceNode) return null;
-          const sourceType = getNodeType(sourceNode);
-
-          // Return the appropriate output based on node type
-          if (sourceType === 'Constant') {
-            return (sourceNode as ConstantNode).output$;
-          } else if (sourceType === 'Nip07') {
-            return (sourceNode as Nip07Node).output$;
-          } else if (sourceType === 'Extraction') {
-            return (sourceNode as ExtractionNode).getOutput$();
-          } else if (sourceType === 'If') {
-            return (sourceNode as IfNode).output$;
-          } else if (sourceType === 'Count') {
-            return (sourceNode as CountNode).output$;
-          } else if (sourceType === 'ModularRelay') {
-            const modularRelayNode = sourceNode as ModularRelayNode;
-            if (sourceOutput === 'relayStatus') {
-              return modularRelayNode.relayStatus$;
-            }
-            return null; // Events are not valid for If node
-          }
-          return null;
-        };
-
-        // Find inputA connection
-        const inputAConn = connections.find(
-          (c: { target: string; targetInput: string; sourceOutput?: string }) =>
-            c.target === node.id && c.targetInput === 'inputA'
-        ) as { source: string; sourceOutput?: string } | undefined;
-        const inputA$ = inputAConn ? getIfTypedOutput(inputAConn.source, inputAConn.sourceOutput) : null;
-        ifNode.setInputA(inputA$);
-
-        // Find inputB connection
-        const inputBConn = connections.find(
-          (c: { target: string; targetInput: string; sourceOutput?: string }) =>
-            c.target === node.id && c.targetInput === 'inputB'
-        ) as { source: string; sourceOutput?: string } | undefined;
-        const inputB$ = inputBConn ? getIfTypedOutput(inputBConn.source, inputBConn.sourceOutput) : null;
-        ifNode.setInputB(inputB$);
-      }
-    }
-
-    // Wire up ModularRelay nodes
-    for (const node of nodes) {
-      if (getNodeType(node) === 'ModularRelay') {
-        const modularRelayNode = node as ModularRelayNode;
-
-        // Wire up filter socket inputs FIRST (before trigger, so values are ready)
-        const socketKeys = modularRelayNode.getSocketKeys();
-        for (const socketKey of socketKeys) {
-          const socketConn = connections.find(
-            (c: { target: string; targetInput: string; sourceOutput: string }) =>
-              c.target === node.id && c.targetInput === socketKey
-          );
-          const socket$ = socketConn ? getNodeOutput(socketConn.source, socketConn.sourceOutput) : null;
-          modularRelayNode.setSocketInput(socketKey, socket$);
-        }
-
-        // Wire up relay input
-        const relayConn = connections.find(
-          (c: { target: string; targetInput: string; sourceOutput: string }) =>
-            c.target === node.id && c.targetInput === 'relay'
-        );
-        const relay$ = relayConn ? getNodeOutput(relayConn.source, relayConn.sourceOutput) : null;
-        modularRelayNode.setRelayInput(relay$);
-
-        // Wire up trigger input LAST (so all other inputs are ready when subscription starts)
-        const triggerConn = connections.find(
-          (c: { target: string; targetInput: string; sourceOutput: string }) =>
-            c.target === node.id && c.targetInput === 'trigger'
-        );
-        const trigger$ = triggerConn ? getNodeOutput(triggerConn.source, triggerConn.sourceOutput) : null;
-        modularRelayNode.setTriggerInput(trigger$);
-      }
-    }
-
-    // Wire up FuncDefOut nodes
-    for (const node of nodes) {
-      if (getNodeType(node) === 'FuncDefOut') {
-        const funcDefOutNode = node as FuncDefOutNode;
-        const socketCount = funcDefOutNode.getSocketCount();
-
-        // Wire each input socket
-        for (let i = 0; i < socketCount; i++) {
-          const socketKey = `in_${i}`;
+      switch (nodeType) {
+        case 'Extraction': {
+          const extractionNode = node as ExtractionNode;
           const inputConn = connections.find(
-            (c: { target: string; targetInput: string }) =>
-              c.target === node.id && c.targetInput === socketKey
+            (c: { target: string }) => c.target === node.id
           );
           const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
-          funcDefOutNode.setInputByIndex(i, input$);
+          extractionNode.setInput(input$ as Observable<EventSignal> | null);
+          break;
         }
-      }
-    }
 
-    // Wire up FunctionNode inputs
-    for (const node of nodes) {
-      if (getNodeType(node) === 'Function') {
-        const functionNode = node as FunctionNode;
-        const inputKeys = functionNode.getInputKeys();
-
-        // Wire each input socket
-        for (const inputKey of inputKeys) {
-          const inputConn = connections.find(
-            (c: { target: string; targetInput: string; sourceOutput: string }) =>
-              c.target === node.id && c.targetInput === inputKey
+        case 'Operator': {
+          const operatorNode = node as OperatorNode;
+          const input1Conn = connections.find(
+            (c: { target: string; targetInput: string }) =>
+              c.target === node.id && c.targetInput === 'input1'
           );
-          const input$ = inputConn ? getNodeOutput(inputConn.source, inputConn.sourceOutput) : null;
-          functionNode.setInput(inputKey, input$);
+          const input1$ = input1Conn ? getNodeOutput(input1Conn.source) : null;
+          const input2Conn = connections.find(
+            (c: { target: string; targetInput: string }) =>
+              c.target === node.id && c.targetInput === 'input2'
+          );
+          const input2$ = input2Conn ? getNodeOutput(input2Conn.source) : null;
+          operatorNode.setInputs(input1$, input2$);
+          break;
         }
+
+        case 'Search': {
+          const searchNode = node as SearchNode;
+          const inputConn = connections.find(
+            (c: { target: string }) => c.target === node.id
+          );
+          const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+          searchNode.setInput(input$);
+          break;
+        }
+
+        case 'Language': {
+          const languageNode = node as LanguageNode;
+          const inputConn = connections.find(
+            (c: { target: string }) => c.target === node.id
+          );
+          const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+          languageNode.setInput(input$);
+          break;
+        }
+
+        case 'NostrFilter': {
+          const nostrFilterNode = node as NostrFilterNode;
+          // Wire up filter socket inputs first
+          const socketKeys = nostrFilterNode.getSocketKeys();
+          for (const socketKey of socketKeys) {
+            const socketConn = connections.find(
+              (c: { target: string; targetInput: string; sourceOutput: string }) =>
+                c.target === node.id && c.targetInput === socketKey
+            );
+            const socket$ = socketConn ? getNodeOutput(socketConn.source, socketConn.sourceOutput) : null;
+            nostrFilterNode.setSocketInput(socketKey, socket$);
+          }
+          // Wire up main event input
+          const inputConn = connections.find(
+            (c: { target: string; targetInput?: string }) =>
+              c.target === node.id && (!c.targetInput || c.targetInput === 'input')
+          );
+          const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+          nostrFilterNode.setInput(input$);
+          break;
+        }
+
+        case 'Count': {
+          const countNode = node as CountNode;
+          const inputConn = connections.find(
+            (c: { target: string }) => c.target === node.id
+          );
+          const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+          countNode.setInput(input$);
+          break;
+        }
+
+        case 'If': {
+          const ifNode = node as IfNode;
+          const inputAConn = connections.find(
+            (c: { target: string; targetInput: string; sourceOutput?: string }) =>
+              c.target === node.id && c.targetInput === 'inputA'
+          ) as { source: string; sourceOutput?: string } | undefined;
+          const inputA$ = inputAConn ? getIfTypedOutput(inputAConn.source, inputAConn.sourceOutput) : null;
+          ifNode.setInputA(inputA$);
+          const inputBConn = connections.find(
+            (c: { target: string; targetInput: string; sourceOutput?: string }) =>
+              c.target === node.id && c.targetInput === 'inputB'
+          ) as { source: string; sourceOutput?: string } | undefined;
+          const inputB$ = inputBConn ? getIfTypedOutput(inputBConn.source, inputBConn.sourceOutput) : null;
+          ifNode.setInputB(inputB$);
+          break;
+        }
+
+        case 'ModularRelay': {
+          const modularRelayNode = node as ModularRelayNode;
+          // Wire up filter socket inputs FIRST (before trigger, so values are ready)
+          const socketKeys = modularRelayNode.getSocketKeys();
+          for (const socketKey of socketKeys) {
+            const socketConn = connections.find(
+              (c: { target: string; targetInput: string; sourceOutput: string }) =>
+                c.target === node.id && c.targetInput === socketKey
+            );
+            const socket$ = socketConn ? getNodeOutput(socketConn.source, socketConn.sourceOutput) : null;
+            modularRelayNode.setSocketInput(socketKey, socket$);
+          }
+          // Wire up relay input
+          const relayConn = connections.find(
+            (c: { target: string; targetInput: string; sourceOutput: string }) =>
+              c.target === node.id && c.targetInput === 'relay'
+          );
+          const relay$ = relayConn ? getNodeOutput(relayConn.source, relayConn.sourceOutput) : null;
+          modularRelayNode.setRelayInput(relay$);
+          // Wire up trigger input LAST (so all other inputs are ready when subscription starts)
+          const triggerConn = connections.find(
+            (c: { target: string; targetInput: string; sourceOutput: string }) =>
+              c.target === node.id && c.targetInput === 'trigger'
+          );
+          const trigger$ = triggerConn ? getNodeOutput(triggerConn.source, triggerConn.sourceOutput) : null;
+          modularRelayNode.setTriggerInput(trigger$);
+          break;
+        }
+
+        case 'FuncDefOut': {
+          const funcDefOutNode = node as FuncDefOutNode;
+          const socketCount = funcDefOutNode.getSocketCount();
+          for (let i = 0; i < socketCount; i++) {
+            const socketKey = `in_${i}`;
+            const inputConn = connections.find(
+              (c: { target: string; targetInput: string }) =>
+                c.target === node.id && c.targetInput === socketKey
+            );
+            const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+            funcDefOutNode.setInputByIndex(i, input$);
+          }
+          break;
+        }
+
+        case 'Function': {
+          const functionNode = node as FunctionNode;
+          const inputKeys = functionNode.getInputKeys();
+          for (const inputKey of inputKeys) {
+            const inputConn = connections.find(
+              (c: { target: string; targetInput: string; sourceOutput: string }) =>
+                c.target === node.id && c.targetInput === inputKey
+            );
+            const input$ = inputConn ? getNodeOutput(inputConn.source, inputConn.sourceOutput) : null;
+            functionNode.setInput(inputKey, input$);
+          }
+          break;
+        }
+
+        case 'Sampling': {
+          const samplingNode = node as SamplingNode;
+          const inputConn = connections.find(
+            (c: { target: string }) => c.target === node.id
+          );
+          const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+          samplingNode.setInput(input$);
+          break;
+        }
+
+        case 'Delay': {
+          const delayNode = node as DelayNode;
+          const inputConn = connections.find(
+            (c: { target: string }) => c.target === node.id
+          );
+          const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
+          delayNode.setInput(input$);
+          break;
+        }
+
+        case 'Timeline': {
+          // Timeline wiring is handled separately below due to its complexity
+          break;
+        }
+
+        // Source nodes (Constant, Nip07, SimpleRelay) don't need input wiring
+        // FuncDefIn is also a source node within function definitions
+        default:
+          break;
       }
     }
 
-    // Wire up Timeline nodes
+    // Wire up Timeline nodes (separate loop due to complexity)
     for (const node of nodes) {
       if (getNodeType(node) === 'Timeline') {
         const timelineNode = node as TimelineNode;
@@ -1274,16 +1343,19 @@ export function GraphEditor({
         }
         const excludedSet = excludedItemsRef.current.get(timelineNodeId)!;
 
-        // Helper to generate unique ID for a timeline item
+        // Helper to generate unique ID for a timeline item (normalized for comparison)
         const generateItemId = (signal: TimelineSignal): string => {
           const data = signal.data;
           switch (signal.type) {
             case 'event':
-              return (data as EventSignal).event.id;
+              // Event ID is already hex - normalize to lowercase
+              return (data as EventSignal).event.id.toLowerCase();
             case 'eventId':
-              return `eventId:${data as string}`;
+              // Normalize note1.../nevent1... to hex for consistent comparison
+              return `eventId:${normalizeEventIdToHex(data as string)}`;
             case 'pubkey':
-              return `pubkey:${data as string}`;
+              // Normalize npub1.../nprofile1... to hex for consistent comparison
+              return `pubkey:${normalizePubkeyToHex(data as string)}`;
             case 'relay':
               return `relay:${Array.isArray(data) ? (data as string[]).join(',') : data as string}`;
             case 'datetime':
@@ -1687,6 +1759,18 @@ export function GraphEditor({
             (node as CountNode).deserialize(nodeData.data as { count?: number });
           }
           break;
+        case 'Sampling':
+          node = new SamplingNode();
+          if (nodeData.data) {
+            (node as SamplingNode).deserialize(nodeData.data as { numerator?: number; denominator?: number });
+          }
+          break;
+        case 'Delay':
+          node = new DelayNode();
+          if (nodeData.data) {
+            (node as DelayNode).deserialize(nodeData.data as { delayValue?: number; delayUnit?: 'ms' | 'sec' | 'min' });
+          }
+          break;
         case 'FuncDefIn':
           node = new FuncDefInNode();
           if (nodeData.data) {
@@ -1845,7 +1929,7 @@ export function GraphEditor({
     }
   }, [loadGraphData]);
 
-  const addNode = useCallback(async (type: 'SimpleRelay' | 'Operator' | 'Search' | 'Language' | 'NostrFilter' | 'Timeline' | 'Constant' | 'Nip07' | 'Extraction' | 'ModularRelay' | 'If' | 'Count' | 'FuncDefIn' | 'FuncDefOut' | 'Function') => {
+  const addNode = useCallback(async (type: 'SimpleRelay' | 'Operator' | 'Search' | 'Language' | 'NostrFilter' | 'Timeline' | 'Constant' | 'Nip07' | 'Extraction' | 'ModularRelay' | 'If' | 'Count' | 'Sampling' | 'Delay' | 'FuncDefIn' | 'FuncDefOut' | 'Function') => {
     const editor = editorRef.current;
     const area = areaRef.current;
     if (!editor || !area) return;
@@ -1889,6 +1973,12 @@ export function GraphEditor({
         break;
       case 'Count':
         node = new CountNode();
+        break;
+      case 'Sampling':
+        node = new SamplingNode();
+        break;
+      case 'Delay':
+        node = new DelayNode();
         break;
       case 'FuncDefIn':
         node = new FuncDefInNode();
@@ -3215,6 +3305,8 @@ export function GraphEditor({
                     <button onClick={() => { addNode('Extraction'); setFilterDropdownOpen(false); }}>{t('toolbar.extraction', 'Extraction')}</button>
                     <button onClick={() => { addNode('If'); setFilterDropdownOpen(false); }}>{t('toolbar.if', 'If')}</button>
                     <button onClick={() => { addNode('Count'); setFilterDropdownOpen(false); }}>{t('toolbar.count', 'Count')}</button>
+                    <button onClick={() => { addNode('Sampling'); setFilterDropdownOpen(false); }}>{t('toolbar.sampling', 'Sampling')}</button>
+                    <button onClick={() => { addNode('Delay'); setFilterDropdownOpen(false); }}>{t('toolbar.delay', 'Delay')}</button>
                   </div>
                 )}
               </div>

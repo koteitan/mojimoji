@@ -13,6 +13,7 @@ import {
 } from './types';
 import { SelectControl } from './controls';
 import type { EventSignal } from '../../../nostr/types';
+import { normalizePubkeyToHex, normalizeEventIdToHex } from '../../../nostr/types';
 
 export type OperatorType = 'AND' | 'OR' | 'A-B';
 export type OperatorDataType = 'event' | 'eventId' | 'pubkey' | 'relay' | 'flag' | 'integer' | 'datetime' | 'relayStatus';
@@ -59,6 +60,10 @@ export class OperatorNode extends ClassicPreset.Node {
   // Track seen keys for AND operation
   private seenFromInput1 = new Set<string>();
   private seenFromInput2 = new Set<string>();
+
+  // Track last values for numeric subtraction (Integer/Datetime A-B)
+  private lastValueA: number | null = null;
+  private lastValueB: number | null = null;
 
   // Subscriptions
   private subscriptions: { unsubscribe: () => void }[] = [];
@@ -156,17 +161,24 @@ export class OperatorNode extends ClassicPreset.Node {
     this.updateSockets();
   }
 
-  // Extract unique key from signal based on data type
+  // Extract unique key from signal based on data type (normalized for comparison)
   private getKeyFromSignal(signal: unknown): string {
     if (!signal || typeof signal !== 'object') return '';
 
     switch (this.dataType) {
       case 'event':
-        return (signal as EventSignal).event?.id || '';
-      case 'eventId':
-        return (signal as { eventId: string }).eventId || '';
-      case 'pubkey':
-        return (signal as { pubkey: string }).pubkey || '';
+        // Event ID is already hex from the event object
+        return (signal as EventSignal).event?.id?.toLowerCase() || '';
+      case 'eventId': {
+        // Normalize note1.../nevent1... to hex
+        const eventId = (signal as { eventId: string }).eventId || '';
+        return normalizeEventIdToHex(eventId);
+      }
+      case 'pubkey': {
+        // Normalize npub1.../nprofile1... to hex
+        const pubkey = (signal as { pubkey: string }).pubkey || '';
+        return normalizePubkeyToHex(pubkey);
+      }
       case 'relay':
         return JSON.stringify((signal as { relays: string[] }).relays || []);
       case 'flag':
@@ -180,6 +192,30 @@ export class OperatorNode extends ClassicPreset.Node {
       default:
         return '';
     }
+  }
+
+  // Extract numeric value from signal (for Integer/Datetime subtraction)
+  private getNumericValue(signal: unknown): number | null {
+    if (!signal || typeof signal !== 'object') return null;
+
+    if (this.dataType === 'integer') {
+      const value = (signal as { value: number }).value;
+      return typeof value === 'number' ? value : null;
+    } else if (this.dataType === 'datetime') {
+      const datetime = (signal as { datetime: number }).datetime;
+      return typeof datetime === 'number' ? datetime : null;
+    }
+    return null;
+  }
+
+  // Create a numeric signal for Integer/Datetime
+  private createNumericSignal(value: number): unknown {
+    if (this.dataType === 'integer') {
+      return { value, signal: 'add' };
+    } else if (this.dataType === 'datetime') {
+      return { datetime: value, signal: 'add' };
+    }
+    return { value, signal: 'add' };
   }
 
   // Get the signal type ('add' or 'remove') from a signal
@@ -210,8 +246,13 @@ export class OperatorNode extends ClassicPreset.Node {
     this.stopSubscriptions();
     this.seenFromInput1.clear();
     this.seenFromInput2.clear();
+    this.lastValueA = null;
+    this.lastValueB = null;
 
     if (!this.input1$ && !this.input2$) return;
+
+    // Check if this is a numeric type that uses subtraction for A-B
+    const isNumericType = this.dataType === 'integer' || this.dataType === 'datetime';
 
     switch (this.operator) {
       case 'OR':
@@ -262,25 +303,61 @@ export class OperatorNode extends ClassicPreset.Node {
         break;
 
       case 'A-B':
-        // A-B: values from A that are NOT in B
-        if (this.input1$ && this.input2$) {
-          // Pass through values from input1 (A) as-is
-          const sub1 = this.input1$.subscribe({
-            next: (signal) => this.outputSubject.next(signal as EventSignal),
-          });
-          // Values from input2 (B) are inverted
-          const sub2 = this.input2$.subscribe({
-            next: (signal) => {
-              this.outputSubject.next(this.invertSignal(signal) as EventSignal);
-            },
-          });
-          this.subscriptions.push(sub1, sub2);
-        } else if (this.input1$) {
-          // If no input2, just pass through input1
-          const sub = this.input1$.subscribe({
-            next: (signal) => this.outputSubject.next(signal as EventSignal),
-          });
-          this.subscriptions.push(sub);
+        // A-B: For numeric types (integer/datetime), compute A - B
+        // For other types, values from A pass through, values from B are inverted (excludedSet)
+        if (isNumericType) {
+          // Numeric subtraction mode
+          if (this.input1$ && this.input2$) {
+            const sub1 = this.input1$.subscribe({
+              next: (signal) => {
+                this.lastValueA = this.getNumericValue(signal);
+                if (this.lastValueA !== null && this.lastValueB !== null) {
+                  const result = this.lastValueA - this.lastValueB;
+                  this.outputSubject.next(this.createNumericSignal(result) as EventSignal);
+                } else if (this.lastValueA !== null) {
+                  // Only A has value, output A as-is
+                  this.outputSubject.next(signal as EventSignal);
+                }
+              },
+            });
+            const sub2 = this.input2$.subscribe({
+              next: (signal) => {
+                this.lastValueB = this.getNumericValue(signal);
+                if (this.lastValueA !== null && this.lastValueB !== null) {
+                  const result = this.lastValueA - this.lastValueB;
+                  this.outputSubject.next(this.createNumericSignal(result) as EventSignal);
+                }
+              },
+            });
+            this.subscriptions.push(sub1, sub2);
+          } else if (this.input1$) {
+            // No B input, pass through A as-is
+            const sub = this.input1$.subscribe({
+              next: (signal) => this.outputSubject.next(signal as EventSignal),
+            });
+            this.subscriptions.push(sub);
+          }
+        } else {
+          // excludedSet mode (for non-numeric types)
+          if (this.input1$ && this.input2$) {
+            // Pass through values from input1 (A) as-is
+            const sub1 = this.input1$.subscribe({
+              next: (signal) => this.outputSubject.next(signal as EventSignal),
+            });
+            // Values from input2 (B) are inverted
+            const sub2 = this.input2$.subscribe({
+              next: (signal) => {
+                this.outputSubject.next(this.invertSignal(signal) as EventSignal);
+              },
+            });
+            this.subscriptions.push(sub1, sub2);
+          } else if (this.input1$) {
+            // If no input2, just pass through input1
+            const sub = this.input1$.subscribe({
+              next: (signal) => this.outputSubject.next(signal as EventSignal),
+            });
+            this.subscriptions.push(sub);
+          }
         }
         break;
     }

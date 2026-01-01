@@ -16,6 +16,8 @@
     "extraction": "抽出",
     "if": "If",
     "count": "カウント",
+    "sampling": "サンプリング",
+    "delay": "遅延",
     "output": "+出力",
     "functionMenu": "+関数",
     "funcDefIn": "定義(in)",
@@ -125,6 +127,16 @@
     },
     "count": {
       "title": "カウント"
+    },
+    "sampling": {
+      "title": "サンプリング",
+      "numerator": "分子",
+      "denominator": "分母"
+    },
+    "delay": {
+      "title": "遅延",
+      "delay": "遅延",
+      "unit": "単位"
     },
     "funcDefIn": {
       "title": "関数定義(in)",
