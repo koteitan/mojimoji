@@ -60,6 +60,7 @@ export function getBaseField(field: string): string {
 
 // Filter fields for NostrFilter node (pass-through filter, no ids/limit)
 export const NOSTR_FILTER_FIELDS = [
+  // UI fields (value input)
   { value: 'kinds', label: 'kinds' },
   { value: 'authors', label: 'authors' },
   { value: '#e', label: '#e' },
@@ -68,6 +69,13 @@ export const NOSTR_FILTER_FIELDS = [
   { value: '#t', label: '#t' },
   { value: 'since', label: 'since' },
   { value: 'until', label: 'until' },
+  // Socket fields (input socket)
+  { value: 'authors (socket)', label: 'authors (socket)' },
+  { value: '#e (socket)', label: '#e (socket)' },
+  { value: '#p (socket)', label: '#p (socket)' },
+  { value: '#q (socket)', label: '#q (socket)' },
+  { value: 'since (socket)', label: 'since (socket)' },
+  { value: 'until (socket)', label: 'until (socket)' },
 ];
 
 // Filter control for nostr filters

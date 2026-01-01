@@ -410,6 +410,16 @@ function SimpleFilterControlComponent({ control, nodeId }: { control: SimpleFilt
     setElements(newElements);
   };
 
+  const handleFieldChange = (index: number, newField: string) => {
+    // Clear value when switching to socket field
+    const newValue = isSocketField(newField) ? '' : elements[index].value;
+    const newElements = elements.map((el, i) =>
+      i === index ? { field: newField, value: newValue } : el
+    );
+    setElements(newElements);
+    commitChanges(newElements, exclude);
+  };
+
   const handleBlur = () => {
     commitChanges(elements, exclude);
   };
@@ -426,8 +436,7 @@ function SimpleFilterControlComponent({ control, nodeId }: { control: SimpleFilt
           <select
             className="filter-field-select"
             value={element.field}
-            onChange={(e) => updateElement(index, e.target.value, element.value)}
-            onBlur={handleBlur}
+            onChange={(e) => handleFieldChange(index, e.target.value)}
             onPointerDown={(e) => e.stopPropagation()}
           >
             {NOSTR_FILTER_FIELDS.map((f) => (
@@ -436,15 +445,17 @@ function SimpleFilterControlComponent({ control, nodeId }: { control: SimpleFilt
               </option>
             ))}
           </select>
-          <input
-            type="text"
-            className="filter-value-input"
-            value={element.value}
-            placeholder="value"
-            onChange={(e) => updateElement(index, element.field, e.target.value)}
-            onBlur={handleBlur}
-            onPointerDown={(e) => e.stopPropagation()}
-          />
+          {!isSocketField(element.field) && (
+            <input
+              type="text"
+              className="filter-value-input"
+              value={element.value}
+              placeholder="value"
+              onChange={(e) => updateElement(index, element.field, e.target.value)}
+              onBlur={handleBlur}
+              onPointerDown={(e) => e.stopPropagation()}
+            />
+          )}
           {elements.length > 1 && (
             <button
               className="filter-element-remove-btn"

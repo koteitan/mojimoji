@@ -1062,8 +1062,21 @@ export function GraphEditor({
       if (getNodeType(node) === 'NostrFilter') {
         const nostrFilterNode = node as NostrFilterNode;
 
+        // Wire up filter socket inputs first
+        const socketKeys = nostrFilterNode.getSocketKeys();
+        for (const socketKey of socketKeys) {
+          const socketConn = connections.find(
+            (c: { target: string; targetInput: string; sourceOutput: string }) =>
+              c.target === node.id && c.targetInput === socketKey
+          );
+          const socket$ = socketConn ? getNodeOutput(socketConn.source, socketConn.sourceOutput) : null;
+          nostrFilterNode.setSocketInput(socketKey, socket$);
+        }
+
+        // Wire up main event input (find connection to 'input' socket specifically)
         const inputConn = connections.find(
-          (c: { target: string }) => c.target === node.id
+          (c: { target: string; targetInput?: string }) =>
+            c.target === node.id && (!c.targetInput || c.targetInput === 'input')
         );
         const input$ = inputConn ? getNodeOutput(inputConn.source) : null;
 
