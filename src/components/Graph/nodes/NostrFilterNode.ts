@@ -124,16 +124,8 @@ export class NostrFilterNode extends ClassicPreset.Node {
   // Check if an event matches the filter criteria
   private matches(event: NostrEvent): boolean {
     const result = this.matchesFilter(event);
-    const finalResult = this.exclude ? !result : result;
-    // Debug: log first few filter decisions
-    if (!NostrFilterNode.debugCount) NostrFilterNode.debugCount = 0;
-    if (NostrFilterNode.debugCount < 3) {
-      console.log(`[NostrFilter] event kind=${event.kind}, filterResult=${result}, exclude=${this.exclude}, pass=${finalResult}, elements=`, JSON.stringify(this.filterElements));
-      NostrFilterNode.debugCount++;
-    }
-    return finalResult;
+    return this.exclude ? !result : result;
   }
-  private static debugCount = 0;
 
   private matchesFilter(event: NostrEvent): boolean {
     // All specified elements must match (AND logic between elements)
@@ -409,22 +401,17 @@ export class NostrFilterNode extends ClassicPreset.Node {
     this.socketValues.set(key, []);
 
     if (!input) {
-      console.log(`[NostrFilter] setSocketInput(${key}): no input`);
       return;
     }
 
     const field = this.currentSockets.get(key);
     if (!field) {
-      console.log(`[NostrFilter] setSocketInput(${key}): no field in currentSockets`);
       return;
     }
-
-    console.log(`[NostrFilter] setSocketInput(${key}): subscribing to ${field}`);
 
     // Subscribe and collect values
     const sub = input.subscribe({
       next: (signal: unknown) => {
-        console.log(`[NostrFilter] socket ${key} received:`, signal);
         const values = this.socketValues.get(key) || [];
         let value: unknown;
         let operation: 'add' | 'remove' = 'add';
@@ -458,7 +445,6 @@ export class NostrFilterNode extends ClassicPreset.Node {
           if (!values.includes(value)) {
             values.push(value);
             this.socketValues.set(key, values);
-            console.log(`[NostrFilter] socket ${key} values now:`, values);
           }
         } else if (operation === 'remove') {
           const index = values.indexOf(value);
@@ -469,7 +455,7 @@ export class NostrFilterNode extends ClassicPreset.Node {
         }
       },
       complete: () => {
-        console.log(`[NostrFilter] socket ${key} completed, values:`, this.socketValues.get(key));
+        // Socket input completed
       },
     });
 
