@@ -54,31 +54,26 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
   const [relayUrls, setRelayUrls] = useState('');
   const [urlCopied, setUrlCopied] = useState(false);
   const [useCompactLayout, setUseCompactLayout] = useState(false);
-  const nameRef = useRef<HTMLSpanElement>(null);
+  const itemRef = useRef<HTMLDivElement>(null);
 
-  // Check graph name width after render to determine layout
-  // Only measure when in 1-row layout (useCompactLayout === false)
-  // because 2-row layout has wider graph name space
+  // Check browser-item width after render to determine layout
   useEffect(() => {
-    if (source !== 'nostr' || nostrLoading || useCompactLayout) return;
+    if (source !== 'nostr' || nostrLoading) return;
 
     // Small delay to ensure DOM is rendered
     const timer = setTimeout(() => {
-      const nameEl = nameRef.current;
-      if (!nameEl) {
+      const itemEl = itemRef.current;
+      if (!itemEl) {
         return;
       }
 
-      const nameWidth = nameEl.offsetWidth;
-      const compact = nameWidth < 120;
-      alert(`Graph name width: ${nameWidth}px → ${compact ? '2-row' : '1-row'} layout`);
-      if (compact && !useCompactLayout) {
-        setUseCompactLayout(true);
-      }
+      const itemWidth = itemEl.offsetWidth;
+      const compact = itemWidth < 500;
+      setUseCompactLayout(compact);
     }, 200);
 
     return () => clearTimeout(timer);
-  }, [source, nostrLoading, nostrGraphs, useCompactLayout]);
+  }, [source, nostrLoading, nostrGraphs]);
 
   // Refresh data when dialog opens
   useEffect(() => {
@@ -578,43 +573,54 @@ export function LoadDialog({ isOpen, onClose, onLoad }: LoadDialogProps) {
                       return (
                         <div
                           key={item.path}
+                          ref={isFirst ? itemRef : undefined}
                           className={`browser-item graph ${selectedNostrGraph?.path === item.path ? 'selected' : ''} ${useCompactLayout ? 'compact' : ''}`}
                           onClick={() => handleSelectNostrGraph(item)}
                         >
                           {useCompactLayout ? (
-                            <>
-                              <div className="item-row-1">
-                                <span className="item-icon">📄</span>
-                                <span className="item-name" ref={isFirst ? nameRef : undefined}>{item.name}</span>
-                                {item.visibility && (
-                                  <span className={`item-visibility ${item.visibility}`}>
-                                    {item.visibility === 'public' ? 'public' : 'for yourself'}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="item-row-2">
-                                <img src={profile?.picture || DEFAULT_AVATAR} alt="" className="item-author-picture" />
-                                <span className="item-author-name">
-                                  {profile?.name || formatNpub(item.pubkey)}
-                                </span>
-                                <span className="item-date">
-                                  {item.createdAt > 0 ? new Date(item.createdAt * 1000).toLocaleString() : ''}
-                                </span>
-                                {isOwn && (
-                                  <button
-                                    className="item-delete"
-                                    onClick={(e) => handleDeleteNostrGraph(e, item)}
-                                    title={t('dialogs.load.deleteGraph')}
-                                  >
-                                    ×
-                                  </button>
-                                )}
-                              </div>
-                            </>
+                            <table className="compact-table">
+                              <tbody>
+                                <tr>
+                                  <td className="compact-cell-icon"><span className="item-icon">📄</span></td>
+                                  <td className="compact-cell-main">
+                                    <span className="item-name">{item.name}</span>
+                                    {item.visibility && (
+                                      <span className={`item-visibility ${item.visibility}`}>
+                                        {item.visibility === 'public' ? 'public' : 'for yourself'}
+                                      </span>
+                                    )}
+                                  </td>
+                                  {isOwn && (
+                                    <td className="compact-cell-delete" rowSpan={2}>
+                                      <button
+                                        className="item-delete"
+                                        onClick={(e) => handleDeleteNostrGraph(e, item)}
+                                        title={t('dialogs.load.deleteGraph')}
+                                      >
+                                        ×
+                                      </button>
+                                    </td>
+                                  )}
+                                </tr>
+                                <tr>
+                                  <td className="compact-cell-icon">
+                                    <img src={profile?.picture || DEFAULT_AVATAR} alt="" className="item-author-picture" />
+                                  </td>
+                                  <td className="compact-cell-main">
+                                    <span className="item-author-name">
+                                      {profile?.name || formatNpub(item.pubkey)}
+                                    </span>
+                                    <span className="item-date">
+                                      {item.createdAt > 0 ? new Date(item.createdAt * 1000).toLocaleString() : ''}
+                                    </span>
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
                           ) : (
                             <>
                               <span className="item-icon">📄</span>
-                              <span className="item-name" ref={isFirst ? nameRef : undefined}>{item.name}</span>
+                              <span className="item-name">{item.name}</span>
                               {item.visibility && (
                                 <span className={`item-visibility ${item.visibility}`}>
                                   {item.visibility === 'public' ? 'public' : 'for yourself'}

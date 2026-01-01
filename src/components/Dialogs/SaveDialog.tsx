@@ -43,30 +43,25 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [savedPath, setSavedPath] = useState<string | null>(null);
   const [useCompactLayout, setUseCompactLayout] = useState(false);
-  const nameRef = useRef<HTMLSpanElement>(null);
+  const itemRef = useRef<HTMLDivElement>(null);
 
-  // Check graph name width after render to determine layout
-  // Only measure when in 1-row layout (useCompactLayout === false)
-  // because 2-row layout has wider graph name space
+  // Check browser-item width after render to determine layout
   useEffect(() => {
     if (destination !== 'nostr' || nostrLoading) return;
 
     const timer = setTimeout(() => {
-      const nameEl = nameRef.current;
-      if (!nameEl) {
+      const itemEl = itemRef.current;
+      if (!itemEl) {
         return;
       }
 
-      const nameWidth = nameEl.offsetWidth;
-      const compact = nameWidth < 120;
-      alert(`Graph name width: ${nameWidth}px → ${compact ? '2-row' : '1-row'} layout`);
-      if (compact && !useCompactLayout) {
-        setUseCompactLayout(true);
-      }
+      const itemWidth = itemEl.offsetWidth;
+      const compact = itemWidth < 500;
+      setUseCompactLayout(compact);
     }, 200);
 
     return () => clearTimeout(timer);
-  }, [destination, nostrLoading, nostrGraphs, useCompactLayout]);
+  }, [destination, nostrLoading, nostrGraphs]);
 
   // Refresh data when dialog opens
   useEffect(() => {
@@ -406,45 +401,56 @@ export function SaveDialog({ isOpen, onClose, onSave }: SaveDialogProps) {
                       return (
                         <div
                           key={item.path}
+                          ref={isFirst ? itemRef : undefined}
                           className={`browser-item graph ${graphName === item.name ? 'selected' : ''} ${useCompactLayout ? 'compact' : ''}`}
                           onClick={() => handleSelectGraph(item.name)}
                         >
                           {useCompactLayout ? (
-                            <>
-                              <div className="item-row-1">
-                                <span className="item-icon">📄</span>
-                                <span className="item-name" ref={isFirst ? nameRef : undefined}>{item.name}</span>
-                                {nostrItem && nostrItem.visibility && (
-                                  <span className={`item-visibility ${nostrItem.visibility}`}>
-                                    {nostrItem.visibility === 'public' ? 'public' : 'for yourself'}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="item-row-2">
-                                {nostrItem && (
-                                  <>
-                                    <img src={profile?.picture || DEFAULT_AVATAR} alt="" className="item-author-picture" />
-                                    <span className="item-author-name">
-                                      {profile?.name || formatNpub(nostrItem.pubkey)}
+                            <table className="compact-table">
+                              <tbody>
+                                <tr>
+                                  <td className="compact-cell-icon"><span className="item-icon">📄</span></td>
+                                  <td className="compact-cell-main">
+                                    <span className="item-name">{item.name}</span>
+                                    {nostrItem && nostrItem.visibility && (
+                                      <span className={`item-visibility ${nostrItem.visibility}`}>
+                                        {nostrItem.visibility === 'public' ? 'public' : 'for yourself'}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="compact-cell-delete" rowSpan={2}>
+                                    <button
+                                      className="item-delete"
+                                      onClick={(e) => handleDeleteGraph(e, item.path, item.name, nostrItem?.event?.id)}
+                                      title={t('dialogs.load.deleteGraph')}
+                                    >
+                                      ×
+                                    </button>
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td className="compact-cell-icon">
+                                    {nostrItem && (
+                                      <img src={profile?.picture || DEFAULT_AVATAR} alt="" className="item-author-picture" />
+                                    )}
+                                  </td>
+                                  <td className="compact-cell-main">
+                                    {nostrItem && (
+                                      <span className="item-author-name">
+                                        {profile?.name || formatNpub(nostrItem.pubkey)}
+                                      </span>
+                                    )}
+                                    <span className="item-date">
+                                      {timestamp > 0 ? new Date(timestamp).toLocaleString() : ''}
                                     </span>
-                                  </>
-                                )}
-                                <span className="item-date">
-                                  {timestamp > 0 ? new Date(timestamp).toLocaleString() : ''}
-                                </span>
-                                <button
-                                  className="item-delete"
-                                  onClick={(e) => handleDeleteGraph(e, item.path, item.name, nostrItem?.event?.id)}
-                                  title={t('dialogs.load.deleteGraph')}
-                                >
-                                  ×
-                                </button>
-                              </div>
-                            </>
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
                           ) : (
                             <>
                               <span className="item-icon">📄</span>
-                              <span className="item-name" ref={isFirst ? nameRef : undefined}>{item.name}</span>
+                              <span className="item-name">{item.name}</span>
                               {nostrItem && nostrItem.visibility && (
                                 <span className={`item-visibility ${nostrItem.visibility}`}>
                                   {nostrItem.visibility === 'public' ? 'public' : 'for yourself'}

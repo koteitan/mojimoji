@@ -583,53 +583,61 @@
   white-space: nowrap;
 }
 
-/* Mobile 2-row layout */
-.browser-item.graph .item-row-1,
-.browser-item.graph .item-row-2 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+/* Compact 2-row table layout */
+.compact-table {
   width: 100%;
+  border-collapse: collapse;
 }
 
-.browser-item.graph .item-row-1 .item-icon {
-  width: 18px;
+.compact-table td {
+  padding: 2px 0;
+  vertical-align: middle;
+}
+
+.compact-cell-icon {
+  width: 24px;
   text-align: center;
-  flex-shrink: 0;
 }
 
-.browser-item.graph .item-row-1 .item-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.browser-item.graph .item-row-2 {
-  margin-top: 4px;
-}
-
-.browser-item.graph .item-row-2 .item-author-picture {
-  width: 18px;
-  height: 18px;
+.compact-cell-icon .item-author-picture {
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   object-fit: cover;
-  flex-shrink: 0;
+  vertical-align: middle;
 }
 
-.browser-item.graph .item-row-2 .item-author-name {
-  flex: 1;
-  font-size: 11px;
-  color: #888;
+.compact-cell-main {
+  /* Takes remaining space */
+}
+
+.compact-cell-main .item-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 200px;
+  display: inline-block;
+  vertical-align: middle;
 }
 
-.browser-item.graph .item-row-2 .item-date {
+.compact-cell-main .item-visibility {
+  margin-left: 8px;
+}
+
+.compact-cell-main .item-author-name {
   font-size: 11px;
   color: #888;
-  flex-shrink: 0;
+  margin-right: 8px;
+}
+
+.compact-cell-main .item-date {
+  font-size: 11px;
+  color: #888;
+}
+
+.compact-cell-delete {
+  width: 32px;
+  text-align: right;
 }
 
 /* Filter options: 2x2 grid on mobile */
