@@ -9,6 +9,7 @@
   height: 100%;
   touch-action: none;  /* Desktop: disable browser touch handling for graph pan/zoom */
   user-select: none;
+  isolation: isolate;  /* Create stacking context so nodes don't overlap siblings */
   --dot-size: 2px;
   --dot-spacing: 80px;
   --dot-color: #222;
@@ -368,4 +369,52 @@ svg {
     padding: 6px 8px;
     font-size: 11px;
   }
+}
+
+/* Debug bar (ws mode) */
+.debug-bar {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  display: flex;
+  gap: 4px;
+  z-index: 10;
+}
+
+@media (max-width: 768px) {
+  .debug-bar {
+    bottom: 42px;
+  }
+}
+
+.debug-bar button {
+  padding: 6px 12px;
+  background: #333;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.debug-bar button:hover {
+  background: #444;
+}
+
+.debug-bar .connect-btn {
+  background: #2a5a2a;
+  border-color: #3a7a3a;
+}
+
+.debug-bar .connect-btn:hover {
+  background: #3a7a3a;
+}
+
+.debug-bar .disconnect-btn {
+  background: #5a2a2a;
+  border-color: #7a3a3a;
+}
+
+.debug-bar .disconnect-btn:hover {
+  background: #7a3a3a;
 }

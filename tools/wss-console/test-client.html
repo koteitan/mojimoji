@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WS Console Test Client</title>
+  <style>
+    body { font-family: monospace; background: #1a1a1a; color: #fff; padding: 20px; }
+    input, button { font-family: monospace; padding: 8px; margin: 4px; }
+    input { background: #333; color: #fff; border: 1px solid #555; width: 300px; }
+    button { background: #444; color: #fff; border: none; cursor: pointer; }
+    button:hover { background: #555; }
+    #status { margin: 10px 0; }
+    .connected { color: #4f4; }
+    .disconnected { color: #f44; }
+  </style>
+</head>
+<body>
+  <h2>WS Console Test Client</h2>
+
+  <div>
+    <input type="text" id="url" placeholder="ws://192.168.1.5:9002">
+    <button onclick="connect()">Connect</button>
+    <button onclick="disconnect()">Disconnect</button>
+  </div>
+
+  <div id="status" class="disconnected">Disconnected</div>
+
+  <div>
+    <input type="text" id="message" placeholder="Message to send">
+    <select id="level">
+      <option value="log">log</option>
+      <option value="info">info</option>
+      <option value="warn">warn</option>
+      <option value="error">error</option>
+      <option value="debug">debug</option>
+    </select>
+    <button onclick="sendLog()">Send</button>
+  </div>
+
+  <div style="margin-top: 20px;">
+    <button onclick="sendTest()">Send Test Messages</button>
+  </div>
+
+  <script>
+    let ws = null;
+
+    function connect() {
+      const url = document.getElementById('url').value;
+      if (!url) return alert('Enter WebSocket URL');
+
+      ws = new WebSocket(url);
+
+      ws.onopen = () => {
+        document.getElementById('status').textContent = 'Connected';
+        document.getElementById('status').className = 'connected';
+      };
+
+      ws.onclose = () => {
+        document.getElementById('status').textContent = 'Disconnected';
+        document.getElementById('status').className = 'disconnected';
+      };
+
+      ws.onerror = () => {
+        alert('Connection failed');
+      };
+    }
+
+    function disconnect() {
+      if (ws) ws.close();
+    }
+
+    function sendLog() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return alert('Not connected');
+
+      const message = document.getElementById('message').value;
+      const level = document.getElementById('level').value;
+
+      ws.send(JSON.stringify({
+        level,
+        timestamp: new Date().toISOString(),
+        message
+      }));
+    }
+
+    function sendTest() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return alert('Not connected');
+
+      const levels = ['log', 'info', 'warn', 'error', 'debug'];
+      levels.forEach((level, i) => {
+        setTimeout(() => {
+          ws.send(JSON.stringify({
+            level,
+            timestamp: new Date().toISOString(),
+            message: `Test ${level} message`
+          }));
+        }, i * 200);
+      });
+    }
+  </script>
+</body>
+</html>

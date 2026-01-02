@@ -48,6 +48,7 @@ import {
   GRAPH_DATA_VERSION,
   type GraphData,
 } from '../../utils/localStorage';
+import { myconsole, onWsConnectionChange } from '../../utils/myconsole';
 import { saveGraphToNostr, loadGraphByPath, loadGraphByEventId, loadGraphByNaddr, loadFunctionGraph } from '../../nostr/graphStorage';
 import { getPubkey, isNip07Available } from '../../nostr/nip07';
 import { SubscriptionTracker } from '../../nostr/SubscriptionTracker';
@@ -56,6 +57,7 @@ import { extractContentWarning, decodeBech32ToHex, isHex64, naddrDecode, eventId
 import { EventFetcher } from '../../nostr/EventFetcher';
 import { merge, type Observable, type Subscription } from 'rxjs';
 import { APP_VERSION } from '../../App';
+import { hasWsParam, isWsConnected, connectWs, disconnectWs } from '../../utils/myconsole';
 import './GraphEditor.css';
 
 // Format build timestamp based on locale
@@ -297,6 +299,12 @@ export function GraphEditor({
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
   const [postDialogOpen, setPostDialogOpen] = useState(false);
+  const [wsConnected, setWsConnected] = useState(isWsConnected());
+
+  // Register callback for WebSocket connection state changes
+  useEffect(() => {
+    return onWsConnectionChange(setWsConnected);
+  }, []);
 
   // Get the current graph data as GraphData object
   const getCurrentGraphData = useCallback((): GraphData | null => {
@@ -340,7 +348,7 @@ export function GraphEditor({
   const dumpGraph = useCallback(() => {
     const editor = editorRef.current;
     if (!editor) {
-      console.log('Editor not initialized');
+      myconsole.log('Editor not initialized');
       return;
     }
 
@@ -358,7 +366,7 @@ export function GraphEditor({
     for (const conn of connections) {
       lines.push(`  ${conn.source}.${conn.sourceOutput} -> ${conn.target}.${conn.targetInput}`);
     }
-    console.log(lines.join('\n'));
+    myconsole.log(lines.join('\n'));
   }, []);
 
   // Debug function to dump subscription state to console
@@ -407,7 +415,7 @@ export function GraphEditor({
           lines.push(`Subscription index ${index} not found`);
         }
       }
-      console.log(lines.join('\n'));
+      myconsole.log(lines.join('\n'));
       return;
     }
 
@@ -432,7 +440,7 @@ export function GraphEditor({
     }))];
 
     if (allEntries.length === 0) {
-      console.log('No subscriptions');
+      myconsole.log('No subscriptions');
       return;
     }
 
@@ -463,18 +471,17 @@ export function GraphEditor({
       const relay = entry.relay.padEnd(maxRelay);
       const kinds = `kind:${formatKinds(entry.kinds).padEnd(maxKinds)}`;
       const purpose = entry.purpose.padEnd(maxPurpose);
-      const statusColor = getStatusColor(entry.status);
       const errorSuffix = entry.error ? ` (${entry.error})` : '';
 
       lines.push(`${idx}: ${relay} -> ${kinds} -> ${purpose}: %c${entry.status}${errorSuffix}%c`);
-      lines.push(`color: ${statusColor}; font-weight: bold`);
+      lines.push(`color: ${getStatusColor(entry.status)}; font-weight: bold`);
       lines.push('');  // Reset style
     }
 
-    // Output with color styling (need separate console.log for %c to work per line)
+    // Output with color styling (need separate myconsole.log for %c to work per line)
     for (let i = 0; i < allEntries.length; i++) {
       const lineIdx = i * 3;
-      console.log(lines[lineIdx], lines[lineIdx + 1], lines[lineIdx + 2]);
+      myconsole.log(lines[lineIdx], lines[lineIdx + 1], lines[lineIdx + 2]);
     }
   }, []);
 
@@ -488,7 +495,7 @@ export function GraphEditor({
       lines.push(`      ${(info.bytes / 1024).toFixed(2)} KB`);
     }
     lines.push('==========================');
-    console.log(lines.join('\n'));
+    myconsole.log(lines.join('\n'));
   }, []);
 
   // Toggle timeline monitoring
@@ -504,7 +511,7 @@ export function GraphEditor({
   const reconnect = useCallback(() => {
     const editor = editorRef.current;
     if (!editor) {
-      console.log('Editor not initialized');
+      myconsole.log('Editor not initialized');
       return;
     }
     const nodes = editor.getNodes();
@@ -516,13 +523,13 @@ export function GraphEditor({
         count++;
       }
     }
-    console.log(`🔄 Reconnected ${count} relay node(s)`);
+    myconsole.log(`Reconnected ${count} relay node(s)`);
   }, []);
 
   // Clean up completed subscriptions (for debugging)
   const cleanSub = useCallback(() => {
     const removed = SubscriptionTracker.cleanup();
-    console.log(`🧹 Cleaned up ${removed} completed subscription(s)`);
+    myconsole.log(`Cleaned up ${removed} completed subscription(s)`);
   }, []);
 
   // Dump observable stream structure (for debugging)
@@ -530,7 +537,7 @@ export function GraphEditor({
   const dumpObStream = useCallback(() => {
     const editor = editorRef.current;
     if (!editor) {
-      console.log('Editor not initialized');
+      myconsole.log('Editor not initialized');
       return;
     }
 
@@ -652,7 +659,7 @@ export function GraphEditor({
     if (!hasFunctionNodes) {
       lines.push('  (no FunctionNodes)');
     }
-    console.log(lines.join('\n'));
+    myconsole.log(lines.join('\n'));
   }, []);
 
   // Dump timeline signals (for debugging)
@@ -660,7 +667,7 @@ export function GraphEditor({
   const dumpTl = useCallback(() => {
     const editor = editorRef.current;
     if (!editor) {
-      console.log('Editor not initialized');
+      myconsole.log('Editor not initialized');
       return;
     }
 
@@ -720,15 +727,15 @@ export function GraphEditor({
     if (timelineIndex === 0) {
       lines.push('No timelines found');
     }
-    console.log(lines.join('\n'));
+    myconsole.log(lines.join('\n'));
   }, []);
 
   // Dump all: runs dumpgraph, dumpobstream, and dumptl
   const dumpAll = useCallback(() => {
     dumpGraph();
-    console.log('');
+    myconsole.log('');
     dumpObStream();
-    console.log('');
+    myconsole.log('');
     dumpTl();
   }, [dumpGraph, dumpObStream, dumpTl]);
 
@@ -3377,6 +3384,30 @@ export function GraphEditor({
         isOpen={postDialogOpen}
         onClose={() => setPostDialogOpen(false)}
       />
+
+      {/* Debug bar (ws mode only) */}
+      {hasWsParam() && (
+        <div className="debug-bar">
+          <button
+            onClick={() => {
+              if (wsConnected) {
+                disconnectWs();
+                setWsConnected(false);
+              } else {
+                connectWs();
+                setTimeout(() => setWsConnected(isWsConnected()), 500);
+              }
+            }}
+            className={wsConnected ? 'disconnect-btn' : 'connect-btn'}
+          >
+            {wsConnected ? 'Disconnect' : 'Connect'}
+          </button>
+          <button onClick={() => (window as any).dumpall?.()}>dumpall</button>
+          <button onClick={() => (window as any).dumpsub?.()}>dumpsub</button>
+          <button onClick={() => (window as any).dumpobstream?.()}>dumpobstream</button>
+          <button onClick={() => (window as any).dumptl?.()}>dumptl</button>
+        </div>
+      )}
     </div>
   );
 }
