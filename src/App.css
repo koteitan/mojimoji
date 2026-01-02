@@ -71,7 +71,7 @@
 }
 
 /* Mobile layout: horizontal scroll with snap */
-@media (max-width: 768px) {
+@media (max-width: 580px) {
   .main-content {
     flex: 1;
     display: flex;
