@@ -67,8 +67,6 @@ function updateTitleBarIndicator(): void {
 }
 
 // Initialize WebSocket connection
-let connectionAttempted = false;
-
 function initWebSocket(): void {
   const wsUrl = getWsUrl();
   if (!wsUrl) return;
@@ -85,20 +83,11 @@ function initWebSocket(): void {
   // Show "-" while connecting
   updateTitleBarIndicator();
 
-  // Connection timeout (5 seconds)
-  const timeoutId = setTimeout(() => {
-    if (ws && ws.readyState === WebSocket.CONNECTING) {
-      ws.close();
-    }
-  }, 5000);
-
   try {
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      clearTimeout(timeoutId);
       isConnected = true;
-      connectionAttempted = true;
       updateTitleBarIndicator();
       // Send queued messages
       while (messageQueue.length > 0) {
@@ -110,22 +99,16 @@ function initWebSocket(): void {
     };
 
     ws.onclose = () => {
-      clearTimeout(timeoutId);
       isConnected = false;
       updateTitleBarIndicator();
     };
 
     ws.onerror = () => {
-      clearTimeout(timeoutId);
       isConnected = false;
       updateTitleBarIndicator();
     };
-  } catch (e) {
-    clearTimeout(timeoutId);
-    if (!connectionAttempted) {
-      connectionAttempted = true;
-      alert(`myconsole: exception - ${e}`);
-    }
+  } catch {
+    // Silently fail
   }
 }
 

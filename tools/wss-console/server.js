@@ -11,8 +11,15 @@ const verbose = args.includes('--verbose') || args.includes('-v');
 const portArg = args.find(a => !a.startsWith('-'));
 const port = parseInt(portArg) || 8080;
 
-// Create WebSocket server
-const wss = new WebSocketServer({ port, host: '0.0.0.0' });
+// Create HTTP server for WebSocket
+const http = require('http');
+const server = http.createServer((req, res) => {
+  res.writeHead(426, { 'Content-Type': 'text/plain' });
+  res.end('WebSocket server - use ws:// protocol');
+});
+
+// Create WebSocket server attached to HTTP server
+const wss = new WebSocketServer({ server });
 
 let connectionCount = 0;
 
@@ -56,17 +63,8 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-wss.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`Error: Port ${port} is already in use.`);
-    console.error(`Try: node server.js ${port + 1}`);
-  } else {
-    console.error(`Error: ${err.message}`);
-  }
-  process.exit(1);
-});
-
-wss.on('listening', () => {
+// Start HTTP server (WebSocket server is attached to it)
+server.listen(port, '0.0.0.0', () => {
   console.log(`WS Console Server running on port ${port}`);
 
   // Show actual IP addresses
@@ -81,4 +79,14 @@ wss.on('listening', () => {
   }
 
   console.log('\nWaiting for connections...\n');
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Error: Port ${port} is already in use.`);
+    console.error(`Try: node server.js ${port + 1}`);
+  } else {
+    console.error(`Error: ${err.message}`);
+  }
+  process.exit(1);
 });
