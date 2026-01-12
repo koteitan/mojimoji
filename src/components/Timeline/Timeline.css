@@ -430,6 +430,29 @@
   margin-top: 6px;
 }
 
+/* Embedded events series (multiple references: root → reply → mention) */
+.timeline-item-embedded-series {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.timeline-item-embedded-wrapper {
+  position: relative;
+}
+
+.timeline-item-embedded-marker {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  font-size: 9px;
+  color: #666;
+  background: #2a2a2a;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
 /* Reaction group (grouped reactions with bump-up) */
 .timeline-item-reaction-group {
   padding: 12px;

@@ -414,6 +414,16 @@ export function extractContentWarning(event: NostrEvent): string | null | undefi
 // Reference type for quote/reply/repost/reaction events
 export type EventReferenceType = 'quote' | 'reply' | 'repost' | 'reaction';
 
+// Marker type for e tags (NIP-10)
+export type ETagMarker = 'root' | 'reply' | 'mention';
+
+// Event reference with marker
+export interface EventReference {
+  type: EventReferenceType;
+  eventId: string;
+  marker?: ETagMarker;
+}
+
 // Detect if an event references another event and return the reference type
 // Returns null if no reference found
 // Reference rules:
@@ -430,8 +440,13 @@ export function detectEventReference(event: NostrEvent): { type: EventReferenceT
     if (hasQTag) {
       return { type: 'quote', eventId: hasQTag[1] };
     }
-    // Reply: has #e tag (but not quote)
+    // Reply: has #e tag (but not quote) - use new function to get proper reply target
     if (hasETag) {
+      const refs = detectEventReferences(event);
+      // Return the first reference (most relevant: reply > root > mention)
+      if (refs.length > 0) {
+        return { type: refs[0].type, eventId: refs[0].eventId };
+      }
       return { type: 'reply', eventId: hasETag[1] };
     }
   } else if (event.kind === 6) {
@@ -447,6 +462,55 @@ export function detectEventReference(event: NostrEvent): { type: EventReferenceT
   }
 
   return null;
+}
+
+// Detect all event references with NIP-10 markers
+// Returns references in order: root → reply → mention
+// For deprecated positional scheme (no markers), returns up to 3 e tags
+export function detectEventReferences(event: NostrEvent): EventReference[] {
+  const hasQTag = event.tags.find(tag => tag[0] === 'q');
+
+  // Quote: return q tag only
+  if (event.kind === 1 && hasQTag) {
+    return [{ type: 'quote', eventId: hasQTag[1] }];
+  }
+
+  // Get all e tags
+  const eTags = event.tags.filter(tag => tag[0] === 'e' && tag[1]);
+  if (eTags.length === 0) return [];
+
+  // Check if any e tag has a marker (NIP-10 style)
+  const hasMarkers = eTags.some(tag => tag[3] === 'root' || tag[3] === 'reply' || tag[3] === 'mention');
+
+  if (hasMarkers) {
+    // NIP-10 style with markers: order by root → reply → mention
+    const result: EventReference[] = [];
+    const markerOrder: ETagMarker[] = ['root', 'reply', 'mention'];
+
+    for (const marker of markerOrder) {
+      const tag = eTags.find(t => t[3] === marker);
+      if (tag) {
+        result.push({
+          type: event.kind === 6 ? 'repost' : event.kind === 7 ? 'reaction' : 'reply',
+          eventId: tag[1],
+          marker,
+        });
+      }
+    }
+    return result;
+  } else {
+    // Deprecated positional scheme: return up to 3 e tags
+    const result: EventReference[] = [];
+    const maxTags = Math.min(eTags.length, 3);
+
+    for (let i = 0; i < maxTags; i++) {
+      result.push({
+        type: event.kind === 6 ? 'repost' : event.kind === 7 ? 'reaction' : 'reply',
+        eventId: eTags[i][1],
+      });
+    }
+    return result;
+  }
 }
 
 // Extract image URLs from text content

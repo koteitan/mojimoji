@@ -5,13 +5,14 @@ import {
   extractImageUrls,
   eventIdToNevent,
   pubkeyToNpub,
-  detectEventReference,
+  detectEventReferences,
   type TimelineEvent,
   type TimelineItem as TimelineItemData,
   type TimelineReactionGroupItem,
   type Profile,
   type NostrEvent,
   type EventReferenceType,
+  type ETagMarker,
 } from '../../nostr/types';
 import { EventFetcher } from '../../nostr/EventFetcher';
 import { getCachedProfile } from '../../nostr/profileCache';
@@ -132,50 +133,92 @@ function EmbeddedEventComponent({ event, profile }: EmbeddedEventProps) {
   );
 }
 
-// Hook to fetch referenced event
-function useReferencedEvent(event: NostrEvent): {
+// Referenced event data with marker
+interface ReferencedEventData {
+  eventId: string;
+  event: NostrEvent | null;
+  profile: Profile | undefined;
+  marker?: ETagMarker;
+}
+
+// Hook to fetch multiple referenced events (for NIP-10 markers: root → reply → mention)
+function useReferencedEvents(event: NostrEvent): {
   referenceType: EventReferenceType | null;
-  referencedEvent: NostrEvent | null;
-  referencedProfile: Profile | undefined;
+  referencedEvents: ReferencedEventData[];
   loading: boolean;
 } {
-  const [referencedEvent, setReferencedEvent] = useState<NostrEvent | null>(null);
-  const [referencedProfile, setReferencedProfile] = useState<Profile | undefined>(undefined);
+  const [referencedEvents, setReferencedEvents] = useState<ReferencedEventData[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const reference = detectEventReference(event);
+  const references = detectEventReferences(event);
 
   useEffect(() => {
-    if (!reference) return;
+    if (references.length === 0) return;
 
     setLoading(true);
 
-    EventFetcher.queueRequest(reference.eventId, (fetchedEvent) => {
-      setLoading(false);
-      if (fetchedEvent) {
-        setReferencedEvent(fetchedEvent);
-        // Try to get cached profile, queue fetch if not available
-        const cached = getCachedProfile(fetchedEvent.pubkey);
-        if (cached) {
-          setReferencedProfile(cached);
-        } else {
-          GlobalProfileFetcher.queueRequest(fetchedEvent.pubkey);
-          // Check again after a delay
-          setTimeout(() => {
-            const profile = getCachedProfile(fetchedEvent.pubkey);
-            if (profile) {
-              setReferencedProfile(profile);
-            }
-          }, 2000);
+    // Initialize with event IDs and markers
+    const initialData: ReferencedEventData[] = references.map(ref => ({
+      eventId: ref.eventId,
+      event: null,
+      profile: undefined,
+      marker: ref.marker,
+    }));
+    setReferencedEvents(initialData);
+
+    // Fetch each referenced event
+    let completedCount = 0;
+    references.forEach((ref, index) => {
+      EventFetcher.queueRequest(ref.eventId, (fetchedEvent) => {
+        completedCount++;
+        if (fetchedEvent) {
+          setReferencedEvents(prev => {
+            const newData = [...prev];
+            newData[index] = {
+              ...newData[index],
+              event: fetchedEvent,
+            };
+            return newData;
+          });
+          // Try to get cached profile
+          const cached = getCachedProfile(fetchedEvent.pubkey);
+          if (cached) {
+            setReferencedEvents(prev => {
+              const newData = [...prev];
+              newData[index] = {
+                ...newData[index],
+                profile: cached,
+              };
+              return newData;
+            });
+          } else {
+            GlobalProfileFetcher.queueRequest(fetchedEvent.pubkey);
+            // Check again after a delay
+            setTimeout(() => {
+              const profile = getCachedProfile(fetchedEvent.pubkey);
+              if (profile) {
+                setReferencedEvents(prev => {
+                  const newData = [...prev];
+                  newData[index] = {
+                    ...newData[index],
+                    profile,
+                  };
+                  return newData;
+                });
+              }
+            }, 2000);
+          }
         }
-      }
+        if (completedCount === references.length) {
+          setLoading(false);
+        }
+      });
     });
-  }, [reference?.eventId]);
+  }, [references.map(r => r.eventId).join(',')]);
 
   return {
-    referenceType: reference?.type || null,
-    referencedEvent,
-    referencedProfile,
+    referenceType: references.length > 0 ? references[0].type : null,
+    referencedEvents,
     loading,
   };
 }
@@ -294,8 +337,8 @@ export function TimelineEventItemComponent({ event }: TimelineItemProps) {
 
   const [revealed, setRevealed] = useState(false);
 
-  // Fetch referenced event for quote/reply/repost/reaction
-  const { referenceType, referencedEvent, referencedProfile, loading: refLoading } = useReferencedEvent(nostrEvent);
+  // Fetch referenced events for quote/reply/repost/reaction (supports multiple references)
+  const { referenceType, referencedEvents, loading: refLoading } = useReferencedEvents(nostrEvent);
 
   // Show npub if no profile name available
   const displayName = profile?.display_name || profile?.name || formatNpub(nostrEvent.pubkey);
@@ -305,15 +348,30 @@ export function TimelineEventItemComponent({ event }: TimelineItemProps) {
     setRevealed(true);
   };
 
-  // Render embedded event component
-  const renderEmbeddedEvent = () => {
-    if (refLoading) {
+  // Render embedded event component (multiple events in series: root → reply → mention)
+  const renderEmbeddedEvents = () => {
+    if (refLoading && referencedEvents.length === 0) {
       return <div className="timeline-item-embedded-loading">Loading...</div>;
     }
-    if (!referencedEvent) {
+    if (referencedEvents.length === 0) {
       return null;
     }
-    return <EmbeddedEventComponent event={referencedEvent} profile={referencedProfile} />;
+    return (
+      <div className="timeline-item-embedded-series">
+        {referencedEvents.map((refData) => (
+          <div key={refData.eventId} className="timeline-item-embedded-wrapper">
+            {refData.marker && (
+              <div className="timeline-item-embedded-marker">{refData.marker}</div>
+            )}
+            {refData.event ? (
+              <EmbeddedEventComponent event={refData.event} profile={refData.profile} />
+            ) : (
+              <div className="timeline-item-embedded-loading">Loading...</div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
   };
 
   // Render content based on event kind
@@ -348,7 +406,7 @@ export function TimelineEventItemComponent({ event }: TimelineItemProps) {
 
     // Kind 6: Repost - show only embedded event
     if (isRepost) {
-      return renderEmbeddedEvent();
+      return renderEmbeddedEvents();
     }
 
     // Kind 1: Text note - handle quote and reply layouts
@@ -357,7 +415,7 @@ export function TimelineEventItemComponent({ event }: TimelineItemProps) {
       if (referenceType === 'reply') {
         return (
           <>
-            {renderEmbeddedEvent()}
+            {renderEmbeddedEvents()}
             <ContentWithImages content={nostrEvent.content} revealed={!hasContentWarning || revealed} />
             {hasContentWarning && revealed && (
               <button
@@ -374,7 +432,7 @@ export function TimelineEventItemComponent({ event }: TimelineItemProps) {
       return (
         <>
           <ContentWithImages content={nostrEvent.content} revealed={!hasContentWarning || revealed} />
-          {referenceType === 'quote' && renderEmbeddedEvent()}
+          {referenceType === 'quote' && renderEmbeddedEvents()}
           {hasContentWarning && revealed && (
             <button
               className="timeline-item-hide-link"
@@ -392,7 +450,7 @@ export function TimelineEventItemComponent({ event }: TimelineItemProps) {
       return (
         <>
           <span className="timeline-item-reaction">{nostrEvent.content || '+'}</span>
-          {renderEmbeddedEvent()}
+          {renderEmbeddedEvents()}
         </>
       );
     }
