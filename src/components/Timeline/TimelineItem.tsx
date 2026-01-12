@@ -17,6 +17,12 @@ import {
 import { EventFetcher } from '../../nostr/EventFetcher';
 import { getCachedProfile } from '../../nostr/profileCache';
 import { GlobalProfileFetcher } from '../../nostr/ProfileFetcher';
+import {
+  isEventReacted,
+  isEventReposted,
+  sendReaction,
+  sendRepost,
+} from '../../nostr/eventActions';
 import './Timeline.css';
 
 const DEFAULT_AVATAR = `${import.meta.env.BASE_URL}mojimoji-icon.png`;
@@ -304,6 +310,7 @@ function parseProfileFromContent(content: string): Profile | null {
 
 interface TimelineItemProps {
   event: TimelineEvent;
+  onReply?: (event: NostrEvent, profile?: Profile) => void;
 }
 
 function formatDate(timestamp: number): string {
@@ -778,7 +785,7 @@ function UnknownKindContent({ nostrEvent }: { nostrEvent: TimelineEvent['event']
 }
 
 // Event type timeline item (original)
-export function TimelineEventItemComponent({ event }: TimelineItemProps) {
+export function TimelineEventItemComponent({ event, onReply }: TimelineItemProps) {
   const { t } = useTranslation();
   const { event: nostrEvent, profile, contentWarning } = event;
   const isProfile = nostrEvent.kind === 0;
@@ -788,6 +795,9 @@ export function TimelineEventItemComponent({ event }: TimelineItemProps) {
   const hasContentWarning = contentWarning !== undefined;
 
   const [revealed, setRevealed] = useState(false);
+  const [reacted, setReacted] = useState(() => isEventReacted(nostrEvent.id));
+  const [reposted, setReposted] = useState(() => isEventReposted(nostrEvent.id));
+  const [actionPending, setActionPending] = useState(false);
 
   // Fetch referenced events for quote/reply/repost/reaction (supports multiple references)
   const { referenceType, referencedEvents, loading: refLoading } = useReferencedEvents(nostrEvent);
@@ -798,6 +808,32 @@ export function TimelineEventItemComponent({ event }: TimelineItemProps) {
 
   const handleReveal = () => {
     setRevealed(true);
+  };
+
+  const handleReaction = async () => {
+    if (reacted || actionPending) return;
+    setActionPending(true);
+    const success = await sendReaction(nostrEvent.id, nostrEvent.pubkey);
+    if (success) {
+      setReacted(true);
+    }
+    setActionPending(false);
+  };
+
+  const handleRepost = async () => {
+    if (reposted || actionPending) return;
+    setActionPending(true);
+    const success = await sendRepost(nostrEvent.id, nostrEvent.pubkey);
+    if (success) {
+      setReposted(true);
+    }
+    setActionPending(false);
+  };
+
+  const handleReply = () => {
+    if (onReply) {
+      onReply(nostrEvent, profile);
+    }
   };
 
   // Render embedded event component (multiple events in series: root → reply → mention)
@@ -950,7 +986,7 @@ export function TimelineEventItemComponent({ event }: TimelineItemProps) {
       <div className="timeline-item-content">
         {renderContent()}
       </div>
-      <div className="timeline-item-time">
+      <div className="timeline-item-footer">
         <a
           href={`https://nostter.app/${eventIdToNevent(nostrEvent.id)}`}
           target="_blank"
@@ -959,6 +995,33 @@ export function TimelineEventItemComponent({ event }: TimelineItemProps) {
         >
           {formatDate(nostrEvent.created_at)}
         </a>
+        {isTextNote && (
+          <div className="timeline-item-actions">
+            <button
+              className="timeline-action-button"
+              onClick={handleReply}
+              title="Reply"
+            >
+              ↩
+            </button>
+            <button
+              className={`timeline-action-button ${reacted ? 'active' : ''}`}
+              onClick={handleReaction}
+              disabled={reacted || actionPending}
+              title="Reaction"
+            >
+              ♥
+            </button>
+            <button
+              className={`timeline-action-button ${reposted ? 'active' : ''}`}
+              onClick={handleRepost}
+              disabled={reposted || actionPending}
+              title="Repost"
+            >
+              ⟲
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -972,9 +1035,10 @@ function formatDateISO(timestamp: number): string {
 // Generic timeline item component for non-event types
 interface TimelineGenericItemProps {
   item: TimelineItemData;
+  onReply?: (event: NostrEvent, profile?: Profile) => void;
 }
 
-export function TimelineGenericItemComponent({ item }: TimelineGenericItemProps) {
+export function TimelineGenericItemComponent({ item, onReply }: TimelineGenericItemProps) {
   switch (item.type) {
     case 'event':
       // Event type should use TimelineEventItemComponent
@@ -985,6 +1049,7 @@ export function TimelineGenericItemComponent({ item }: TimelineGenericItemProps)
             profile: item.profile,
             contentWarning: item.contentWarning,
           }}
+          onReply={onReply}
         />
       );
 

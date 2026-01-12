@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Timeline } from './components/Timeline';
 import { GraphEditor } from './components/Graph/GraphEditor';
+import { PostDialog, type ReplyTarget } from './components/Dialogs/PostDialog';
 import { initUserRelayList, initAllGraphs, fetchAndCacheProfiles } from './nostr/graphStorage';
-import type { TimelineItem } from './nostr/types';
+import type { TimelineItem, NostrEvent, Profile } from './nostr/types';
 import './App.css';
 
 // Version: Update this on each deployment
@@ -22,6 +23,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingDots, setLoadingDots] = useState('* * *');
   const [swappingIndices, setSwappingIndices] = useState<[number, number] | null>(null);
+  const [replyDialogOpen, setReplyDialogOpen] = useState(false);
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | undefined>(undefined);
 
   // Initialize user's relay list, graphs, and profiles on app load
   useEffect(() => {
@@ -86,6 +89,16 @@ function App() {
     }, 300);
   }, []);
 
+  const handleReply = useCallback((event: NostrEvent, profile?: Profile) => {
+    setReplyTarget({ event, profile });
+    setReplyDialogOpen(true);
+  }, []);
+
+  const handleReplyDialogClose = useCallback(() => {
+    setReplyDialogOpen(false);
+    setReplyTarget(undefined);
+  }, []);
+
   return (
     <div className="app">
       <div className="title-bar">
@@ -111,6 +124,7 @@ function App() {
                   swappingIndices?.[0] === index ? 'right' :
                   swappingIndices?.[1] === index ? 'left' : null
                 }
+                onReply={handleReply}
               />
             ))
           )}
@@ -124,6 +138,13 @@ function App() {
           />
         </div>
       </div>
+
+      {/* Reply PostDialog */}
+      <PostDialog
+        isOpen={replyDialogOpen}
+        onClose={handleReplyDialogClose}
+        replyTo={replyTarget}
+      />
     </div>
   );
 }

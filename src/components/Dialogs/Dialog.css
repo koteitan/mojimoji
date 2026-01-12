@@ -679,3 +679,64 @@
     gap: 8px;
   }
 }
+
+/* Reply target display */
+.dialog-reply-target {
+  background: #252525;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.dialog-reply-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.dialog-reply-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.dialog-reply-names {
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog-reply-display-name {
+  font-weight: bold;
+  color: #ccc;
+  font-size: 13px;
+}
+
+.dialog-reply-name {
+  color: #666;
+  font-size: 11px;
+}
+
+.dialog-reply-content {
+  color: #aaa;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.dialog-reply-images {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.dialog-reply-image {
+  max-width: 100px;
+  max-height: 100px;
+  border-radius: 4px;
+  object-fit: cover;
+}

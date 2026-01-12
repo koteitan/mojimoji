@@ -1,5 +1,5 @@
 import { TimelineGenericItemComponent } from './TimelineItem';
-import type { TimelineItem as TimelineItemData } from '../../nostr/types';
+import type { TimelineItem as TimelineItemData, NostrEvent, Profile } from '../../nostr/types';
 import './Timeline.css';
 
 interface TimelineProps {
@@ -9,9 +9,10 @@ interface TimelineProps {
   isLast: boolean;
   onSwap?: (index: number) => void;
   swapDirection?: 'left' | 'right' | null;
+  onReply?: (event: NostrEvent, profile?: Profile) => void;
 }
 
-export function Timeline({ name, items, index, isLast, onSwap, swapDirection }: TimelineProps) {
+export function Timeline({ name, items, index, isLast, onSwap, swapDirection, onReply }: TimelineProps) {
   const swapClass = swapDirection ? `swapping-${swapDirection}` : '';
   const isFirst = index === 0;
   return (
@@ -46,7 +47,7 @@ export function Timeline({ name, items, index, isLast, onSwap, swapDirection }: 
           <div className="timeline-empty">No items</div>
         ) : (
           items.map((item) => (
-            <TimelineGenericItemComponent key={item.id} item={item} />
+            <TimelineGenericItemComponent key={item.id} item={item} onReply={onReply} />
           ))
         )}
       </div>

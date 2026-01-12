@@ -6,19 +6,26 @@ import { isNip07Available, getPubkey, signEvent } from '../../nostr/nip07';
 import type { UnsignedEvent } from '../../nostr/nip07';
 import { fetchUserRelayList } from '../../nostr/graphStorage';
 import { getCachedProfile } from '../../nostr/profileCache';
-import { formatNpub } from '../../nostr/types';
+import { formatNpub, extractImageUrls, type NostrEvent, type Profile } from '../../nostr/types';
 import { RelaySettingsDialog } from './RelaySettingsDialog';
 import { Nip07ErrorMessage } from './Nip07ErrorMessage';
 import './Dialog.css';
 
 const DEFAULT_AVATAR = `${import.meta.env.BASE_URL}mojimoji-icon.png`;
 
+// Reply target info
+export interface ReplyTarget {
+  event: NostrEvent;
+  profile?: Profile;
+}
+
 interface PostDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  replyTo?: ReplyTarget;
 }
 
-export function PostDialog({ isOpen, onClose }: PostDialogProps) {
+export function PostDialog({ isOpen, onClose, replyTo }: PostDialogProps) {
   const { t } = useTranslation();
   const [content, setContent] = useState('');
   const [posting, setPosting] = useState(false);
@@ -87,11 +94,18 @@ export function PostDialog({ isOpen, onClose }: PostDialogProps) {
     setError(null);
 
     try {
+      // Build tags for reply if replyTo is provided
+      const tags: string[][] = [];
+      if (replyTo) {
+        tags.push(['e', replyTo.event.id, '', 'reply']);
+        tags.push(['p', replyTo.event.pubkey]);
+      }
+
       // Create unsigned kind:1 event
       const unsignedEvent: UnsignedEvent = {
         kind: 1,
         created_at: Math.floor(Date.now() / 1000),
-        tags: [],
+        tags,
         content: content.trim(),
       };
 
@@ -191,6 +205,41 @@ export function PostDialog({ isOpen, onClose }: PostDialogProps) {
           </div>
 
           <div className="dialog-content">
+            {/* Reply target display */}
+            {replyTo && (
+              <div className="dialog-reply-target">
+                <div className="dialog-reply-header">
+                  <img
+                    className="dialog-reply-icon"
+                    src={replyTo.profile?.picture || DEFAULT_AVATAR}
+                    alt=""
+                    onError={(e) => {
+                      const img = e.target as HTMLImageElement;
+                      img.src = DEFAULT_AVATAR;
+                    }}
+                  />
+                  <div className="dialog-reply-names">
+                    <span className="dialog-reply-display-name">
+                      {replyTo.profile?.display_name || replyTo.profile?.name || formatNpub(replyTo.event.pubkey)}
+                    </span>
+                    <span className="dialog-reply-name">
+                      @{replyTo.profile?.name || formatNpub(replyTo.event.pubkey)}
+                    </span>
+                  </div>
+                </div>
+                <div className="dialog-reply-content">
+                  {replyTo.event.content}
+                </div>
+                {extractImageUrls(replyTo.event.content).length > 0 && (
+                  <div className="dialog-reply-images">
+                    {extractImageUrls(replyTo.event.content).map((url, idx) => (
+                      <img key={idx} src={url} alt="" className="dialog-reply-image" />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Content textarea */}
             <div className="dialog-input-group">
               <textarea

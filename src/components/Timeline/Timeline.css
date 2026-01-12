@@ -130,10 +130,42 @@
   font-size: 24px;
 }
 
-.timeline-item-time {
+.timeline-item-footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 8px;
   color: #666;
   font-size: 11px;
-  margin-top: 8px;
+}
+
+.timeline-item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.timeline-action-button {
+  background: transparent;
+  border: none;
+  color: transparent;
+  font-size: 12px;
+  padding: 0 2px;
+  cursor: pointer;
+  line-height: 1;
+  -webkit-text-stroke: 1px #666;
+  transition: color 0.2s;
+}
+
+.timeline-action-button:hover:not(:disabled) {
+  color: rgba(102, 102, 102, 0.3);
+}
+
+.timeline-action-button:disabled {
+  cursor: default;
+}
+
+.timeline-action-button.active {
+  color: #666;
 }
 
 .timeline-link-time {
