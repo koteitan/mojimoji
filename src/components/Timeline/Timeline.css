@@ -243,6 +243,102 @@
   color: #f38181;
 }
 
+/* Embeds container */
+.timeline-item-embeds {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* YouTube embed */
+.timeline-embed-youtube {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%; /* 16:9 aspect ratio */
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+}
+
+.timeline-embed-youtube iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* Twitter/X embed (official widget) */
+.timeline-embed-twitter-container {
+  margin-top: 8px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.timeline-embed-twitter-container .twitter-tweet {
+  margin: 0 !important;
+}
+
+/* OGP link preview card */
+.timeline-embed-ogp {
+  display: block;
+  text-decoration: none;
+  border: 1px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #1a1a1a;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.timeline-embed-ogp:hover {
+  background: #222;
+  border-color: #444;
+}
+
+.timeline-embed-ogp-image {
+  width: 100%;
+  max-height: 200px;
+  overflow: hidden;
+}
+
+.timeline-embed-ogp-image img {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+.timeline-embed-ogp-content {
+  padding: 10px;
+}
+
+.timeline-embed-ogp-host {
+  color: #666;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.timeline-embed-ogp-title {
+  color: #fff;
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.timeline-embed-ogp-description {
+  color: #888;
+  font-size: 12px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 /* Images in timeline */
 .timeline-item-images {
   display: flex;

@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   formatNpub,
@@ -31,7 +31,168 @@ const PATTERNS = {
   hashtag: /#([^\s#]+)/g,
   // Image URL pattern (to exclude from regular URL linking)
   imageUrl: /https?:\/\/[^\s<>"{}|\\^`\[\]]+\.(jpg|jpeg|gif|png|webp)(\?[^\s<>"{}|\\^`\[\]]*)?/gi,
+  // YouTube URL patterns
+  youtubeShort: /https?:\/\/youtu\.be\/([a-zA-Z0-9_-]+)(\?[^\s]*)?/gi,
+  youtubeLong: /https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)([^\s]*)?/gi,
+  // X/Twitter URL patterns
+  twitter: /https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)\/status\/(\d+)(\?[^\s]*)?/gi,
 };
+
+// Extract YouTube video ID from URL
+function extractYouTubeVideoId(url: string): string | null {
+  // youtu.be/VIDEO_ID
+  const shortMatch = url.match(/youtu\.be\/([a-zA-Z0-9_-]+)/i);
+  if (shortMatch) return shortMatch[1];
+
+  // youtube.com/watch?v=VIDEO_ID
+  const longMatch = url.match(/youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/i);
+  if (longMatch) return longMatch[1];
+
+  // youtube.com/shorts/VIDEO_ID
+  const shortsMatch = url.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]+)/i);
+  if (shortsMatch) return shortsMatch[1];
+
+  return null;
+}
+
+// Check if URL is a YouTube URL
+function isYouTubeUrl(url: string): boolean {
+  return /youtu\.be\/|youtube\.com\/watch\?v=|youtube\.com\/shorts\//i.test(url);
+}
+
+// Check if URL is a Twitter/X URL
+function isTwitterUrl(url: string): boolean {
+  return /(?:twitter\.com|x\.com)\/[a-zA-Z0-9_]+\/status\/\d+/i.test(url);
+}
+
+// Convert image URL to thumbnail URL based on service
+function convertToThumbnailUrl(url: string): string {
+  // Imgur: add 'l' suffix before extension for large thumbnail
+  if (/i\.imgur\.com\/([a-zA-Z0-9]+)\.(jpg|jpeg|png|gif|webp)/i.test(url)) {
+    return url.replace(/\.([a-zA-Z]+)(\?.*)?$/, 'l.$1$2');
+  }
+
+  // Gyazo: use thumb.gyazo.com with 640px width
+  const gyazoMatch = url.match(/i\.gyazo\.com\/([a-f0-9]+)\.(png|jpg|jpeg|gif)/i);
+  if (gyazoMatch) {
+    return `https://thumb.gyazo.com/thumb/640/${gyazoMatch[1]}.${gyazoMatch[2]}`;
+  }
+
+  // nostr.build: use resp/240p path for thumbnail
+  const nostrBuildMatch = url.match(/i\.nostr\.build\/([^\s?]+)/i);
+  if (nostrBuildMatch) {
+    return `https://i.nostr.build/resp/240p/${nostrBuildMatch[1]}`;
+  }
+
+  // Twitter media: add format and size params
+  if (/pbs\.twimg\.com\/media\//i.test(url)) {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}format=jpg&name=small`;
+  }
+
+  // Discord: add size params
+  if (/media\.discordapp\.net\/attachments\//i.test(url)) {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}format=webp&width=320&height=320`;
+  }
+
+  // No conversion needed
+  return url;
+}
+
+// Extract all YouTube URLs from content
+function extractYouTubeUrls(content: string): string[] {
+  const urls: string[] = [];
+  const urlPattern = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/g;
+  let match;
+  while ((match = urlPattern.exec(content)) !== null) {
+    if (isYouTubeUrl(match[0])) {
+      urls.push(match[0]);
+    }
+  }
+  return urls;
+}
+
+// Extract all Twitter/X URLs from content
+function extractTwitterUrls(content: string): string[] {
+  const urls: string[] = [];
+  const urlPattern = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/g;
+  let match;
+  while ((match = urlPattern.exec(content)) !== null) {
+    if (isTwitterUrl(match[0])) {
+      urls.push(match[0]);
+    }
+  }
+  return urls;
+}
+
+// Check if URL is an image URL
+function isImageUrl(url: string): boolean {
+  return /\.(jpg|jpeg|gif|png|webp)(\?[^\s]*)?$/i.test(url);
+}
+
+// Extract general URLs (not YouTube, Twitter, or image)
+function extractOgpUrls(content: string): string[] {
+  const urls: string[] = [];
+  const urlPattern = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/g;
+  let match;
+  while ((match = urlPattern.exec(content)) !== null) {
+    const url = match[0];
+    if (!isYouTubeUrl(url) && !isTwitterUrl(url) && !isImageUrl(url)) {
+      urls.push(url);
+    }
+  }
+  return urls;
+}
+
+// OGP content type
+interface OgpContent {
+  url: string;
+  title: string;
+  description: string;
+  image: string;
+}
+
+// Parse OGP from HTML text
+function parseOgp(html: string, urlString: string): OgpContent | null {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const props: { [key: string]: string } = {};
+
+  doc.head.querySelectorAll('meta').forEach((m) => {
+    const property = m.getAttribute('property') || m.getAttribute('name');
+    const content = m.getAttribute('content');
+    if (property && content) {
+      props[property] = content;
+    }
+  });
+
+  const image = props['og:image'] || props['twitter:image'];
+  const title = props['og:title'] || props['twitter:title'] || doc.title;
+  const url = props['og:url'] || urlString;
+  const description = props['og:description'] || props['twitter:description'] || '';
+
+  if (title) {
+    return { title, description, image: image || '', url };
+  }
+  return null;
+}
+
+// Fetch OGP content via CORS proxy
+async function fetchOgpContent(urlString: string): Promise<OgpContent | null> {
+  try {
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(urlString)}`;
+    const res = await fetch(proxyUrl, {
+      mode: 'cors',
+      headers: { Accept: 'text/html' },
+      credentials: 'omit',
+    });
+    const text = await res.text();
+    return parseOgp(text, urlString);
+  } catch (err) {
+    console.error(`Failed to fetch OGP for ${urlString}`, err);
+    return null;
+  }
+}
 
 // Parse content and return React elements with links
 function parseContentWithLinks(content: string): ReactNode[] {
@@ -150,10 +311,13 @@ function formatDate(timestamp: number): string {
   return date.toLocaleString();
 }
 
-// Component for displaying an image with loading/error states
+// Component for displaying an image with loading/error states (uses thumbnail URL)
 function ImagePreview({ url }: { url: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+
+  // Convert to thumbnail URL for display
+  const thumbnailUrl = convertToThumbnailUrl(url);
 
   if (error) {
     return null; // Don't show broken images
@@ -164,7 +328,7 @@ function ImagePreview({ url }: { url: string }) {
       {loading && <div className="timeline-item-image-loading" />}
       <img
         className={`timeline-item-image ${loading ? 'loading' : ''}`}
-        src={url}
+        src={thumbnailUrl}
         alt=""
         loading="lazy"
         onLoad={() => setLoading(false)}
@@ -178,13 +342,140 @@ function ImagePreview({ url }: { url: string }) {
   );
 }
 
-// Component for content with images and links
+// Component for YouTube embed
+function YouTubeEmbed({ url }: { url: string }) {
+  const videoId = extractYouTubeVideoId(url);
+
+  if (!videoId) {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" className="timeline-link timeline-link-url">
+        {url}
+      </a>
+    );
+  }
+
+  return (
+    <div className="timeline-embed-youtube">
+      <iframe
+        src={`https://www.youtube.com/embed/${videoId}`}
+        title="YouTube video"
+        frameBorder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+      />
+    </div>
+  );
+}
+
+// Convert x.com URL to twitter.com for widget compatibility
+function toTwitterUrl(urlString: string): string {
+  try {
+    const url = new URL(urlString);
+    if (url.host === 'x.com' || url.host === 'www.x.com') {
+      url.host = 'twitter.com';
+    }
+    return url.href;
+  } catch {
+    return urlString;
+  }
+}
+
+// Component for Twitter/X embed (uses official Twitter widget)
+function TwitterEmbed({ url }: { url: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (containerRef.current && window.twttr?.widgets) {
+      window.twttr.widgets.load(containerRef.current);
+      setLoaded(true);
+    }
+  }, [url]);
+
+  const twitterUrl = toTwitterUrl(url);
+
+  return (
+    <div ref={containerRef} className="timeline-embed-twitter-container">
+      <blockquote className="twitter-tweet" data-theme="dark" data-chrome="transparent nofooter">
+        <a href={twitterUrl}>{loaded ? '' : 'Loading tweet...'}</a>
+      </blockquote>
+    </div>
+  );
+}
+
+// Component for OGP link preview card
+function OgpEmbed({ url }: { url: string }) {
+  const [ogp, setOgp] = useState<OgpContent | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
+
+    fetchOgpContent(url).then((result) => {
+      if (cancelled) return;
+      setLoading(false);
+      if (result) {
+        setOgp(result);
+      } else {
+        setError(true);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  // Show simple link while loading or on error
+  if (loading || error || !ogp) {
+    return null; // URL is already shown as link in text
+  }
+
+  // Get hostname for display
+  let hostname = '';
+  try {
+    hostname = new URL(ogp.url).hostname;
+  } catch {
+    hostname = url;
+  }
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="timeline-embed-ogp"
+    >
+      {ogp.image && (
+        <div className="timeline-embed-ogp-image">
+          <img src={ogp.image} alt={ogp.title} loading="lazy" />
+        </div>
+      )}
+      <div className="timeline-embed-ogp-content">
+        <div className="timeline-embed-ogp-host">{hostname}</div>
+        <div className="timeline-embed-ogp-title">{ogp.title}</div>
+        {ogp.description && (
+          <div className="timeline-embed-ogp-description">{ogp.description}</div>
+        )}
+      </div>
+    </a>
+  );
+}
+
+// Component for content with images, links, and embeds
 function ContentWithImages({ content, revealed }: { content: string; revealed: boolean }) {
   const imageUrls = extractImageUrls(content);
+  const youtubeUrls = extractYouTubeUrls(content);
+  const twitterUrls = extractTwitterUrls(content);
+  const ogpUrls = extractOgpUrls(content);
 
-  // Remove image URLs from text content for cleaner display
+  // Remove image, YouTube, and Twitter URLs from text content for cleaner display
+  // OGP URLs are kept as links in text, but also shown as cards
   let textContent = content;
-  for (const url of imageUrls) {
+  for (const url of [...imageUrls, ...youtubeUrls, ...twitterUrls]) {
     textContent = textContent.replace(url, '').trim();
   }
 
@@ -197,6 +488,27 @@ function ContentWithImages({ content, revealed }: { content: string; revealed: b
   return (
     <>
       {parsedContent && <div className="timeline-item-text">{parsedContent}</div>}
+      {revealed && youtubeUrls.length > 0 && (
+        <div className="timeline-item-embeds">
+          {youtubeUrls.map((url, index) => (
+            <YouTubeEmbed key={`yt-${index}`} url={url} />
+          ))}
+        </div>
+      )}
+      {revealed && twitterUrls.length > 0 && (
+        <div className="timeline-item-embeds">
+          {twitterUrls.map((url, index) => (
+            <TwitterEmbed key={`tw-${index}`} url={url} />
+          ))}
+        </div>
+      )}
+      {revealed && ogpUrls.length > 0 && (
+        <div className="timeline-item-embeds">
+          {ogpUrls.map((url, index) => (
+            <OgpEmbed key={`ogp-${index}`} url={url} />
+          ))}
+        </div>
+      )}
       {revealed && imageUrls.length > 0 && (
         <div className="timeline-item-images">
           {imageUrls.map((url, index) => (
