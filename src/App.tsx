@@ -7,7 +7,7 @@ import type { TimelineItem, NostrEvent, Profile } from './nostr/types';
 import './App.css';
 
 // Version: Update this on each deployment
-export const APP_VERSION = '1.2.1';
+export const APP_VERSION = '1.2.2';
 
 const APP_NAME = '(.>_<)-(.>_<)-mojimoji: Nostr Modular Client';
 const LOADING_PREFIX = '(.>_<)-(.>_<)-loading ';
