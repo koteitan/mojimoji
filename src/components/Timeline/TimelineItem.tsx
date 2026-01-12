@@ -533,27 +533,47 @@ function EmbeddedEventComponent({ event, profile }: EmbeddedEventProps) {
   return (
     <div className="timeline-item-embedded">
       <div className="timeline-item-embedded-header">
-        <img
-          className="timeline-item-embedded-icon"
-          src={profile?.picture || DEFAULT_AVATAR}
-          alt={profile?.name || 'avatar'}
-          onError={(e) => {
-            const img = e.target as HTMLImageElement;
-            if (!img.src.endsWith('mojimoji-icon.png')) {
-              img.src = DEFAULT_AVATAR;
-            }
-          }}
-        />
+        <a
+          href={`https://nostter.app/${pubkeyToNpub(event.pubkey)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <img
+            className="timeline-item-embedded-icon"
+            src={profile?.picture || DEFAULT_AVATAR}
+            alt={profile?.name || 'avatar'}
+            onError={(e) => {
+              const img = e.target as HTMLImageElement;
+              if (!img.src.endsWith('mojimoji-icon.png')) {
+                img.src = DEFAULT_AVATAR;
+              }
+            }}
+          />
+        </a>
         <div className="timeline-item-embedded-names">
-          <span className="timeline-item-embedded-display-name">{displayName}</span>
-          <span className="timeline-item-embedded-name">@{userName}</span>
+          <a
+            href={`https://nostter.app/${pubkeyToNpub(event.pubkey)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="timeline-link-author"
+          >
+            <span className="timeline-item-embedded-display-name">{displayName}</span>
+            <span className="timeline-item-embedded-name">@{userName}</span>
+          </a>
         </div>
       </div>
       <div className="timeline-item-embedded-content">
         <ContentWithImages content={event.content} revealed={true} />
       </div>
       <div className="timeline-item-embedded-time">
-        {formatDate(event.created_at)}
+        <a
+          href={`https://nostter.app/${eventIdToNevent(event.id)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="timeline-link-time"
+        >
+          {formatDate(event.created_at)}
+        </a>
       </div>
     </div>
   );
@@ -665,19 +685,25 @@ export function ReactionGroupItemComponent({ item }: ReactionGroupItemProps) {
             <span className="reaction-group-emoji">{reactionGroup.content}</span>
             <div className="reaction-group-authors">
               {reactionGroup.authors.map((author, authorIdx) => (
-                <img
+                <a
                   key={authorIdx}
-                  className="reaction-group-author-icon"
-                  src={author.profile?.picture || DEFAULT_AVATAR}
-                  alt={author.profile?.name || formatNpub(author.pubkey)}
-                  title={author.profile?.display_name || author.profile?.name || formatNpub(author.pubkey)}
-                  onError={(e) => {
-                    const img = e.target as HTMLImageElement;
-                    if (!img.src.endsWith('mojimoji-icon.png')) {
-                      img.src = DEFAULT_AVATAR;
-                    }
-                  }}
-                />
+                  href={`https://nostter.app/${pubkeyToNpub(author.pubkey)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <img
+                    className="reaction-group-author-icon"
+                    src={author.profile?.picture || DEFAULT_AVATAR}
+                    alt={author.profile?.name || formatNpub(author.pubkey)}
+                    title={author.profile?.display_name || author.profile?.name || formatNpub(author.pubkey)}
+                    onError={(e) => {
+                      const img = e.target as HTMLImageElement;
+                      if (!img.src.endsWith('mojimoji-icon.png')) {
+                        img.src = DEFAULT_AVATAR;
+                      }
+                    }}
+                  />
+                </a>
               ))}
             </div>
           </div>
@@ -888,31 +914,51 @@ export function TimelineEventItemComponent({ event }: TimelineItemProps) {
   return (
     <div className="timeline-item">
       <div className="timeline-item-header">
-        <img
-          className="timeline-item-icon"
-          src={profile?.picture || DEFAULT_AVATAR}
-          alt={profile?.name || 'avatar'}
-          onError={(e) => {
-            const img = e.target as HTMLImageElement;
-            if (!img.src.endsWith('default-avatar.svg')) {
-              img.src = DEFAULT_AVATAR;
-            }
-          }}
-        />
+        <a
+          href={`https://nostter.app/${pubkeyToNpub(nostrEvent.pubkey)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <img
+            className="timeline-item-icon"
+            src={profile?.picture || DEFAULT_AVATAR}
+            alt={profile?.name || 'avatar'}
+            onError={(e) => {
+              const img = e.target as HTMLImageElement;
+              if (!img.src.endsWith('default-avatar.svg')) {
+                img.src = DEFAULT_AVATAR;
+              }
+            }}
+          />
+        </a>
         <div className="timeline-item-names">
-          <span className="timeline-item-display-name">
-            {displayName}
-          </span>
-          <span className="timeline-item-name">
-            @{userName}
-          </span>
+          <a
+            href={`https://nostter.app/${pubkeyToNpub(nostrEvent.pubkey)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="timeline-link-author"
+          >
+            <span className="timeline-item-display-name">
+              {displayName}
+            </span>
+            <span className="timeline-item-name">
+              @{userName}
+            </span>
+          </a>
         </div>
       </div>
       <div className="timeline-item-content">
         {renderContent()}
       </div>
       <div className="timeline-item-time">
-        {formatDate(nostrEvent.created_at)}
+        <a
+          href={`https://nostter.app/${eventIdToNevent(nostrEvent.id)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="timeline-link-time"
+        >
+          {formatDate(nostrEvent.created_at)}
+        </a>
       </div>
     </div>
   );

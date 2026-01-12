@@ -136,6 +136,29 @@
   margin-top: 8px;
 }
 
+.timeline-link-time {
+  color: inherit;
+  text-decoration: none;
+}
+
+.timeline-link-time:hover {
+  text-decoration: underline;
+}
+
+.timeline-link-author {
+  color: inherit;
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline-link-author:hover .timeline-item-display-name,
+.timeline-link-author:hover .timeline-item-name,
+.timeline-link-author:hover .timeline-item-embedded-display-name,
+.timeline-link-author:hover .timeline-item-embedded-name {
+  text-decoration: underline;
+}
+
 /* Scrollbar styling */
 .timeline-events::-webkit-scrollbar {
   width: 8px;
