@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   formatNpub,
@@ -20,6 +20,117 @@ import { GlobalProfileFetcher } from '../../nostr/ProfileFetcher';
 import './Timeline.css';
 
 const DEFAULT_AVATAR = `${import.meta.env.BASE_URL}mojimoji-icon.png`;
+
+// Pattern definitions for content parsing
+const PATTERNS = {
+  // URL pattern (https:// only, excluding image URLs which are handled separately)
+  url: /https?:\/\/[^\s<>"{}|\\^`\[\]]+/g,
+  // Nostr entities: nevent, npub, nprofile, note, naddr
+  nostrEntity: /nostr:(nevent1[a-z0-9]+|npub1[a-z0-9]+|nprofile1[a-z0-9]+|note1[a-z0-9]+|naddr1[a-z0-9]+)/gi,
+  // Hashtags: # followed by 2+ alphanumeric/unicode characters (not just numbers)
+  hashtag: /#([^\s#]+)/g,
+  // Image URL pattern (to exclude from regular URL linking)
+  imageUrl: /https?:\/\/[^\s<>"{}|\\^`\[\]]+\.(jpg|jpeg|gif|png|webp)(\?[^\s<>"{}|\\^`\[\]]*)?/gi,
+};
+
+// Parse content and return React elements with links
+function parseContentWithLinks(content: string): ReactNode[] {
+  // Get image URLs to exclude them from regular linking
+  const imageUrls = new Set<string>();
+  let match;
+  while ((match = PATTERNS.imageUrl.exec(content)) !== null) {
+    imageUrls.add(match[0]);
+  }
+
+  // Combined pattern for all link types
+  const combinedPattern = new RegExp(
+    `(${PATTERNS.nostrEntity.source})|(${PATTERNS.url.source})|(${PATTERNS.hashtag.source})`,
+    'gi'
+  );
+
+  const result: ReactNode[] = [];
+  let lastIndex = 0;
+  let key = 0;
+
+  // Reset regex state
+  combinedPattern.lastIndex = 0;
+
+  while ((match = combinedPattern.exec(content)) !== null) {
+    const matchedText = match[0];
+    const matchIndex = match.index;
+
+    // Add text before this match
+    if (matchIndex > lastIndex) {
+      result.push(content.slice(lastIndex, matchIndex));
+    }
+
+    // Determine match type and create appropriate link
+    // Groups: match[1]=nostr full, match[2]=nostr inner, match[3]=url, match[4]=hashtag full, match[5]=hashtag content
+    if (match[1]) {
+      // Nostr entity (nostr:nevent1..., nostr:npub1..., etc.)
+      const entity = match[1].replace(/^nostr:/i, '');
+      const href = `https://nostter.app/${entity}`;
+      const displayText = entity.length > 20 ? `${entity.slice(0, 10)}...${entity.slice(-8)}` : entity;
+      result.push(
+        <a
+          key={key++}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="timeline-link timeline-link-nostr"
+        >
+          {displayText}
+        </a>
+      );
+    } else if (match[3] && !imageUrls.has(matchedText)) {
+      // Regular URL (not an image)
+      result.push(
+        <a
+          key={key++}
+          href={matchedText}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="timeline-link timeline-link-url"
+        >
+          {matchedText}
+        </a>
+      );
+    } else if (match[4]) {
+      // Hashtag
+      const tag = match[5]; // The captured group without #
+      // Only link if 2+ characters and not purely numeric
+      if (tag && tag.length >= 2 && !/^\d+$/.test(tag)) {
+        const href = `https://nostter.app/search?q=${encodeURIComponent('#' + tag)}`;
+        result.push(
+          <a
+            key={key++}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="timeline-link timeline-link-hashtag"
+          >
+            #{tag}
+          </a>
+        );
+      } else {
+        // Not a valid hashtag, keep as text
+        result.push(matchedText);
+      }
+    } else {
+      // Image URL or other - keep as text (will be rendered as image separately)
+      result.push(matchedText);
+    }
+
+    lastIndex = matchIndex + matchedText.length;
+  }
+
+  // Add remaining text after last match
+  if (lastIndex < content.length) {
+    result.push(content.slice(lastIndex));
+  }
+
+  return result.length > 0 ? result : [content];
+}
 
 // Parse profile from kind 0 event content
 function parseProfileFromContent(content: string): Profile | null {
@@ -67,7 +178,7 @@ function ImagePreview({ url }: { url: string }) {
   );
 }
 
-// Component for content with images
+// Component for content with images and links
 function ContentWithImages({ content, revealed }: { content: string; revealed: boolean }) {
   const imageUrls = extractImageUrls(content);
 
@@ -80,9 +191,12 @@ function ContentWithImages({ content, revealed }: { content: string; revealed: b
   // Clean up multiple spaces/newlines left after removing URLs
   textContent = textContent.replace(/\n\s*\n/g, '\n').trim();
 
+  // Parse content to add links (URLs, nostr entities, hashtags)
+  const parsedContent = textContent ? parseContentWithLinks(textContent) : null;
+
   return (
     <>
-      {textContent && <div className="timeline-item-text">{textContent}</div>}
+      {parsedContent && <div className="timeline-item-text">{parsedContent}</div>}
       {revealed && imageUrls.length > 0 && (
         <div className="timeline-item-images">
           {imageUrls.map((url, index) => (

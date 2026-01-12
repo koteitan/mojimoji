@@ -220,6 +220,29 @@
   margin-bottom: 0;
 }
 
+/* Links in content */
+.timeline-link {
+  color: #4ecdc4;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.timeline-link:hover {
+  text-decoration: underline;
+}
+
+.timeline-link-url {
+  color: #4ecdc4;
+}
+
+.timeline-link-nostr {
+  color: #aa96da;
+}
+
+.timeline-link-hashtag {
+  color: #f38181;
+}
+
 /* Images in timeline */
 .timeline-item-images {
   display: flex;
