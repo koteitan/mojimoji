@@ -3,8 +3,14 @@
 
 param(
     [int]$Port = 5173,
-    [switch]$Remove
+    [switch]$Remove,
+    [switch]$Show
 )
+
+if ($Show) {
+    netsh interface portproxy show all
+    exit
+}
 
 # Get WSL IP address
 $wslIp = (wsl hostname -I).Trim().Split(' ')[0]

@@ -7,6 +7,25 @@
 const { WebSocketServer } = require('ws');
 
 const args = process.argv.slice(2);
+
+// Show help if no arguments
+if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+  console.log(`WebSocket Console Server (ws://, no SSL)
+
+Usage: node server.js <port> [--verbose]
+
+Arguments:
+  port        Port number to listen on (required)
+  --verbose   Show log level and timestamp (e.g., [LOG] 12:34:56 message)
+  -v          Alias for --verbose
+  --help, -h  Show this help
+
+Example:
+  node server.js 8080
+  node server.js 9001 --verbose`);
+  process.exit(0);
+}
+
 const verbose = args.includes('--verbose') || args.includes('-v');
 const portArg = args.find(a => !a.startsWith('-'));
 const port = parseInt(portArg) || 8080;

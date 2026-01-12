@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# Port forwarding script for WSL -> Windows
+
+# Show help if no arguments
+if [ $# -eq 0 ] || [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
+    echo "Port forwarding script for WSL -> Windows"
+    echo ""
+    echo "Usage:"
+    echo "  port-forward <port>             Add port forwarding"
+    echo "  port-forward <port> --remove    Remove port forwarding"
+    echo "  port-forward --show             Show current port forwarding settings"
+    echo "  port-forward --help, -h         Show this help"
+    echo ""
+    echo "Example:"
+    echo "  port-forward 5173"
+    echo "  port-forward 8080 --remove"
+    exit 0
+fi
+
+PORT=${1:-5173}
+ACTION=${2:-""}
+
+# Handle --show as first argument
+if [ "$PORT" == "--show" ]; then
+    netsh.exe interface portproxy show all
+    exit 0
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PS_SCRIPT="$(wslpath -w "$SCRIPT_DIR/port-forward.ps1")"
+
+if [ "$ACTION" == "--show" ]; then
+    netsh.exe interface portproxy show all
+elif [ "$ACTION" == "--remove" ] || [ "$PORT" == "--remove" ]; then
+    if [ "$PORT" == "--remove" ]; then
+        PORT=5173
+    fi
+    echo "Removing port forwarding for port $PORT..."
+    powershell.exe -ExecutionPolicy Bypass -Command "Start-Process powershell -Verb RunAs -ArgumentList '-ExecutionPolicy Bypass -File \"$PS_SCRIPT\" -Port $PORT -Remove'"
+else
+    echo "Setting up port forwarding for port $PORT..."
+    echo "Note: This requires Administrator privileges. A UAC prompt will appear."
+    powershell.exe -ExecutionPolicy Bypass -Command "Start-Process powershell -Verb RunAs -ArgumentList '-ExecutionPolicy Bypass -File \"$PS_SCRIPT\" -Port $PORT'"
+fi
