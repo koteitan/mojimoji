@@ -32,3 +32,11 @@ assets
 # Commit message suggestion
 commit-msg.txt
 tags
+
+# JSON files (except config files)
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!tsconfig.app.json
+!tsconfig.node.json
