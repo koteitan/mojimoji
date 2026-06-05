@@ -1509,7 +1509,7 @@ export function GraphEditor({
               newestTimestamp: timestamp,
             };
 
-            // Fetch target event
+            // Fetch target event (use relay hint from the reaction's e tag if present)
             EventFetcher.queueRequest(targetEventId, (fetchedEvent) => {
               if (fetchedEvent) {
                 // Update the group with fetched event
@@ -1525,7 +1525,7 @@ export function GraphEditor({
                   onItemsUpdate(timelineNodeId, updatedItems);
                 }
               }
-            });
+            }, reference.relay);
 
             // Add new group and sort
             const newItems = [...items, newGroup].sort((a, b) => {

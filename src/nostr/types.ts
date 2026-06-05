@@ -422,6 +422,16 @@ export interface EventReference {
   type: EventReferenceType;
   eventId: string;
   marker?: ETagMarker;
+  relay?: string; // Relay hint (e/q tag position 2)
+}
+
+// Validate and normalize a relay hint URL (e/q/p tag position 2)
+// Returns undefined for empty or non-ws(s) values
+export function normalizeRelayHint(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  const trimmed = url.trim();
+  if (!/^wss?:\/\//i.test(trimmed)) return undefined;
+  return trimmed;
 }
 
 // Detect if an event references another event and return the reference type
@@ -431,33 +441,33 @@ export interface EventReference {
 // - Reply: kind:1 with #e tag (but no #q tag)
 // - Repost: kind:6 with #e tag
 // - Reaction: kind:7 with #e tag
-export function detectEventReference(event: NostrEvent): { type: EventReferenceType; eventId: string } | null {
+export function detectEventReference(event: NostrEvent): { type: EventReferenceType; eventId: string; relay?: string } | null {
   const hasQTag = event.tags.find(tag => tag[0] === 'q');
   const hasETag = event.tags.find(tag => tag[0] === 'e');
 
   if (event.kind === 1) {
     // Quote: has #q tag
     if (hasQTag) {
-      return { type: 'quote', eventId: hasQTag[1] };
+      return { type: 'quote', eventId: hasQTag[1], relay: normalizeRelayHint(hasQTag[2]) };
     }
     // Reply: has #e tag (but not quote) - use new function to get proper reply target
     if (hasETag) {
       const refs = detectEventReferences(event);
       // Return the first reference (most relevant: reply > root > mention)
       if (refs.length > 0) {
-        return { type: refs[0].type, eventId: refs[0].eventId };
+        return { type: refs[0].type, eventId: refs[0].eventId, relay: refs[0].relay };
       }
-      return { type: 'reply', eventId: hasETag[1] };
+      return { type: 'reply', eventId: hasETag[1], relay: normalizeRelayHint(hasETag[2]) };
     }
   } else if (event.kind === 6) {
     // Repost: kind 6 with #e tag
     if (hasETag) {
-      return { type: 'repost', eventId: hasETag[1] };
+      return { type: 'repost', eventId: hasETag[1], relay: normalizeRelayHint(hasETag[2]) };
     }
   } else if (event.kind === 7) {
     // Reaction: kind 7 with #e tag
     if (hasETag) {
-      return { type: 'reaction', eventId: hasETag[1] };
+      return { type: 'reaction', eventId: hasETag[1], relay: normalizeRelayHint(hasETag[2]) };
     }
   }
 
@@ -472,7 +482,7 @@ export function detectEventReferences(event: NostrEvent): EventReference[] {
 
   // Quote: return q tag only
   if (event.kind === 1 && hasQTag) {
-    return [{ type: 'quote', eventId: hasQTag[1] }];
+    return [{ type: 'quote', eventId: hasQTag[1], relay: normalizeRelayHint(hasQTag[2]) }];
   }
 
   // Get all e tags
@@ -494,6 +504,7 @@ export function detectEventReferences(event: NostrEvent): EventReference[] {
           type: event.kind === 6 ? 'repost' : event.kind === 7 ? 'reaction' : 'reply',
           eventId: tag[1],
           marker,
+          relay: normalizeRelayHint(tag[2]),
         });
       }
     }
@@ -507,6 +518,7 @@ export function detectEventReferences(event: NostrEvent): EventReference[] {
       result.push({
         type: event.kind === 6 ? 'repost' : event.kind === 7 ? 'reaction' : 'reply',
         eventId: eTags[i][1],
+        relay: normalizeRelayHint(eTags[i][2]),
       });
     }
     return result;

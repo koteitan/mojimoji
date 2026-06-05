@@ -665,7 +665,7 @@ function useReferencedEvents(event: NostrEvent): {
         if (completedCount === references.length) {
           setLoading(false);
         }
-      });
+      }, ref.relay);
     });
   }, [references.map(r => r.eventId).join(',')]);
 
