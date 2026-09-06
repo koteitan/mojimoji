@@ -39,18 +39,25 @@ Note:
 - When loading older (version 1) events, visibility falls back to checking the `["public"]` Nostr tag
 
 #### in LocalStorage
+All keys are namespaced with the repository name `mojimoji` and a colon,
+because every koteitan app shares the https://koteitan.github.io origin.
 Current localStorage keys used by mojimoji:
-- `mojimoji-graph`: auto-saved graph data (current working graph)
-- `mojimoji-profile-cache`: cached user profiles (kind:0 events)
+- `mojimoji:graph`: auto-saved graph data (current working graph)
+- `mojimoji:profile-cache`: cached user profiles (kind:0 events)
+- `mojimoji:actions`: reacted / reposted event IDs
 
 For manual saving, we will add:
-- `mojimoji-saved-graphs`: array of saved graphs
+- `mojimoji:saved-graphs`: array of saved graphs
+
+Legacy keys (`mojimoji-graph`, `mojimoji-profile-cache`, `mojimoji-saved-graphs`,
+`mojimoji_reacted_events`, `mojimoji_reposted_events`) are still read as a
+fallback when the namespaced key is missing. They are never written or deleted.
 
 ```json
-// mojimoji-graph (auto-save, single graph)
+// mojimoji:graph (auto-save, single graph)
 [graph data]
 
-// mojimoji-profile-cache (profile cache)
+// mojimoji:profile-cache (profile cache)
 {
   "[pubkey]": {
     "name": "string",
@@ -62,7 +69,7 @@ For manual saving, we will add:
   ...
 }
 
-// mojimoji-saved-graphs (manual saves, array of graphs)
+// mojimoji:saved-graphs (manual saves, array of graphs)
 [
   {
     "path": "[graph path]",
@@ -71,6 +78,12 @@ For manual saving, we will add:
   },
   ...
 ]
+
+// mojimoji:actions (reacted / reposted event IDs)
+{
+  "reacted": ["[event id]", ...],
+  "reposted": ["[event id]", ...]
+}
 ```
 
 #### in File
@@ -151,7 +164,7 @@ For manual saving, we will add:
   - k: zoom scale factor (1.0 = 100%)
 
 ### (reference) Current auto saving format for LocalStorage
-- localStorage key: `mojimoji-graph`
+- localStorage key: `mojimoji:graph` (legacy fallback: `mojimoji-graph`)
 - format: same as [graph data](#graph-data)
 
 ## Saving UI Specifications

@@ -4,34 +4,71 @@ import { verifier } from '@rx-nostr/crypto';
 import { isNip07Available, signEvent } from './nip07';
 import type { UnsignedEvent } from './nip07';
 import { fetchUserRelayList } from './graphStorage';
+import { lsLoadRaw, lsSaveRaw } from '../utils/localStorage';
 
-const REACTED_STORAGE_KEY = 'mojimoji_reacted_events';
-const REPOSTED_STORAGE_KEY = 'mojimoji_reposted_events';
+// Reacted / reposted event IDs live in a single namespaced key
+// 'mojimoji:actions' = { reacted: string[], reposted: string[] }
+// Legacy keys are read as a fallback only; they are never written or removed.
+const ACTIONS_NAME = 'actions';
+const LEGACY_REACTED_STORAGE_KEY = 'mojimoji_reacted_events';
+const LEGACY_REPOSTED_STORAGE_KEY = 'mojimoji_reposted_events';
 const MAX_STORED_EVENTS = 500;
 
-// Get reacted event IDs from LocalStorage as array (preserves order)
-function getReactedEventIds(): string[] {
+interface StoredActions {
+  reacted: string[];
+  reposted: string[];
+}
+
+// Read one legacy array key (pre-namespace format)
+function loadLegacyIds(legacyKey: string): string[] {
   try {
-    const data = localStorage.getItem(REACTED_STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
+    const data = localStorage.getItem(legacyKey);
+    const parsed = data ? JSON.parse(data) : [];
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
+}
+
+// Load actions from LocalStorage, falling back to the legacy keys
+function loadActions(): StoredActions {
+  try {
+    const data = lsLoadRaw(ACTIONS_NAME);
+    if (data) {
+      const parsed = JSON.parse(data) as Partial<StoredActions>;
+      return {
+        reacted: Array.isArray(parsed?.reacted) ? parsed.reacted : [],
+        reposted: Array.isArray(parsed?.reposted) ? parsed.reposted : [],
+      };
+    }
+  } catch {
+    // Fall through to the legacy keys
+  }
+  return {
+    reacted: loadLegacyIds(LEGACY_REACTED_STORAGE_KEY),
+    reposted: loadLegacyIds(LEGACY_REPOSTED_STORAGE_KEY),
+  };
+}
+
+// Save actions to LocalStorage (always to the namespaced key)
+function saveActions(actions: StoredActions): void {
+  lsSaveRaw(ACTIONS_NAME, JSON.stringify(actions));
+}
+
+// Get reacted event IDs from LocalStorage as array (preserves order)
+function getReactedEventIds(): string[] {
+  return loadActions().reacted;
 }
 
 // Get reposted event IDs from LocalStorage as array (preserves order)
 function getRepostedEventIds(): string[] {
-  try {
-    const data = localStorage.getItem(REPOSTED_STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
-  }
+  return loadActions().reposted;
 }
 
 // Save reacted event ID to LocalStorage (max 500 events, removes oldest)
 function saveReactedEventId(eventId: string): void {
-  const ids = getReactedEventIds();
+  const actions = loadActions();
+  const ids = actions.reacted;
   if (!ids.includes(eventId)) {
     ids.push(eventId);
     // Remove oldest events if over limit
@@ -39,12 +76,13 @@ function saveReactedEventId(eventId: string): void {
       ids.shift();
     }
   }
-  localStorage.setItem(REACTED_STORAGE_KEY, JSON.stringify(ids));
+  saveActions(actions);
 }
 
 // Save reposted event ID to LocalStorage (max 500 events, removes oldest)
 function saveRepostedEventId(eventId: string): void {
-  const ids = getRepostedEventIds();
+  const actions = loadActions();
+  const ids = actions.reposted;
   if (!ids.includes(eventId)) {
     ids.push(eventId);
     // Remove oldest events if over limit
@@ -52,7 +90,7 @@ function saveRepostedEventId(eventId: string): void {
       ids.shift();
     }
   }
-  localStorage.setItem(REPOSTED_STORAGE_KEY, JSON.stringify(ids));
+  saveActions(actions);
 }
 
 // Check if event is reacted

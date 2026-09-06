@@ -1,15 +1,18 @@
 import type { Profile } from './types';
+import { lsLoadRaw, lsSaveRaw } from '../utils/localStorage';
 
 const DEBUG = false;
 
 // Global profile cache shared across all nodes
-const PROFILE_CACHE_KEY = 'mojimoji-profile-cache';
+// Namespaced key: 'mojimoji:profile-cache' (legacy: 'mojimoji-profile-cache')
+const PROFILE_CACHE_NAME = 'profile-cache';
+const LEGACY_PROFILE_CACHE_KEY = 'mojimoji-profile-cache';
 const profileCache = new Map<string, Profile>();
 
 // Load cache from localStorage on startup
 function loadProfileCache(): void {
   try {
-    const stored = localStorage.getItem(PROFILE_CACHE_KEY);
+    const stored = lsLoadRaw(PROFILE_CACHE_NAME, LEGACY_PROFILE_CACHE_KEY);
     if (stored) {
       const data = JSON.parse(stored) as Record<string, Profile>;
       for (const [pubkey, profile] of Object.entries(data)) {
@@ -36,7 +39,7 @@ function saveProfileCache(): void {
       for (const [pubkey, profile] of profileCache) {
         data[pubkey] = profile;
       }
-      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(data));
+      lsSaveRaw(PROFILE_CACHE_NAME, JSON.stringify(data));
       if (DEBUG) console.log('Profile cache saved to localStorage');
     } catch {
       // Ignore errors when saving cache (e.g., quota exceeded)

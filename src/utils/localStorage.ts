@@ -3,11 +3,51 @@ import type { GraphData } from '../graph/types';
 // Re-export graph types from shared location
 export { GRAPH_DATA_VERSION, type ViewTransform, type GraphData, type GraphVisibility } from '../graph/types';
 
+// ============================================
+// localStorage namespace
+// ============================================
+// All koteitan apps share the https://koteitan.github.io origin, so every
+// localStorage key must be namespaced with the repository name to avoid
+// collisions between apps.
+export const NS = 'mojimoji';
+
+// Build a namespaced key: lsKey('graph') === 'mojimoji:graph'
+export const lsKey = (name: string): string => `${NS}:${name}`;
+
+/**
+ * Read a namespaced value.
+ * Falls back to the legacy (pre-namespace) key when the namespaced key is
+ * missing, so existing users keep their data. Legacy keys are never deleted.
+ * Callers keep their own try/catch (this helper does not swallow errors).
+ */
+export function lsLoadRaw(name: string, legacyKey?: string): string | null {
+  const value = localStorage.getItem(lsKey(name));
+  if (value !== null) {
+    return value;
+  }
+  if (legacyKey) {
+    return localStorage.getItem(legacyKey);
+  }
+  return null;
+}
+
+/** Write a namespaced value. Saves always go to the new key. */
+export function lsSaveRaw(name: string, value: string): void {
+  localStorage.setItem(lsKey(name), value);
+}
+
+/** Remove a namespaced value. Legacy keys are never removed. */
+export function lsRemoveRaw(name: string): void {
+  localStorage.removeItem(lsKey(name));
+}
+
 // Auto-save key (current working graph)
-const AUTO_SAVE_KEY = 'mojimoji-graph';
+const AUTO_SAVE_NAME = 'graph';
+const LEGACY_AUTO_SAVE_KEY = 'mojimoji-graph';
 
 // Manual saves key (array of saved graphs)
-const SAVED_GRAPHS_KEY = 'mojimoji-saved-graphs';
+const SAVED_GRAPHS_NAME = 'saved-graphs';
+const LEGACY_SAVED_GRAPHS_KEY = 'mojimoji-saved-graphs';
 
 export interface SavedGraphEntry {
   path: string;
@@ -28,7 +68,7 @@ export interface SavedGraphItem {
 
 export function saveGraph(data: GraphData): void {
   try {
-    localStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(data));
+    lsSaveRaw(AUTO_SAVE_NAME, JSON.stringify(data));
   } catch (e) {
     console.error('Failed to save graph to localStorage:', e);
   }
@@ -36,7 +76,7 @@ export function saveGraph(data: GraphData): void {
 
 export function loadGraph(): GraphData | null {
   try {
-    const data = localStorage.getItem(AUTO_SAVE_KEY);
+    const data = lsLoadRaw(AUTO_SAVE_NAME, LEGACY_AUTO_SAVE_KEY);
     if (data) {
       return JSON.parse(data) as GraphData;
     }
@@ -48,7 +88,7 @@ export function loadGraph(): GraphData | null {
 
 export function clearGraph(): void {
   try {
-    localStorage.removeItem(AUTO_SAVE_KEY);
+    lsRemoveRaw(AUTO_SAVE_NAME);
   } catch (e) {
     console.error('Failed to clear graph from localStorage:', e);
   }
@@ -60,7 +100,7 @@ export function clearGraph(): void {
 
 function getSavedGraphsData(): SavedGraphEntry[] {
   try {
-    const data = localStorage.getItem(SAVED_GRAPHS_KEY);
+    const data = lsLoadRaw(SAVED_GRAPHS_NAME, LEGACY_SAVED_GRAPHS_KEY);
     if (data) {
       return JSON.parse(data) as SavedGraphEntry[];
     }
@@ -72,7 +112,7 @@ function getSavedGraphsData(): SavedGraphEntry[] {
 
 function setSavedGraphsData(entries: SavedGraphEntry[]): void {
   try {
-    localStorage.setItem(SAVED_GRAPHS_KEY, JSON.stringify(entries));
+    lsSaveRaw(SAVED_GRAPHS_NAME, JSON.stringify(entries));
   } catch (e) {
     console.error('Failed to save graphs:', e);
   }

@@ -439,7 +439,7 @@ User Inrterface is as follows.
 
 ### profile cache
 - Profile data (kind:0 events) is cached in memory and persisted to localStorage
-- Cache key: `mojimoji-profile-cache`
+- Cache key: `mojimoji:profile-cache` (legacy fallback: `mojimoji-profile-cache`)
 - Cache is loaded from localStorage on app startup
 - Cache is saved to localStorage with debouncing (500ms delay to batch writes)
 

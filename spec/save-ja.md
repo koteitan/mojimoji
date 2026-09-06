@@ -39,18 +39,25 @@
 - 古い（バージョン 1）イベントを読み込む場合、visibility は `["public"]` Nostr タグにフォールバックして確認される
 
 #### LocalStorage 内
+すべての koteitan 製アプリは https://koteitan.github.io という1つのオリジンを
+共有するため、キー名はリポジトリ名 `mojimoji` + コロンで名前空間化する。
 mojimoji が使用する localStorage キー:
-- `mojimoji-graph`: 自動保存されたグラフデータ（現在作業中のグラフ）
-- `mojimoji-profile-cache`: キャッシュされたユーザープロフィール（kind:0 イベント）
+- `mojimoji:graph`: 自動保存されたグラフデータ（現在作業中のグラフ）
+- `mojimoji:profile-cache`: キャッシュされたユーザープロフィール（kind:0 イベント）
+- `mojimoji:actions`: リアクション済み / リポスト済みのイベントID
 
 手動保存用に追加予定:
-- `mojimoji-saved-graphs`: 保存されたグラフの配列
+- `mojimoji:saved-graphs`: 保存されたグラフの配列
+
+旧キー（`mojimoji-graph`, `mojimoji-profile-cache`, `mojimoji-saved-graphs`,
+`mojimoji_reacted_events`, `mojimoji_reposted_events`）は、新キーが存在しない
+場合の読み込みフォールバックとしてのみ参照する。書き込みも削除もしない。
 
 ```json
-// mojimoji-graph（自動保存、単一グラフ）
+// mojimoji:graph（自動保存、単一グラフ）
 [graph data]
 
-// mojimoji-profile-cache（プロフィールキャッシュ）
+// mojimoji:profile-cache（プロフィールキャッシュ）
 {
   "[pubkey]": {
     "name": "string",
@@ -62,7 +69,7 @@ mojimoji が使用する localStorage キー:
   ...
 }
 
-// mojimoji-saved-graphs（手動保存、グラフの配列）
+// mojimoji:saved-graphs（手動保存、グラフの配列）
 [
   {
     "path": "[graph path]",
@@ -71,6 +78,12 @@ mojimoji が使用する localStorage キー:
   },
   ...
 ]
+
+// mojimoji:actions（リアクション済み / リポスト済みのイベントID）
+{
+  "reacted": ["[event id]", ...],
+  "reposted": ["[event id]", ...]
+}
 ```
 
 #### ファイル内
@@ -151,7 +164,7 @@ mojimoji が使用する localStorage キー:
   - k: ズーム倍率（1.0 = 100%）
 
 ### （参考）現在の LocalStorage 自動保存フォーマット
-- localStorage キー: `mojimoji-graph`
+- localStorage キー: `mojimoji:graph`（旧キー `mojimoji-graph` は読み込み時のフォールバック）
 - 形式: [graph data](#graph-dataグラフデータ) と同じ
 
 ## 保存 UI 仕様
